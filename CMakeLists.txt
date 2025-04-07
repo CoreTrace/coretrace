@@ -102,25 +102,9 @@ if(NOT Boost_FOUND)
   elseif(REQUIRE_BOOST)
     # Only show error if Boost is required
     if(IS_LINUX)
-      message(FATAL_ERROR 
-        "Boost libraries not found. Install them with:\n"
-        "  sudo apt-get install libboost-all-dev\n\n"
-        "Or install specific components:\n"
-        "  sudo apt-get install libboost-filesystem-dev libboost-system-dev libboost-program-options-dev\n\n"
-        "Then, if needed, specify the location using:\n"
-        "  -DBOOST_ROOT=/path/to/boost\n"
-        "  -DBOOST_INCLUDEDIR=/path/to/boost/include\n"
-        "  -DBOOST_LIBRARYDIR=/path/to/boost/lib\n\n"
-        "Alternatively:\n"
-        "  - Run cmake with -DREQUIRE_BOOST=OFF to build without Boost support\n"
-        "  - Run cmake with -DAUTO_INSTALL_DEPENDENCIES=ON to attempt automatic installation"
-      )
+      message(FATAL_ERROR "Boost libraries not found. Install them with:\n  sudo apt-get install libboost-all-dev\n\nOr install specific components:\n  sudo apt-get install libboost-filesystem-dev libboost-system-dev libboost-program-options-dev\n\nThen, if needed, specify the location using:\n  -DBOOST_ROOT=/path/to/boost\n  -DBOOST_INCLUDEDIR=/path/to/boost/include\n  -DBOOST_LIBRARYDIR=/path/to/boost/lib\n\nAlternatively:\n  - Run cmake with -DREQUIRE_BOOST=OFF to build without Boost support\n  - Run cmake with -DAUTO_INSTALL_DEPENDENCIES=ON to attempt automatic installation")
     elseif(IS_MACOS)
-      message(FATAL_ERROR 
-        "Boost not found. Install it with:\n"
-        "  brew install boost\n\n"
-        "Alternatively, run cmake with -DREQUIRE_BOOST=OFF to build without Boost support."
-      )
+      message(FATAL_ERROR "Boost not found. Install it with:\n  brew install boost\n\nAlternatively, run cmake with -DREQUIRE_BOOST=OFF to build without Boost support.")
     endif()
   else
     # Just a warning if Boost is optional
