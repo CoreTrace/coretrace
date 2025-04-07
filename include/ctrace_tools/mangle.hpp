@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iostream>
 #include <cxxabi.h>
+#include <memory>
 
 namespace ctrace_tools
 {
