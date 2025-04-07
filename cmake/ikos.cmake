@@ -15,10 +15,32 @@ if(NOT GMP_LIBRARY OR NOT GMP_INCLUDE_DIR)
   return()
 endif()
 
-# Boost
-find_package(Boost 1.65 REQUIRED COMPONENTS system filesystem)
+# Boost - use same approach as main CMakeLists to ensure compatibility
 if(NOT Boost_FOUND)
-  message(FATAL_ERROR "Boost not found. Install it with 'brew install boost' on macOS or 'apt-get install libboost-all-dev' on Linux.")
+  # Set policy for Boost detection if not already set in main CMakeLists
+  if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+  endif()
+  
+  # First try with required components
+  find_package(Boost COMPONENTS system filesystem)
+  
+  if(NOT Boost_FOUND)
+    # Try pkg-config as fallback
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+      pkg_check_modules(BOOST QUIET boost_system boost_filesystem)
+      if(BOOST_FOUND)
+        set(Boost_INCLUDE_DIRS ${BOOST_INCLUDE_DIRS})
+        set(Boost_LIBRARIES ${BOOST_LIBRARIES})
+        set(Boost_FOUND TRUE)
+      endif()
+    endif()
+  endif()
+  
+  if(NOT Boost_FOUND)
+    message(FATAL_ERROR "Boost not found. Install it with 'brew install boost' on macOS or 'apt-get install libboost-all-dev' on Linux.")
+  endif()
 endif()
 
 # TBB

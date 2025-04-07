@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.11)
 
+# Set policy for Boost detection
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 OLD)
+endif()
+
 project(ArgumentManagerProject VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -14,14 +19,51 @@ elseif(UNIX AND NOT APPLE)
   set(IS_LINUX TRUE)
 endif()
 
-# Boost dependency
+# Set Boost search paths for common locations
+set(BOOST_ROOT "" CACHE PATH "Boost root directory")
+set(BOOST_INCLUDEDIR "" CACHE PATH "Boost include directory")
+set(BOOST_LIBRARYDIR "" CACHE PATH "Boost library directory")
+
+# For newer CMake, try to accommodate both old and new ways
 if(IS_LINUX OR IS_MACOS)
-  find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
+  # First attempt with required components
+  find_package(Boost COMPONENTS filesystem system program_options)
+  
   if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost not found. Install it with 'brew install boost' on macOS or 'apt-get install libboost-all-dev' on Linux.")
+    # Try to find Boost using pkg-config as fallback
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+      pkg_check_modules(BOOST QUIET boost_system boost_filesystem boost_program_options)
+      if(BOOST_FOUND)
+        set(Boost_INCLUDE_DIRS ${BOOST_INCLUDE_DIRS})
+        set(Boost_LIBRARIES ${BOOST_LIBRARIES})
+        set(Boost_FOUND TRUE)
+      endif()
+    endif()
+  endif()
+
+  # If still not found, provide a useful error message
+  if(NOT Boost_FOUND)
+    if(IS_LINUX)
+      message(FATAL_ERROR 
+        "Boost libraries not found. Install them with:\n"
+        "  sudo apt-get install libboost-all-dev\n\n"
+        "Or install specific components:\n"
+        "  sudo apt-get install libboost-filesystem-dev libboost-system-dev libboost-program-options-dev\n\n"
+        "Then, if needed, specify the location using:\n"
+        "  -DBOOST_ROOT=/path/to/boost\n"
+        "  -DBOOST_INCLUDEDIR=/path/to/boost/include\n"
+        "  -DBOOST_LIBRARYDIR=/path/to/boost/lib"
+      )
+    elseif(IS_MACOS)
+      message(FATAL_ERROR 
+        "Boost not found. Install it with:\n"
+        "  brew install boost"
+      )
+    endif()
   endif()
 elseif(IS_WINDOWS)
-  # On Windows, make Boost optional or handle differently
+  # On Windows, make Boost optional
   find_package(Boost COMPONENTS filesystem system program_options)
 endif()
 
