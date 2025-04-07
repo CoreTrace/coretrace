@@ -179,11 +179,11 @@ if(Boost_FOUND)
   target_link_libraries(ctrace PRIVATE ${Boost_LIBRARIES})
 endif()
 
-if (USE_THREAD_SANITIZER)
+if(USE_THREAD_SANITIZER)
     include(${CMAKE_SOURCE_DIR}/cmake/debug/sanitizer/ThreadSanitizer.cmake)
 endif()
 
-if (USE_ADDRESS_SANITIZER)
+if(USE_ADDRESS_SANITIZER)
     include(${CMAKE_SOURCE_DIR}/cmake/debug/sanitizer/AddressSanitizer.cmake)
 endif()
 
@@ -191,7 +191,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
 target_link_libraries(ctrace PRIVATE nlohmann_json::nlohmann_json)
 
 option(USE_EXTERNAL_CLI11 "Download CLI11" OFF)
-if (USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")
+if(USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")
     include(${CMAKE_SOURCE_DIR}/cmake/CLI11.cmake)
     target_link_libraries(ctrace PRIVATE CLI11::CLI11)
 endif()
