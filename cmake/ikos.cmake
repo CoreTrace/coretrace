@@ -103,3 +103,32 @@ ExternalProject_Add(
         ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}/ikos/src/ikos/build make install
     INSTALL_COMMAND ""
 )
+
+# IKOS static analysis configuration
+# This file configures the IKOS static analyzer for use with the project
+
+# Find IKOS
+find_program(IKOS_EXECUTABLE ikos)
+
+# Add a custom target for running IKOS analysis
+add_custom_target(ikos_analysis
+    COMMENT "Running IKOS static analysis..."
+)
+
+# Add a function to add files to IKOS analysis
+function(add_ikos_analysis target)
+    if(IKOS_EXECUTABLE)
+        add_custom_command(
+            TARGET ikos_analysis
+            COMMAND ${IKOS_EXECUTABLE} -a=boa ${CMAKE_CURRENT_BINARY_DIR}/${target}
+            COMMENT "Running IKOS on ${target}"
+        )
+    else()
+        message(STATUS "IKOS not found, skipping IKOS analysis for ${target}")
+    endif()
+endfunction()
+
+# Add project executable to IKOS analysis
+if(TARGET ctrace)
+    add_ikos_analysis(ctrace)
+endif()
