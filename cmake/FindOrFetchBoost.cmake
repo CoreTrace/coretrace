@@ -8,6 +8,7 @@ endif()
 # Options for Boost dependency
 option(USE_SYSTEM_BOOST "Use system-installed Boost" ON)
 option(BOOST_FROM_SCRIPT "Install Boost using script if not found" ON)
+option(BOOST_TRY_APT "Try installing Boost via apt before script (Linux only)" ON)
 set(BOOST_REQUIRED_VERSION "1.71.0" CACHE STRING "Minimum required Boost version")
 set(BOOST_REQUIRED_COMPONENTS system filesystem program_options CACHE STRING "Required Boost components")
 
@@ -20,6 +21,38 @@ if(USE_SYSTEM_BOOST)
         message(STATUS "Found system Boost ${Boost_VERSION}")
     else()
         message(STATUS "System Boost not found or does not meet version requirements")
+    endif()
+endif()
+
+# If Boost is not found and we're on Linux, try installing via apt
+if(NOT Boost_FOUND AND BOOST_TRY_APT AND UNIX AND NOT APPLE)
+    message(STATUS "Attempting to install Boost via apt...")
+    
+    execute_process(
+        COMMAND sudo apt-get update
+        RESULT_VARIABLE APT_UPDATE_RESULT
+    )
+    
+    if(APT_UPDATE_RESULT EQUAL 0)
+        execute_process(
+            COMMAND sudo apt-get install -y libboost-system-dev libboost-filesystem-dev libboost-program-options-dev
+            RESULT_VARIABLE APT_INSTALL_RESULT
+        )
+        
+        if(APT_INSTALL_RESULT EQUAL 0)
+            message(STATUS "Installed Boost via apt. Searching again...")
+            find_package(Boost ${BOOST_REQUIRED_VERSION} COMPONENTS ${BOOST_REQUIRED_COMPONENTS} QUIET)
+            
+            if(Boost_FOUND)
+                message(STATUS "Successfully found Boost via apt: ${Boost_VERSION}")
+            else()
+                message(STATUS "Still unable to find Boost after apt install")
+            endif()
+        else()
+            message(STATUS "Failed to install Boost via apt")
+        endif()
+    else()
+        message(STATUS "Failed to update apt repositories")
     endif()
 endif()
 

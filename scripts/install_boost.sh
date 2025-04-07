@@ -4,7 +4,7 @@ set -e # Exit immediately if a command exits with a non-zero status
 
 # Default installation directory and version
 INSTALL_DIR="${CMAKE_BINARY_DIR}/boost_install"
-BOOST_VERSION="1.82.0"
+BOOST_VERSION="1.87.0"
 BOOST_UNDERSCORE_VERSION=${BOOST_VERSION//./_}
 
 # Parse arguments
@@ -35,16 +35,38 @@ mkdir -p /tmp/boost_build
 # Download and extract
 cd /tmp/boost_build
 
-BOOST_URL="https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VERSION}/source/boost_${BOOST_UNDERSCORE_VERSION}.tar.gz"
+# Updated to use SourceForge mirror which is more reliable
 BOOST_ARCHIVE="boost_${BOOST_UNDERSCORE_VERSION}.tar.gz"
+PRIMARY_URL="https://sourceforge.net/projects/boost/files/boost/1.87.0/boost_1_87_0.tar.gz/download"
+FALLBACK_URL="https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VERSION}/source/boost_${BOOST_UNDERSCORE_VERSION}.tar.gz"
 
-if [ ! -f "${BOOST_ARCHIVE}" ]; then
-  echo "Downloading Boost ${BOOST_VERSION}..."
-  wget "${BOOST_URL}" -O "${BOOST_ARCHIVE}" || { echo "Failed to download Boost"; exit 1; }
-  
-  # Verify download
+# Function to verify the downloaded archive
+verify_archive() {
+  # Check if file exists and is not empty
   if [ ! -s "${BOOST_ARCHIVE}" ]; then
     echo "Downloaded file is empty or corrupt"
+    return 1
+  fi
+
+  # Try to list the archive contents
+  tar -tzf "${BOOST_ARCHIVE}" > /dev/null 2>&1
+  return $?
+}
+
+if [ ! -f "${BOOST_ARCHIVE}" ] || ! verify_archive; then
+  echo "Downloading Boost ${BOOST_VERSION} from primary source..."
+  wget -q "${PRIMARY_URL}" -O "${BOOST_ARCHIVE}" || {
+    echo "Primary download failed, trying fallback..."
+    wget -q "${FALLBACK_URL}" -O "${BOOST_ARCHIVE}" || {
+      echo "All download attempts failed."
+      exit 1
+    }
+  }
+  
+  # Verify download was successful
+  if ! verify_archive; then
+    echo "Downloaded file is not a valid tar.gz archive"
+    cat "${BOOST_ARCHIVE}" | head -20  # Display the start of the file for debugging
     rm -f "${BOOST_ARCHIVE}"
     exit 1
   fi
@@ -53,7 +75,12 @@ fi
 # Extract only if directory doesn't exist
 if [ ! -d "boost_${BOOST_UNDERSCORE_VERSION}" ]; then
   echo "Extracting Boost..."
-  tar -xzf "${BOOST_ARCHIVE}" || { echo "Failed to extract Boost archive"; exit 1; }
+  tar -xzf "${BOOST_ARCHIVE}" || { 
+    echo "Failed to extract Boost archive"
+    echo "Archive info:"
+    file "${BOOST_ARCHIVE}"
+    exit 1
+  }
 fi
 
 # Check if extraction was successful
