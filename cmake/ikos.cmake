@@ -2,8 +2,17 @@ include(ExternalProject)
 
 # GMP
 find_library(GMP_LIBRARY NAMES gmp)
-if(NOT GMP_LIBRARY)
-  message(FATAL_ERROR "GMP not found. Install it with 'brew install gmp' on macOS or 'apt-get install libgmp-dev' on Linux.")
+find_path(GMP_INCLUDE_DIR NAMES gmp.h)
+
+if(NOT GMP_LIBRARY OR NOT GMP_INCLUDE_DIR)
+  if(IS_MACOS)
+    message(WARNING "GMP not found. Install it with 'brew install gmp' on macOS. IKOS analysis will be disabled.")
+  elseif(IS_LINUX)
+    message(WARNING "GMP not found. Install it with 'apt-get install libgmp-dev' on Linux. IKOS analysis will be disabled.")
+  else()
+    message(WARNING "GMP not found. IKOS analysis will be disabled.")
+  endif()
+  return()
 endif()
 
 # Boost
