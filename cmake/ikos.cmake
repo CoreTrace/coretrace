@@ -1,3 +1,22 @@
+# IKOS static analysis configuration
+# This file configures the IKOS static analyzer for use with the project
+
+# Define platform variables
+if(UNIX AND NOT APPLE)
+  set(IS_LINUX TRUE)
+else()
+  set(IS_LINUX FALSE)
+endif()
+
+if(APPLE)
+  set(IS_MACOS TRUE)
+else()
+  set(IS_MACOS FALSE)
+endif()
+
+# Optional dependency auto-installation
+option(AUTO_INSTALL_DEPENDENCIES "Automatically install dependencies if missing" OFF)
+
 include(ExternalProject)
 
 # GMP
@@ -7,7 +26,7 @@ find_path(GMP_INCLUDE_DIR NAMES gmp.h)
 if(NOT GMP_LIBRARY OR NOT GMP_INCLUDE_DIR)
   if(IS_LINUX AND AUTO_INSTALL_DEPENDENCIES)
     message(STATUS "GMP not found. It will be installed by the dependency script if AUTO_INSTALL_DEPENDENCIES is enabled.")
-  else  
+  else()  
     if(IS_MACOS)
       message(WARNING "GMP not found. Install it with 'brew install gmp' on macOS. IKOS analysis will be disabled.")
     elseif(IS_LINUX)
@@ -50,31 +69,35 @@ endif()
 # TBB
 find_library(TBB_LIBRARY NAMES tbb)
 if(NOT TBB_LIBRARY)
-  message(FATAL_ERROR "TBB not found. Install it with 'brew install tbb' on macOS or 'apt-get install libtbb-dev' on Linux.")
+  message(STATUS "TBB not found. IKOS analysis will be disabled.")
+  return()
 endif()
 
 # LLVM 14
 find_program(LLVM_CONFIG_EXECUTABLE llvm-config HINTS "/opt/llvm-14/bin" "/opt/homebrew/opt/llvm@14/bin")
 if(NOT LLVM_CONFIG_EXECUTABLE)
-  message(FATAL_ERROR "LLVM 14 not found. Install it with 'brew install llvm@14' on macOS or manually compile it for Linux.")
+  message(STATUS "LLVM 14 not found. IKOS analysis will be disabled.")
+  return()
 endif()
 
 # SQLite
 find_library(SQLITE_LIBRARY NAMES sqlite3)
 if(NOT SQLITE_LIBRARY)
-  message(FATAL_ERROR "SQLite not found. Install it with 'brew install sqlite' on macOS or 'apt-get install libsqlite3-dev' on Linux.")
+  message(STATUS "SQLite not found. IKOS analysis will be disabled.")
+  return()
 endif()
 
-# Apron (approximation, peut nécessiter un module personnalisé)
+# Apron (optional)
 find_library(APRON_LIBRARY NAMES apron)
 if(NOT APRON_LIBRARY)
-  message(FATAL_ERROR "Apron not found. Install it with 'brew install apron' on macOS or 'apt-get install libapron-dev' on Linux.")
+  message(STATUS "Apron not found. Some IKOS analyses may not be available.")
 endif()
 
 # Python
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+find_package(Python3 COMPONENTS Interpreter Development)
 if(NOT Python3_FOUND)
-  message(FATAL_ERROR "Python3 not found. Ensure python3 is installed.")
+  message(STATUS "Python3 not found. IKOS analysis will be disabled.")
+  return()
 endif()
 
 # Configuration pour macOS (si cross-compilation)
@@ -104,10 +127,7 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
 )
 
-# IKOS static analysis configuration
-# This file configures the IKOS static analyzer for use with the project
-
-# Find IKOS
+# Find IKOS executable
 find_program(IKOS_EXECUTABLE ikos)
 
 # Add a custom target for running IKOS analysis
