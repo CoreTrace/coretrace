@@ -13,6 +13,7 @@ set_property(CACHE PARSER_TYPE PROPERTY STRINGS "Getopt" "CLI11")
 
 option(USE_THREAD_SANITIZER "Activer ThreadSanitizer" OFF)
 option(USE_ADDRESS_SANITIZER "Activer AddressSanitizer (Memory)" OFF)
+option(SKIP_ANALYSIS_TOOLS "Skip building static analysis tools (tscancode, flawfinder, ikos)" OFF)
 
 # Create scripts directory if it doesn't exist
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/scripts)
@@ -73,6 +74,9 @@ if (USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")
     target_link_libraries(ctrace PRIVATE CLI11::CLI11)
 endif()
 
-include(${CMAKE_SOURCE_DIR}/cmake/tscancode.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
+# Only include static analysis tools if not explicitly skipped
+if (NOT SKIP_ANALYSIS_TOOLS)
+    include(${CMAKE_SOURCE_DIR}/cmake/tscancode.cmake)
+    include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
+    include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
+endif()

@@ -13,6 +13,7 @@ ExternalProject_Add(
         chmod +x ${CMAKE_SOURCE_DIR}/scripts/fix_tscancode.sh && 
         ${CMAKE_SOURCE_DIR}/scripts/fix_tscancode.sh ${CMAKE_BINARY_DIR}/tscancode/src/tscancode/trunk
     CONFIGURE_COMMAND ""
+    # Build command without defining MYSTACKSIZE to avoid conflicts
     BUILD_COMMAND
         COMMAND cd ${CMAKE_BINARY_DIR}/tscancode/src/tscancode/trunk && make
     INSTALL_COMMAND ""

@@ -1,85 +1,77 @@
-name: Build and Test
+name: Build
 
 on:
   push:
-    branches: [ main, feature/add-workflow-ci ]
+    branches: [ main, dev, feature/add-workflow-ci ]
   pull_request:
-    branches: [ main,feature/add-workflow-ci ]
+    branches: [ main, dev, feature/add-workflow-ci ]
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake
-        sudo apt-get install -y libboost-system-dev libboost-filesystem-dev libboost-program-options-dev
-    
-    - name: Create Build Directory
-      run: mkdir -p build
-    
-    - name: Configure CMake
-      working-directory: ${{github.workspace}}/build
-      run: cmake ..
-    
-    - name: Build
-      working-directory: ${{github.workspace}}/build
-      run: make -j$(nproc)
-    
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      run: ./ctrace --help
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+
+      - name: Build
+        run: |
+          cd build
+          make -j4
+
+      - name: Test
+        run: |
+          cd build
+          ./ctrace --help
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DSKIP_ANALYSIS_TOOLS=ON -DBOOST_FROM_SCRIPT=ON
+
+      - name: Build
+        run: |
+          cd build
+          make ctrace
+
+      - name: Test
+        run: |
+          cd build
+          ./ctrace --help
 
   build-windows:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgGitCommitId: 'ea222747e47dcdbd7a138ca974330107bc52f38e'
-    
-    - name: Install Boost dependencies
-      run: |
-        vcpkg install boost-system:x64-windows
-        vcpkg install boost-filesystem:x64-windows
-        vcpkg install boost-program-options:x64-windows
-    
-    - name: Configure CMake
-      run: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${{env.VCPKG_ROOT}}/scripts/buildsystems/vcpkg.cmake
-    
-    - name: Build
-      run: cmake --build build --config Release
-    
-    - name: Test
-      working-directory: ${{github.workspace}}/build/Release
-      run: ./ctrace.exe --help
-      
-  build-macos:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: |
-        brew update
-        brew install boost
-    
-    - name: Create Build Directory
-      run: mkdir -p build
-    
-    - name: Configure CMake
-      working-directory: ${{github.workspace}}/build
-      run: cmake ..
-    
-    - name: Build
-      working-directory: ${{github.workspace}}/build
-      run: make -j$(sysctl -n hw.ncpu)
-    
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      run: ./ctrace --help
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.0.2
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DSKIP_ANALYSIS_TOOLS=ON -DBOOST_FROM_SCRIPT=ON -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release --target ctrace
+
+      - name: Test
+        run: |
+          cd build\Release
+          .\ctrace.exe --help
