@@ -60,28 +60,44 @@ endif()
 if(NOT Boost_FOUND AND BOOST_FROM_SCRIPT)
     message(STATUS "Attempting to install Boost via script...")
     
-    # Path to the script relative to the project source directory
-    set(BOOST_INSTALL_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/install_boost.sh")
-    
-    # Make sure the script is executable
-    execute_process(
-        COMMAND chmod +x ${BOOST_INSTALL_SCRIPT}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-    
     # Create install directory
     set(BOOST_INSTALL_DIR "${CMAKE_BINARY_DIR}/boost_install")
     file(MAKE_DIRECTORY ${BOOST_INSTALL_DIR})
     
-    # Execute the installation script
-    message(STATUS "Running Boost installation script...")
-    execute_process(
-        COMMAND ${BOOST_INSTALL_SCRIPT} --prefix=${BOOST_INSTALL_DIR}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        RESULT_VARIABLE SCRIPT_RESULT
-        OUTPUT_VARIABLE SCRIPT_OUTPUT
-        ERROR_VARIABLE SCRIPT_ERROR
-    )
+    # Choose the appropriate script based on the platform
+    if(WIN32)
+        # Windows: use PowerShell script
+        set(BOOST_INSTALL_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/install_boost.ps1")
+        
+        # Execute the PowerShell script
+        message(STATUS "Running Windows Boost installation script...")
+        execute_process(
+            COMMAND powershell -ExecutionPolicy Bypass -File ${BOOST_INSTALL_SCRIPT} -InstallDir ${BOOST_INSTALL_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            RESULT_VARIABLE SCRIPT_RESULT
+            OUTPUT_VARIABLE SCRIPT_OUTPUT
+            ERROR_VARIABLE SCRIPT_ERROR
+        )
+    else()
+        # Unix/Linux: use Bash script
+        set(BOOST_INSTALL_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/install_boost.sh")
+        
+        # Make sure the script is executable
+        execute_process(
+            COMMAND chmod +x ${BOOST_INSTALL_SCRIPT}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+        
+        # Execute the installation script
+        message(STATUS "Running Unix/Linux Boost installation script...")
+        execute_process(
+            COMMAND ${BOOST_INSTALL_SCRIPT} --prefix=${BOOST_INSTALL_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            RESULT_VARIABLE SCRIPT_RESULT
+            OUTPUT_VARIABLE SCRIPT_OUTPUT
+            ERROR_VARIABLE SCRIPT_ERROR
+        )
+    endif()
     
     if(NOT SCRIPT_RESULT EQUAL 0)
         message(WARNING "Failed to install Boost via script (exit code: ${SCRIPT_RESULT})")
