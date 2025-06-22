@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <future>
 #include <functional>
 #include <unordered_map>
 #include "ArgumentParser/ArgumentManager.hpp"
@@ -66,6 +67,7 @@ namespace ctrace
     struct GlobalConfig
     {
         bool verbose = false; ///< Enables verbose output.
+        std::   launch hasAsync = std::launch::deferred; ///< Enables asynchronous execution.
         bool hasSarifFormat = false; ///< Indicates if SARIF format is enabled.
         bool hasStaticAnalysis = false; ///< Indicates if static analysis is enabled.
         bool hasDynamicAnalysis = false; ///< Indicates if dynamic analysis is enabled.
@@ -131,6 +133,7 @@ namespace ctrace
                 commands["--verbose"] = [this](const std::string&) { config.global.verbose = true; };
                 commands["--sarif-format"] = [this](const std::string&) { config.global.hasSarifFormat = true; };
                 commands["--report-file"] = [this](const std::string& value) { config.global.report_file = value; };
+                commands["--async"] = [this](const std::string&) { config.global.hasAsync = std::launch::async; std::cout << "Asynchronous execution enabled." << std::endl; };
                 commands["--invoke"] = [this](const std::string& value)
                 {
                     config.global.hasInvokedSpecificTools = true;
@@ -139,29 +142,24 @@ namespace ctrace
                     for (const auto& part : parts)
                     {
                         // TODO: Refactor this block for better readability.
-                        std::cout << "Invoke tool: " << part << std::endl;
                         if (part == "flawfinder")
                         {
                             // config.global.hasStaticAnalysis = true;
-                            std::cout << "Flawfinder invoked" << std::endl;
                             config.global.specificTools.emplace_back("flawfinder");
                         }
                         if (part == "ikos")
                         {
                             // config.global.hasStaticAnalysis = true;
-                            std::cout << "Ikos invoked" << std::endl;
                             config.global.specificTools.emplace_back("ikos");
                         }
                         if (part == "cppcheck")
                         {
                             // config.global.hasStaticAnalysis = true;
-                            std::cout << "Cppcheck invoked" << std::endl;
                             config.global.specificTools.emplace_back("cppcheck");
                         }
                         if (part == "tscancode")
                         {
                             // config.global.hasStaticAnalysis = true;
-                            std::cout << "Tscancode invoked" << std::endl;
                             config.global.specificTools.emplace_back("tscancode");
                         }
                     }
@@ -209,7 +207,7 @@ namespace ctrace
              *
              * @param argManager The argument manager containing parsed options.
              */
-            void process(ArgumentManager& argManager)
+            void    process(ArgumentManager& argManager)
             {
                 for (const auto& [option, command] : commands)
                 {
