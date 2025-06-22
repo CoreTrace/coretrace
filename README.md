@@ -26,6 +26,10 @@ You can pass arguments to CMake and invoke ASan.
 ```bash
 -DUSE_THREAD_SANITIZER=ON
 ```
+or
+```bash
+-DUSE_ADDRESS_SANITIZER=ON
+```
 
 > ⚠️ **Warning**: You cannot use `-DUSE_THREAD_SANITIZER=ON` and `-DUSE_ADDRESS_SANITIZER=ON` at the same time.
 
