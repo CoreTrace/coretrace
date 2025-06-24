@@ -20,18 +20,6 @@
 
 std::mutex queueMutex;
 
-// Fonction de tâche qui retourne une string au lieu d'écrire directement
-void longue_tache(int id, int sleep) {
-    std::this_thread::sleep_for(std::chrono::seconds(sleep));
-    std::lock_guard<std::mutex> lock(queueMutex);
-    std::cout << "Tâche " << id << " terminée." << std::endl;
-    std::cout << "Pendant " << sleep << " seconde." << std::endl;
-
-    return;
-    // std::ostringstream oss;
-    // oss << "Tâche " << id << " terminée.";
-}
-
 class ThreadPool {
 public:
     ThreadPool(size_t numThreads)
@@ -98,8 +86,7 @@ class ToolInvoker {
             : m_config(config), m_nbThreadPool(nbThreadPool), m_policy(policy)
         {
             std::cout << "\033[36mInitializing ToolInvoker...\033[0m\n";
-            // Enregistrement des outils disponibles
-            // setup message d'erreur si il ne trouve pas d'outil
+
             tools["cppcheck"]   = std::make_unique<CppCheckToolImplementation>();
             tools["flawfinder"] = std::make_unique<FlawfinderToolImplementation>();
             tools["tscancode"]  = std::make_unique<TscancodeToolImplementation>();
@@ -146,11 +133,15 @@ class ToolInvoker {
         // Exécute une liste spécifique d'outils
         void runSpecificTools(const std::vector<std::string>& tool_names, const std::string& file) const
         {
-            for (const auto& name : tool_names) {
-                if (tools.count(name)) {
+            for (const auto& name : tool_names)
+            {
+                if (tools.count(name))
+                {
                     tools.at(name)->execute(file, m_config);
-                } else {
-                    std::cerr << "\033[31mUnknown tool: " << name << "\033[0m\n";
+                }
+                else
+                {
+                    ctrace::Thread::Output::cerr("\033[31mUnknown tool: " + name + "\033[0m");
                 }
             }
         }

@@ -21,6 +21,7 @@ set(COMMON_SOURCES
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
     src/ctrace_tools/strings.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
     main.cpp
 )
 
@@ -64,4 +65,4 @@ endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/tscancode.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
+# include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)

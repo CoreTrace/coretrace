@@ -38,6 +38,7 @@ namespace ctrace
         argManager.addOption("--dyn", false, 'd');
         argManager.addOption("--entry-points", true, 'e');
         argManager.addOption("--report-file", true, 'r');
+        argManager.addOption("--async", false, 'a');
 
         // Parsing des arguments
         argManager.parse(argc, argv);
@@ -54,7 +55,12 @@ namespace ctrace
 int main(int argc, char *argv[])
 {
     ctrace::ProgramConfig config = ctrace::buildConfig(argc, argv);
-    ctrace::ToolInvoker invoker(config, std::thread::hardware_concurrency(), std::launch::deferred);
+    ctrace::ToolInvoker invoker(config, std::thread::hardware_concurrency(), config.global.hasAsync);
+
+    std::cout << ctrace::Color::CYAN << "asynchronous execution: "
+              << (config.global.hasAsync == std::launch::async ? ctrace::Color::GREEN : ctrace::Color::RED)
+              << (config.global.hasAsync == std::launch::async ? "enabled" : "disabled")
+              << ctrace::Color::RESET << std::endl;
 
     std::cout << ctrace::Color::CYAN << "verbose: "
               << (config.global.verbose ? ctrace::Color::GREEN : ctrace::Color::RED)

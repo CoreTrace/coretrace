@@ -34,13 +34,13 @@ class ProcessFactory {
         static std::unique_ptr<Process> createProcess(const std::string& command, const std::vector<std::string>& args = {})
         {
             #if defined(_WIN32)
-                std::cout << "RUNNING PROCESS FOR WINDOWS" << std::endl;
+                safe_cout("Creating Windows process for command: " + command);
                 return std::make_unique<WindowsProcess>(command, args);
             #elif defined(__linux__)
-                std::cout << "RUNNING PROCESS FOR LINUX" << std::endl;
+                safe_cout("Creating Linux process for command: " + command);
                 return std::make_unique<UnixProcess>(command, args);
             #elif defined(__APPLE__)
-                std::cout << "RUNNING PROCESS FOR MACOS" << std::endl;
+                ctrace::Thread::Output::cout("Creating macOS process for command: " + command);
                 // return std::make_unique<UnixProcessWithPosixSpawn>(command, args); // doesn't work with tscancode
                 return std::make_unique<UnixProcess>(command, args);
             #endif

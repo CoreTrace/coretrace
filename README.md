@@ -12,12 +12,26 @@ Depending on your configuration, you can pass these parameters to cmake. The par
 cmake ..                        \
     -DPARSER_TYPE=CLI11         \
     -DUSE_THREAD_SANITIZER=ON   \
-    -DUSE_ADDRESS_SANITIZER=ON
+    -DUSE_ADDRESS_SANITIZER=OFF
 ```
 
 ```bash
 make -j4
 ```
+
+### DEBUG
+
+You can pass arguments to CMake and invoke ASan.
+
+```bash
+-DUSE_THREAD_SANITIZER=ON
+```
+or
+```bash
+-DUSE_ADDRESS_SANITIZER=ON
+```
+
+> ⚠️ **Warning**: You cannot use `-DUSE_THREAD_SANITIZER=ON` and `-DUSE_ADDRESS_SANITIZER=ON` at the same time.
 
 ### ARGUMENT
 
@@ -90,4 +104,6 @@ std::cout << "Mangled utils::init(): " << mangled3 << "\n";
 - Handle multi-file parsing
 - Add mangling for windows
 - Add lvl verbosity to --verbose like : --verbose=[1|2|3|4]
+- sanitazier explication ...
+- passer du code au lieu du fichier
 ```

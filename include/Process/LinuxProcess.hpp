@@ -6,6 +6,9 @@
 #include <fcntl.h>
 #include <stdexcept>
 #include "Process.hpp"
+#include "ThreadProcess.hpp"
+#include <mutex>
+    #include <iostream>
 
 class UnixProcess : public Process {
 public:
@@ -17,20 +20,19 @@ public:
 protected:
     void prepare() override
     {
-        std::cout << "Preparing Unix/Linux process\n";
+        ctrace::Thread::Output::cout("Preparing Unix/Linux process");
         prepareArguments();
     }
 
     void run() override {
-        std::cout << "Running Unix/Linux process\n";
+        ctrace::Thread::Output::cout("Running Unix/Linux process");
 
         pid_t pid = fork();
         if (pid == -1) {
             throw std::runtime_error("Failed to fork process");
         }
 
-        if (pid == 0) { // Processus fils
-            // Convertir les arguments en tableau de char* pour execvp
+        if (pid == 0) {
             std::vector<char*> execArgs;
             execArgs.push_back(const_cast<char*>(m_command.c_str()));
             for (auto& arg : m_arguments) {
@@ -38,7 +40,6 @@ protected:
             }
             execArgs.push_back(nullptr);
 
-            // Rediriger la sortie standard vers un fichier temporaire pour capturer les logs
             int logFd = open("process.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (logFd == -1) {
                 throw std::runtime_error("Failed to open log file");
@@ -48,8 +49,8 @@ protected:
             close(logFd);
 
             execvp(m_command.c_str(), execArgs.data());
-            _exit(EXIT_FAILURE); // En cas d'échec d'execvp
-        } else { // Processus parent
+            _exit(EXIT_FAILURE);
+        } else {
             int status;
             waitpid(pid, &status, 0);
             captureLogs();
@@ -57,18 +58,18 @@ protected:
     }
 
     void cleanup() override {
-        std::cout << "Cleaning up Unix/Linux process\n";
-        unlink("process.log"); // Supprimer le fichier de logs temporaire
+        ctrace::Thread::Output::cout("Cleaning up Unix/Linux process");
+        // unlink("process.log");
     }
 
     void prepareArguments() override {
-        std::cout << "Preparing arguments for Unix/Linux\n";
+        ctrace::Thread::Output::cout("Preparing arguments for Unix/Linux");
         // m_arguments.clear();
-        // m_arguments.push_back("-l"); // Exemple d'argument pour `ls`
+        // m_arguments.push_back("-l");
     }
 
     void captureLogs() override {
-        std::cout << "Capturing logs for Unix/Linux\n";
+        ctrace::Thread::Output::cout("Capturing logs from process.log");
         FILE* logFile = fopen("process.log", "r");
         if (!logFile) {
             throw std::runtime_error("Failed to open log file");

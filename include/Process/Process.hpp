@@ -26,6 +26,7 @@ class Process {
         virtual void captureLogs() = 0;
 
         std::vector<std::string> m_arguments;
+        std::stringstream log_buffer;
 };
 
 #endif // PROCESS_HPP
