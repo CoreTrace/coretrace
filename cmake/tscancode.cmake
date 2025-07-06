@@ -2,7 +2,7 @@ include(ExternalProject)
 
 ExternalProject_Add(
     tscancode
-    GIT_REPOSITORY https://github.com/Tencent/TscanCode.git
+    GIT_REPOSITORY https://github.com/CoreTrace/coretrace-TscanCode
     GIT_TAG master
     PREFIX ${CMAKE_BINARY_DIR}/tscancode
     CONFIGURE_COMMAND ""
