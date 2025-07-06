@@ -34,10 +34,10 @@ class ProcessFactory {
         static std::unique_ptr<Process> createProcess(const std::string& command, const std::vector<std::string>& args = {})
         {
             #if defined(_WIN32)
-                safe_cout("Creating Windows process for command: " + command);
+                ctrace::Thread::Output::cout("Creating Windows process for command: " + command);
                 return std::make_unique<WindowsProcess>(command, args);
             #elif defined(__linux__)
-                safe_cout("Creating Linux process for command: " + command);
+                ctrace::Thread::Output::cout("Creating Linux process for command: " + command);
                 return std::make_unique<UnixProcess>(command, args);
             #elif defined(__APPLE__)
                 ctrace::Thread::Output::cout("Creating macOS process for command: " + command);
