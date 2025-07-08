@@ -3,6 +3,7 @@ name: Build and Release
 on:
   push:
     branches: [ main, dev, feature/add-workflow-ci ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, dev, feature/add-workflow-ci ]
 
@@ -78,3 +79,48 @@ jobs:
         with:
           name: ctrace-macos
           path: build/ctrace-macos.tar.gz
+
+  release:
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/add-workflow-ci'
+    steps:
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ctrace-linux
+          
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ctrace-macos
+          
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name || 'latest' }}
+          release_name: ctrace ${{ github.ref_name || 'latest' }}
+          draft: false
+          prerelease: false
+          
+      - name: Upload Linux Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./ctrace-linux.tar.gz
+          asset_name: ctrace-linux.tar.gz
+          asset_content_type: application/gzip
+          
+      - name: Upload macOS Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./ctrace-macos.tar.gz
+          asset_name: ctrace-macos.tar.gz
+          asset_content_type: application/gzip
