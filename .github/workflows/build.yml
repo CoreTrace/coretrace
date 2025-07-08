@@ -1,0 +1,83 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, dev, feature/add-workflow-ci ]
+  pull_request:
+    branches: [ main, dev, feature/add-workflow-ci ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DPARSER_TYPE=CLI11 \
+            -DUSE_THREAD_SANITIZER=ON \
+            -DUSE_ADDRESS_SANITIZER=OFF
+
+      - name: Build
+        run: |
+          cd build
+          make -j4
+
+      - name: Test
+        run: |
+          cd build
+          ./ctrace -h
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DPARSER_TYPE=CLI11 \
+            -DUSE_THREAD_SANITIZER=ON \
+            -DUSE_ADDRESS_SANITIZER=OFF
+
+      - name: Build
+        run: |
+          cd build
+          make -j4
+
+      - name: Test
+        run: |
+          cd build
+          ./ctrace -h
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DPARSER_TYPE=CLI11 \
+            -DUSE_THREAD_SANITIZER=ON \
+            -DUSE_ADDRESS_SANITIZER=OFF
+
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --config Release
+
+      - name: Test
+        run: |
+          cd build/Release
+          ./ctrace.exe -h
