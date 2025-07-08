@@ -38,7 +38,7 @@ jobs:
           tar -czf ctrace-linux.tar.gz ctrace
           
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ctrace-linux
           path: build/ctrace-linux.tar.gz
@@ -74,7 +74,7 @@ jobs:
           tar -czf ctrace-macos.tar.gz ctrace
           
       - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ctrace-macos
           path: build/ctrace-macos.tar.gz
