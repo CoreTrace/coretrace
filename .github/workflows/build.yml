@@ -67,10 +67,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake .. \
-            -DPARSER_TYPE=CLI11 \
-            -DUSE_THREAD_SANITIZER=ON \
-            -DUSE_ADDRESS_SANITIZER=OFF
+          cmake .. -DPARSER_TYPE=CLI11 -DUSE_THREAD_SANITIZER=ON -DUSE_ADDRESS_SANITIZER=OFF
 
       - name: Build
         run: |
