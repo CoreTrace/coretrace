@@ -1,4 +1,4 @@
-name: Build
+name: Build and Release
 
 on:
   push:
@@ -32,6 +32,17 @@ jobs:
           cd build
           ./ctrace -h
 
+      - name: Package Linux Release
+        run: |
+          cd build
+          tar -czf ctrace-linux.tar.gz ctrace
+          
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ctrace-linux
+          path: build/ctrace-linux.tar.gz
+
   build-macos:
     runs-on: macos-latest
     steps:
@@ -57,24 +68,13 @@ jobs:
           cd build
           ./ctrace -h
 
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Configure CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake .. -DPARSER_TYPE=CLI11 -DUSE_THREAD_SANITIZER=ON -DUSE_ADDRESS_SANITIZER=OFF
-
-      - name: Build
+      - name: Package macOS Release
         run: |
           cd build
-          cmake --build . --config Release
-
-      - name: Test
-        run: |
-          cd build/Release
-          ./ctrace.exe -h
+          tar -czf ctrace-macos.tar.gz ctrace
+          
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ctrace-macos
+          path: build/ctrace-macos.tar.gz
