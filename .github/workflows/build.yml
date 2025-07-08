@@ -87,6 +87,47 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          
+      - name: Generate version number
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Si c'est déjà un tag, utiliser le nom du tag
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            # Vérifier si le message de commit contient un tag spécifié
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            
+            # Chercher [tag:vX.X.X] ou [release:vX.X.X] dans le message de commit
+            if [[ $COMMIT_MSG =~ \[tag:([vV]?[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+              CUSTOM_TAG="${BASH_REMATCH[1]}"
+              # S'assurer que le tag commence par 'v'
+              if [[ ! $CUSTOM_TAG =~ ^v ]]; then
+                CUSTOM_TAG="v${CUSTOM_TAG}"
+              fi
+              echo "tag_name=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
+              echo "Custom tag found: ${CUSTOM_TAG}"
+            elif [[ $COMMIT_MSG =~ \[release:([vV]?[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+              CUSTOM_TAG="${BASH_REMATCH[1]}"
+              # S'assurer que le tag commence par 'v'
+              if [[ ! $CUSTOM_TAG =~ ^v ]]; then
+                CUSTOM_TAG="v${CUSTOM_TAG}"
+              fi
+              echo "tag_name=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
+              echo "Custom release tag found: ${CUSTOM_TAG}"
+            else
+              # Générer un nouveau numéro de version 0.x.0 automatique
+              COMMIT_COUNT=$(git rev-list --count HEAD)
+              VERSION="0.${COMMIT_COUNT}.0"
+              echo "tag_name=v${VERSION}" >> $GITHUB_OUTPUT
+              echo "Auto-generated tag: v${VERSION}"
+            fi
+          fi
+          
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
@@ -100,8 +141,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name || format('dev-{0}', github.sha) }}
-          name: ctrace ${{ github.ref_name || format('dev-{0}', github.sha) }}
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ctrace ${{ steps.version.outputs.tag_name }}
           files: |
             ctrace-linux.tar.gz
             ctrace-macos.tar.gz
