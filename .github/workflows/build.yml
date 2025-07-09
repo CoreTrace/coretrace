@@ -1,0 +1,150 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main, dev, feature/add-workflow-ci ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, dev, feature/add-workflow-ci ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DPARSER_TYPE=CLI11 \
+            -DUSE_THREAD_SANITIZER=ON \
+            -DUSE_ADDRESS_SANITIZER=OFF
+
+      - name: Build
+        run: |
+          cd build
+          make -j4
+
+      - name: Test
+        run: |
+          cd build
+          ./ctrace -h
+
+      - name: Package Linux Release
+        run: |
+          cd build
+          tar -czf ctrace-linux.tar.gz ctrace
+          
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrace-linux
+          path: build/ctrace-linux.tar.gz
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DPARSER_TYPE=CLI11 \
+            -DUSE_THREAD_SANITIZER=ON \
+            -DUSE_ADDRESS_SANITIZER=OFF
+
+      - name: Build
+        run: |
+          cd build
+          make -j4
+
+      - name: Test
+        run: |
+          cd build
+          ./ctrace -h
+
+      - name: Package macOS Release
+        run: |
+          cd build
+          tar -czf ctrace-macos.tar.gz ctrace
+          
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrace-macos
+          path: build/ctrace-macos.tar.gz
+
+  release:
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/add-workflow-ci'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          
+      - name: Generate version number
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Si c'est déjà un tag, utiliser le nom du tag
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            # Vérifier si le message de commit contient un tag spécifié
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            
+            # Chercher [tag:vX.X.X] ou [release:vX.X.X] dans le message de commit
+            if [[ $COMMIT_MSG =~ \[tag:([vV]?[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+              CUSTOM_TAG="${BASH_REMATCH[1]}"
+              # S'assurer que le tag commence par 'v'
+              if [[ ! $CUSTOM_TAG =~ ^v ]]; then
+                CUSTOM_TAG="v${CUSTOM_TAG}"
+              fi
+              echo "tag_name=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
+              echo "Custom tag found: ${CUSTOM_TAG}"
+            elif [[ $COMMIT_MSG =~ \[release:([vV]?[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+              CUSTOM_TAG="${BASH_REMATCH[1]}"
+              # S'assurer que le tag commence par 'v'
+              if [[ ! $CUSTOM_TAG =~ ^v ]]; then
+                CUSTOM_TAG="v${CUSTOM_TAG}"
+              fi
+              echo "tag_name=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
+              echo "Custom release tag found: ${CUSTOM_TAG}"
+            else
+              # Générer un nouveau numéro de version 0.x.0 automatique
+              COMMIT_COUNT=$(git rev-list --count HEAD)
+              VERSION="0.${COMMIT_COUNT}.0"
+              echo "tag_name=v${VERSION}" >> $GITHUB_OUTPUT
+              echo "Auto-generated tag: v${VERSION}"
+            fi
+          fi
+          
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ctrace-linux
+          
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ctrace-macos
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ctrace ${{ steps.version.outputs.tag_name }}
+          files: |
+            ctrace-linux.tar.gz
+            ctrace-macos.tar.gz
+          draft: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
