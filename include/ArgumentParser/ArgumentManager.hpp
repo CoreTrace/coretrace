@@ -55,6 +55,14 @@ class ArgumentManager
          * @return `true` if the option was provided, `false` otherwise.
          */
         [[nodiscard]] bool hasOption(const std::string& name) const;
+
+        /**
+         * @brief Checks if no options were provided.
+         *
+         * @return `true` if no options were provided, `false` otherwise.
+         */
+        [[nodiscard]] bool hasNoOption() const;
+
         /**
          * @brief Retrieves the value of a specific option.
          *
@@ -65,6 +73,7 @@ class ArgumentManager
 
     private:
         std::unique_ptr<IArgumentParser> _parser; ///< The underlying argument parser implementation.
+        bool _hasNoOption = false; ///< Flag indicating if no options were provided.
 };
 
 #endif // ARGUMENTMANAGER_HPP
