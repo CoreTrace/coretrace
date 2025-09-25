@@ -48,6 +48,12 @@ namespace ctrace
         processor.process(argManager);
         // processor.execute(argManager);
 
+        if (argManager.hasNoOption())
+        {
+            processor.execute("--help", "");
+            std::exit(0);
+        }
+
         return config;
     }
 }
