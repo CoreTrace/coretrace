@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include "Config/config.hpp"
+#include "../Ipc/IpcStrategy.hpp"
 
 namespace ctrace {
 
@@ -39,6 +40,14 @@ namespace ctrace {
              * @return A `std::string` representing the name of the tool.
              */
             virtual std::string name() const = 0;
+
+            /**
+             * @brief Sets the IPC strategy for the analysis tool.
+             * This method allows the tool to communicate results or data
+             * through the specified IPC mechanism.
+             * @param ipc A shared pointer to an `IpcStrategy` instance.
+             */
+            virtual void setIpcStrategy(std::shared_ptr<IpcStrategy> ipc) = 0;
     };
 
 }

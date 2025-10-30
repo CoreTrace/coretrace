@@ -9,6 +9,8 @@
 #include "ArgumentParser/ArgumentManager.hpp"
 #include "ArgumentParser/ArgumentParserFactory.hpp"
 #include "ctrace_tools/strings.hpp"
+#include "Process/Ipc/IpcStrategy.hpp"
+#include "ctrace_defs/types.hpp"
 
 static void printHelp(void)
 {
@@ -29,6 +31,9 @@ Options:
   --invoke <tools>         Invokes specific tools (comma-separated).
                            Available tools: flawfinder, ikos, cppcheck, tscancode.
   --input <files>          Specifies the source files to analyse (comma-separated).
+  --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
+  --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
+  --async                  Enables asynchronous execution.
 
 Examples:
   ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder
@@ -67,11 +72,13 @@ namespace ctrace
     struct GlobalConfig
     {
         bool verbose = false; ///< Enables verbose output.
-        std::   launch hasAsync = std::launch::deferred; ///< Enables asynchronous execution.
+        std::launch hasAsync = std::launch::deferred; ///< Enables asynchronous execution.
         bool hasSarifFormat = false; ///< Indicates if SARIF format is enabled.
         bool hasStaticAnalysis = false; ///< Indicates if static analysis is enabled.
         bool hasDynamicAnalysis = false; ///< Indicates if dynamic analysis is enabled.
         bool hasInvokedSpecificTools = false; ///< Indicates if specific tools are invoked.
+        std::string ipc = ctrace_defs::IPC_TYPES.front(); ///< IPC method to use (e.g., fifo, socket).
+        std::string ipcPath = "/tmp/coretrace_ipc"; ///< Path for IPC communication.
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
@@ -180,6 +187,25 @@ namespace ctrace
                 {
                     config.global.entry_points = value;
                 };
+                commands["--ipc"] = [this](const std::string& value)
+                {
+                    auto ipc_list = ctrace_defs::IPC_TYPES;
+
+                    if (std::find(ipc_list.begin(), ipc_list.end(), value) == ipc_list.end())
+                    {
+                        std::cerr << "Invalid IPC type: '" << value << "'\n"
+                                << "Available IPC types: ";
+                        for (const auto& ipc : ipc_list)
+                            std::cerr << ipc << " ";
+                        std::cerr << std::endl;
+                        std::exit(EXIT_FAILURE);
+                    }
+                    config.global.ipc = value;
+                };
+                commands["--ipc-path"] = [this](const std::string& value)
+                {
+                    config.global.ipcPath = value;
+                };
                 // commands["--output"] = [this](const std::string& value) {
                 //     if (!config.files.empty()) config.files.back().output_file = value;
                 // };
@@ -207,7 +233,7 @@ namespace ctrace
              *
              * @param argManager The argument manager containing parsed options.
              */
-            void    process(ArgumentManager& argManager)
+            void process(ArgumentManager& argManager)
             {
                 for (const auto& [option, command] : commands)
                 {

@@ -1,6 +1,9 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+#include <vector>
+#include <string>
+
 namespace ctrace_defs
 {
     /**
@@ -14,6 +17,13 @@ namespace ctrace_defs
         C   = 0,
         CPP = 1,
     };
+
+    inline const std::vector<std::string> IPC_TYPES = {
+                                                        "standardIO", // default
+                                                        "socket",
+                                                        // "pipe" // future implementation
+                                                    };
+
 }
 
 #endif // TYPES_HPP

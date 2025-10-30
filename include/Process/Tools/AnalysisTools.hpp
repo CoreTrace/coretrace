@@ -3,7 +3,8 @@
 
 #include <regex>
 
-#include "IAnalysisTools.hpp"
+// #include "IAnalysisTools.hpp"
+#include "AnalysisToolsBase.hpp"
 #include "ctrace_tools/languageType.hpp"
 #include "ctrace_tools/mangle.hpp"
 #include "../ProcessFactory.hpp"
@@ -12,7 +13,8 @@
 
 using json = nlohmann::json;
 
-class EntryPoint {
+class EntryPoint
+{
     public:
         EntryPoint(const std::string& entryPointName, const std::vector<std::string>& paramTypes)
             : name(entryPointName), paramTypes(paramTypes)
@@ -74,7 +76,7 @@ namespace ctrace
 {
 
 // Outils statiques
-class IkosToolImplementation : public IAnalysisTool
+class IkosToolImplementation : public AnalysisToolBase
 {
     public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
@@ -137,7 +139,7 @@ class IkosToolImplementation : public IAnalysisTool
         }
 };
 
-class FlawfinderToolImplementation : public IAnalysisTool
+class FlawfinderToolImplementation : public AnalysisToolBase
 {
     public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
@@ -161,9 +163,18 @@ class FlawfinderToolImplementation : public IAnalysisTool
                     argsProcess.push_back("--sarif");
                 }
                 argsProcess.push_back(src_file);
-                auto process = ProcessFactory::createProcess("python3", argsProcess); // ou "cmd.exe" pour Windows
+                auto process = ProcessFactory::createProcess("python3", argsProcess); // or "cmd.exe" for Windows
                 process->execute();
-                ctrace::Thread::Output::cout(process->logOutput);
+
+                if (config.global.ipc == "standardIO")
+                {
+                    ctrace::Thread::Output::cout(process->logOutput);
+                }
+                else
+                {
+                    ipc->write(process->logOutput);
+                }
+
             } catch (const std::exception& e) {
                 ctrace::Thread::Output::cout("Error: " + std::string(e.what()));
                 return;
@@ -175,7 +186,7 @@ class FlawfinderToolImplementation : public IAnalysisTool
         }
 };
 
-class TscancodeToolImplementation : public IAnalysisTool
+class TscancodeToolImplementation : public AnalysisToolBase
 {
 public:
     void execute(const std::string& file, ProgramConfig config) const override;
@@ -187,7 +198,7 @@ protected:
 };
 
 
-class CppCheckToolImplementation : public IAnalysisTool
+class CppCheckToolImplementation : public AnalysisToolBase
 {
     public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
@@ -222,7 +233,7 @@ class CppCheckToolImplementation : public IAnalysisTool
 };
 
     // Outils dynamiques
-class DynTool1 : public IAnalysisTool
+class DynTool1 : public AnalysisToolBase
 {
     public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
@@ -235,7 +246,7 @@ class DynTool1 : public IAnalysisTool
         }
 };
 
-class DynTool2 : public IAnalysisTool
+class DynTool2 : public AnalysisToolBase
 {
     public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
@@ -248,7 +259,7 @@ class DynTool2 : public IAnalysisTool
         }
 };
 
-class DynTool3 : public IAnalysisTool
+class DynTool3 : public AnalysisToolBase
 {
     public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
