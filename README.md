@@ -12,7 +12,8 @@ Depending on your configuration, you can pass these parameters to cmake. The par
 cmake ..                        \
     -DPARSER_TYPE=CLI11         \
     -DUSE_THREAD_SANITIZER=ON   \
-    -DUSE_ADDRESS_SANITIZER=OFF
+    -DUSE_ADDRESS_SANITIZER=OFF \
+    -DLLVM_DIR=your/llvm/version
 ```
 
 ```bash
@@ -54,6 +55,9 @@ Options:
   --invoke <tools>         Invokes specific tools (comma-separated).
                            Available tools: flawfinder, ikos, cppcheck, tscancode.
   --input <files>          Specifies the source files to analyse (comma-separated).
+  --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
+  --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
+  --async                  Enables asynchronous execution.
 
 Examples:
   ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder
