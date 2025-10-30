@@ -95,13 +95,24 @@ class ToolInvoker {
             tools["dyn_tools_2"] = std::make_unique<DynTool2>();
             tools["dyn_tools_3"] = std::make_unique<DynTool3>();
 
-
-            // Groupes prédéfinis
             static_tools = {"cppcheck", "flawfinder", "tscancode", "ikos"};
             dynamic_tools = {"dyn_tools_1", "dyn_tools_2", "dyn_tools_3"};
 
+            if (m_config.global.ipc == "standardIO")
+            {
+                m_ipc = nullptr; // Use std::cout directely
+                std::cout << "\033[36mUsing standardIO for IPC.\033[0m\n";
+            }
+            else
+            {
+                m_ipc = std::make_shared<UnixSocketStrategy>(m_config.global.ipcPath);
+
+                for (auto& [_, tool] : tools)
+                    tool->setIpcStrategy(m_ipc);
+            }
         }
-        // Exécute tous les outils statiques
+
+        // execute all static analysis tools
         void runStaticTools(const std::string& file) const
         {
             std::vector<std::future<void>> results;
@@ -123,9 +134,11 @@ class ToolInvoker {
             }
         }
 
-        // Exécute tous les outils dynamiques
-        void runDynamicTools(const std::string& file) const {
-            for (const auto& tool_name : dynamic_tools) {
+        // execute all dynamic analysis tools
+        void runDynamicTools(const std::string& file) const
+        {
+            for (const auto& tool_name : dynamic_tools)
+            {
                 tools.at(tool_name)->execute(file, m_config);
             }
         }
@@ -153,6 +166,7 @@ class ToolInvoker {
         ctrace::ProgramConfig m_config;
         uint8_t m_nbThreadPool;
         std::launch m_policy;
+        std::shared_ptr<IpcStrategy> m_ipc;
     };
 }
 
