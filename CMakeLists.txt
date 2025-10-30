@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.11)
 
-project(ArgumentManagerProject VERSION 1.0 LANGUAGES CXX)
+project(ArgumentManagerProject VERSION 1.0 LANGUAGES C CXX)
+
+include(${CMAKE_SOURCE_DIR}/cmake/CheckLLVMVersion.cmake)
+set(LLVM_MIN_REQUIRED_VERSION "19" CACHE STRING "Minimum required LLVM version")
+check_llvm_version(${LLVM_MIN_REQUIRED_VERSION})
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
