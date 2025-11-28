@@ -91,11 +91,12 @@ class ToolInvoker {
             tools["flawfinder"] = std::make_unique<FlawfinderToolImplementation>();
             tools["tscancode"]  = std::make_unique<TscancodeToolImplementation>();
             tools["ikos"]       = std::make_unique<IkosToolImplementation>();
+            tools["ctrace_stack_analyzer"] = std::make_unique<StackAnalyzerToolImplementation>();
             tools["dyn_tools_1"] = std::make_unique<DynTool1>();
             tools["dyn_tools_2"] = std::make_unique<DynTool2>();
             tools["dyn_tools_3"] = std::make_unique<DynTool3>();
 
-            static_tools = {"cppcheck", "flawfinder", "tscancode", "ikos"};
+            static_tools = {"cppcheck", "flawfinder", "tscancode", "ikos", "ctrace_stack_analyzer"};
             dynamic_tools = {"dyn_tools_1", "dyn_tools_2", "dyn_tools_3"};
 
             if (m_config.global.ipc == "standardIO")
@@ -112,7 +113,7 @@ class ToolInvoker {
             }
         }
 
-        // execute all static analysis tools
+        // Execute all static analysis tools
         void runStaticTools(const std::string& file) const
         {
             std::vector<std::future<void>> results;
@@ -134,7 +135,7 @@ class ToolInvoker {
             }
         }
 
-        // execute all dynamic analysis tools
+        // Execute all dynamic analysis tools
         void runDynamicTools(const std::string& file) const
         {
             for (const auto& tool_name : dynamic_tools)
@@ -143,7 +144,7 @@ class ToolInvoker {
             }
         }
 
-        // Exécute une liste spécifique d'outils
+        // Execute a specific tool list
         void runSpecificTools(const std::vector<std::string>& tool_names, const std::string& file) const
         {
             for (const auto& name : tool_names)

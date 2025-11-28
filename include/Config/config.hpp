@@ -169,6 +169,11 @@ namespace ctrace
                             // config.global.hasStaticAnalysis = true;
                             config.global.specificTools.emplace_back("tscancode");
                         }
+                        if (part == "ctrace_stack_analyzer")
+                        {
+                            // config.global.hasStaticAnalysis = true;
+                            config.global.specificTools.emplace_back("ctrace_stack_analyzer");
+                        }
                     }
                 };
                 commands["--input"] = [this](const std::string& value)

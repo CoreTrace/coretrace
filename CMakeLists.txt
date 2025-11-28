@@ -22,6 +22,7 @@ set(COMMON_SOURCES
     src/ctrace_tools/languageType.cpp
     src/ctrace_tools/strings.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
+    src/Process/Tools/StackAnalyzerToolImplementation.cpp
     main.cpp
 )
 
@@ -56,6 +57,9 @@ endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
 target_link_libraries(ctrace PRIVATE nlohmann_json::nlohmann_json)
+
+include(${CMAKE_SOURCE_DIR}/cmake/stackUsageAnalyzer.cmake)
+target_link_libraries(ctrace PRIVATE coretrace::stack_usage_analyzer_lib)
 
 option(USE_EXTERNAL_CLI11 "Download CLI11" OFF)
 if (USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")

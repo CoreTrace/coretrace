@@ -11,6 +11,11 @@
 #include "../ThreadProcess.hpp"
 #include <nlohmann/json.hpp>
 
+#include "StackUsageAnalyzer.hpp"
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/Support/SourceMgr.h>
+#include <llvm/Support/raw_ostream.h>
+
 using json = nlohmann::json;
 
 class EntryPoint
@@ -75,7 +80,7 @@ class EntryPoint
 namespace ctrace
 {
 
-// Outils statiques
+// Static analysis tools
 class IkosToolImplementation : public AnalysisToolBase
 {
     public:
@@ -139,6 +144,13 @@ class IkosToolImplementation : public AnalysisToolBase
         }
 };
 
+class StackAnalyzerToolImplementation : public AnalysisToolBase
+{
+    public:
+        void execute(const std::string& file, ctrace::ProgramConfig config) const override;
+        std::string name() const override;
+};
+
 class FlawfinderToolImplementation : public AnalysisToolBase
 {
     public:
@@ -195,6 +207,7 @@ public:
 protected:
     std::string_view severityToLevel(const std::string& severity) const;
     json sarifFormat(const std::string &buffer, const std::string &outputFile) const;
+    json jsonFormat(const std::string &buffer, const std::string &outputFile) const;
 };
 
 

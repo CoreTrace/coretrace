@@ -3,7 +3,8 @@
 #include <unordered_map>
 #include <string_view>
 
-namespace ctrace {
+namespace ctrace
+{
 
 void TscancodeToolImplementation::execute(const std::string& file, ProgramConfig config) const
 {
@@ -23,9 +24,14 @@ void TscancodeToolImplementation::execute(const std::string& file, ProgramConfig
         ctrace::Thread::Output::cout(process->logOutput);
         ctrace::Thread::Output::cout("Finished tscancode on " + file);
 
-        if (has_sarif_format) {
+        if (has_sarif_format)
+        {
             ctrace::Thread::Output::cout(sarifFormat(process->logOutput, "ccoretrace-sarif-tscancode.json").dump());
         }
+        // if (has_json_format)
+        // {
+        //     ctrace::Thread::Output::cout(jsonFormat(process->logOutput, "coretrace-json-tscancode.json").dump());
+        // }
 
     }
     catch (const std::exception& e)
@@ -54,6 +60,22 @@ std::string_view TscancodeToolImplementation::severityToLevel(const std::string&
         return it->second;
     }
     return "none";
+}
+
+/*
+    START TEST
+*/
+
+/*
+    END TEST
+*/
+
+json TscancodeToolImplementation::jsonFormat(const std::string &buffer, const std::string &outputFile) const
+{
+    json j;
+    std::cout << buffer << std::endl;
+    std::cout << outputFile << std::endl;
+    return j;
 }
 
 json TscancodeToolImplementation::sarifFormat(const std::string &buffer, const std::string &outputFile) const
