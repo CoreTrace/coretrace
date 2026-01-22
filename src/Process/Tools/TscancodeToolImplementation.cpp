@@ -21,12 +21,12 @@ void TscancodeToolImplementation::execute(const std::string& file, ProgramConfig
 
         auto process = ProcessFactory::createProcess("./tscancode/src/tscancode/trunk/tscancode", argsProcess);
         process->execute();
-        ctrace::Thread::Output::cout(process->logOutput);
+        ctrace::Thread::Output::tool_out(process->logOutput);
         ctrace::Thread::Output::cout("Finished tscancode on " + file);
 
         if (has_sarif_format)
         {
-            ctrace::Thread::Output::cout(sarifFormat(process->logOutput, "ccoretrace-sarif-tscancode.json").dump());
+            ctrace::Thread::Output::tool_out(sarifFormat(process->logOutput, "ccoretrace-sarif-tscancode.json").dump());
         }
         // if (has_json_format)
         // {
@@ -36,7 +36,7 @@ void TscancodeToolImplementation::execute(const std::string& file, ProgramConfig
     }
     catch (const std::exception& e)
     {
-        ctrace::Thread::Output::cerr("Error: " + std::string(e.what()));
+        ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
         return;
     }
 }
