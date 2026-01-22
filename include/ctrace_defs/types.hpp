@@ -21,6 +21,7 @@ namespace ctrace_defs
     inline const std::vector<std::string> IPC_TYPES = {
                                                         "standardIO", // default
                                                         "socket",
+                                                        "serve",
                                                         // "pipe" // future implementation
                                                     };
 
