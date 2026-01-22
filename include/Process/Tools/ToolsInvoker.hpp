@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <iostream>
 
+#include "Process/Ipc/IpcStrategy.hpp"
 #include "AnalysisTools.hpp"
 
 #include <iostream>
@@ -17,8 +18,6 @@
 #include <chrono>
 #include <functional>
 #include <sstream>
-
-std::mutex queueMutex;
 
 class ThreadPool {
 public:
@@ -82,8 +81,14 @@ namespace ctrace
 
 class ToolInvoker {
     public:
-        ToolInvoker(ctrace::ProgramConfig config, uint8_t nbThreadPool, std::launch policy)
-            : m_config(config), m_nbThreadPool(nbThreadPool), m_policy(policy)
+        ToolInvoker(ctrace::ProgramConfig config,
+                    uint8_t nbThreadPool,
+                    std::launch policy,
+                    std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> output_capture = nullptr)
+            : m_config(config),
+              m_nbThreadPool(nbThreadPool),
+              m_policy(policy),
+              m_output_capture(output_capture)
         {
             std::cout << "\033[36mInitializing ToolInvoker...\033[0m\n";
 
@@ -123,8 +128,11 @@ class ToolInvoker {
                 // tools.at(tool_name)->execute(file, m_config);
                 results.push_back(std::async(
                     m_policy,
-                    [&tool = tools.at(tool_name), file, this]()
+                    [this, tool_name, file]()
                     {
+                        auto& tool = tools.at(tool_name);
+                        ctrace::Thread::Output::CaptureContext ctx{m_output_capture, tool_name, true};
+                        ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
                         return tool->execute(file, m_config);
                     }
                 ));
@@ -140,7 +148,10 @@ class ToolInvoker {
         {
             for (const auto& tool_name : dynamic_tools)
             {
-                tools.at(tool_name)->execute(file, m_config);
+                auto& tool = tools.at(tool_name);
+                ctrace::Thread::Output::CaptureContext ctx{m_output_capture, tool_name, true};
+                ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
+                tool->execute(file, m_config);
             }
         }
 
@@ -151,10 +162,15 @@ class ToolInvoker {
             {
                 if (tools.count(name))
                 {
-                    tools.at(name)->execute(file, m_config);
+                    auto& tool = tools.at(name);
+                    ctrace::Thread::Output::CaptureContext ctx{m_output_capture, name, true};
+                    ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
+                    tool->execute(file, m_config);
                 }
                 else
                 {
+                    ctrace::Thread::Output::CaptureContext ctx{m_output_capture, name, true};
+                    ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
                     ctrace::Thread::Output::cerr("\033[31mUnknown tool: " + name + "\033[0m");
                 }
             }
@@ -168,6 +184,7 @@ class ToolInvoker {
         uint8_t m_nbThreadPool;
         std::launch m_policy;
         std::shared_ptr<IpcStrategy> m_ipc;
+        std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> m_output_capture;
     };
 }
 
