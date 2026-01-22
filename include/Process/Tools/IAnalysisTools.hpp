@@ -2,8 +2,12 @@
 #define IANALYSISTOOLS_HPP
 
 #include <iostream>
+#include <memory>
+#include <string>
+
 #include "Config/config.hpp"
-#include "../Ipc/IpcStrategy.hpp"
+
+class IpcStrategy;
 
 namespace ctrace {
 
