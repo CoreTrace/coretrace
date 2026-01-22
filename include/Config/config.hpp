@@ -1,6 +1,8 @@
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
+#include <cstdlib>
+#include <iostream>
 #include <string>
 #include <vector>
 #include <future>
@@ -9,7 +11,6 @@
 #include "ArgumentParser/ArgumentManager.hpp"
 #include "ArgumentParser/ArgumentParserFactory.hpp"
 #include "ctrace_tools/strings.hpp"
-#include "Process/Ipc/IpcStrategy.hpp"
 #include "ctrace_defs/types.hpp"
 
 static void printHelp(void)
@@ -79,6 +80,8 @@ namespace ctrace
         bool hasInvokedSpecificTools = false; ///< Indicates if specific tools are invoked.
         std::string ipc = ctrace_defs::IPC_TYPES.front(); ///< IPC method to use (e.g., fifo, socket).
         std::string ipcPath = "/tmp/coretrace_ipc"; ///< Path for IPC communication.
+        std::string serverHost = "127.0.0.1"; ///< Host for server IPC (if applicable).
+        int serverPort = 8080; ///< Port for server IPC (if applicable).
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
@@ -199,10 +202,14 @@ namespace ctrace
                     if (std::find(ipc_list.begin(), ipc_list.end(), value) == ipc_list.end())
                     {
                         std::cerr << "Invalid IPC type: '" << value << "'\n"
-                                << "Available IPC types: ";
+                                << "Available IPC types: [";
                         for (const auto& ipc : ipc_list)
-                            std::cerr << ipc << " ";
-                        std::cerr << std::endl;
+                        {
+                            std::cerr << ipc;
+                            if (ipc != ipc_list.back())
+                                std::cerr << ", ";
+                        }
+                        std::cerr << "]" << std::endl;
                         std::exit(EXIT_FAILURE);
                     }
                     config.global.ipc = value;
@@ -210,6 +217,16 @@ namespace ctrace
                 commands["--ipc-path"] = [this](const std::string& value)
                 {
                     config.global.ipcPath = value;
+                };
+                commands["--serve-host"] = [this](const std::string& value)
+                {
+                    config.global.serverHost = value;
+                    std::cout << "[DEBUG] Server host set to " << config.global.serverHost << std::endl;
+                };
+                commands["--serve-port"] = [this](const std::string& value)
+                {
+                    config.global.serverPort = std::stoi(value);
+                    std::cout << "[DEBUG] Server port set to " << config.global.serverPort << std::endl;
                 };
                 // commands["--output"] = [this](const std::string& value) {
                 //     if (!config.files.empty()) config.files.back().output_file = value;
