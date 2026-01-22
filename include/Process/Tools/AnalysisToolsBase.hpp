@@ -1,4 +1,5 @@
 #include "IAnalysisTools.hpp"
+#include "../Ipc/IpcStrategy.hpp"
 
 namespace ctrace
 {
