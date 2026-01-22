@@ -20,7 +20,7 @@ void StackAnalyzerToolImplementation::execute(const std::string& file, ctrace::P
     {
         if (config.global.hasSarifFormat)
         {
-            ctrace::Thread::Output::cout(ctrace::stack::toJson(res, filename));
+            ctrace::Thread::Output::tool_out(ctrace::stack::toJson(res, filename));
             return;
         }
             if (res.functions.empty()) {

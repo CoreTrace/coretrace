@@ -131,10 +131,10 @@ class IkosToolImplementation : public AnalysisToolBase
                 auto process = ProcessFactory::createProcess("./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 process->execute();
-                ctrace::Thread::Output::cout(process->logOutput);
+                ctrace::Thread::Output::tool_out(process->logOutput);
 
             } catch (const std::exception& e) {
-                ctrace::Thread::Output::cout("Error: " + std::string(e.what()));
+                ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 // return 1;
             }
         }
@@ -180,7 +180,7 @@ class FlawfinderToolImplementation : public AnalysisToolBase
 
                 if (config.global.ipc == "standardIO")
                 {
-                    ctrace::Thread::Output::cout(process->logOutput);
+                    ctrace::Thread::Output::tool_out(process->logOutput);
                 }
                 else
                 {
@@ -188,7 +188,7 @@ class FlawfinderToolImplementation : public AnalysisToolBase
                 }
 
             } catch (const std::exception& e) {
-                ctrace::Thread::Output::cout("Error: " + std::string(e.what()));
+                ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 return;
             }
         }
@@ -233,9 +233,9 @@ class CppCheckToolImplementation : public AnalysisToolBase
 
                 auto process = ProcessFactory::createProcess("/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
                 process->execute();
-                ctrace::Thread::Output::cout(process->logOutput);
+                ctrace::Thread::Output::tool_out(process->logOutput);
             } catch (const std::exception& e) {
-                ctrace::Thread::Output::cout("Error: " + std::string(e.what()));
+                ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 return;
             }
         }

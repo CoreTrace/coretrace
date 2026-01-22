@@ -3,7 +3,6 @@
 
 #include <regex>
 
-#include "../Tools/IAnalysisTools.hpp"
 #include "../ProcessFactory.hpp"
 #include "../ThreadProcess.hpp"
 
@@ -67,7 +66,7 @@ public:
         if (sock != -1) {
             ::close(sock);
             sock = -1;
-            unlink(path.c_str());  // Optionnel
+            // unlink(path.c_str());  // Optionnel
         }
     }
 };
