@@ -54,6 +54,11 @@ Options:
   --invoke <tools>         Invokes specific tools (comma-separated).
                            Available tools: flawfinder, ikos, cppcheck, tscancode.
   --input <files>          Specifies the source files to analyse (comma-separated).
+  --ipc <method>           IPC method: standardIO, socket, or serve.
+  --ipc-path <path>        IPC path (default: /tmp/coretrace_ipc).
+  --serve-host <host>      HTTP server host when --ipc=serve.
+  --serve-port <port>      HTTP server port when --ipc=serve.
+  --async                  Enables asynchronous execution.
 
 Examples:
   ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder
@@ -68,6 +73,46 @@ Description:
 ```bash
 ./ctrace --input ../tests/EmptyForStatement.cc --entry-points=main --verbose --static --dyn
 ```
+
+### SERVER MODE
+
+Start the HTTP server:
+
+```bash
+./ctrace --ipc serve --serve-host 127.0.0.1 --serve-port 8080
+```
+
+Send a request:
+
+```bash
+curl -X POST http://127.0.0.1:8080/api \
+  -H "Content-Type: application/json" \
+  -d '{
+    "proto": "coretrace-1.0",
+    "id": 1,
+    "type": "request",
+    "method": "run_analysis",
+    "params": {
+      "input": ["./tests/buffer_overflow.cc"],
+      "entry_points": ["main"],
+      "static_analysis": true,
+      "dynamic_analysis": false,
+      "invoke": ["flawfinder"],
+      "sarif_format": true,
+      "report_file": "ctrace-report.txt",
+      "output_file": "ctrace.out",
+      "ipc": "serve",
+      "ipc_path": "/tmp/coretrace_ipc",
+      "async": false,
+      "verbose": true
+    }
+  }'
+```
+
+Response notes:
+- `status` is `ok` or `error`.
+- `result.outputs` groups tool output by tool name.
+- Each output entry has `stream` and `message`. If a tool emits JSON, `message` is returned as a JSON object.
 
 ### Mangle/Demangle API
 
