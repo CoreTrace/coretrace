@@ -18,6 +18,9 @@ set(COMMON_SOURCES
     src/ArgumentParser/BaseArgumentParser.cpp
     src/ArgumentParser/ArgumentManager.cpp
     src/ArgumentParser/ArgumentParserFactory.cpp
+    src/App/Config.cpp
+    src/App/Files.cpp
+    src/App/Runner.cpp
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
     src/ctrace_tools/strings.cpp
@@ -55,11 +58,18 @@ if (USE_ADDRESS_SANITIZER)
     include(${CMAKE_SOURCE_DIR}/cmake/debug/sanitizer/AddressSanitizer.cmake)
 endif()
 
+# === INCLUDE .CMAKE ===
+
 include(${CMAKE_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
 target_link_libraries(ctrace PRIVATE nlohmann_json::nlohmann_json)
 
 include(${CMAKE_SOURCE_DIR}/cmake/stackUsageAnalyzer.cmake)
 target_link_libraries(ctrace PRIVATE coretrace::stack_usage_analyzer_lib)
+
+include(${CMAKE_SOURCE_DIR}/cmake/httpLib.cmake)
+target_link_libraries(ctrace PRIVATE httplib::httplib)
+
+# === OPTIONAL DEPENDENCIES ===
 
 option(USE_EXTERNAL_CLI11 "Download CLI11" OFF)
 if (USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")
