@@ -24,7 +24,7 @@ class EntryPoint
         EntryPoint(const std::string& entryPointName, const std::vector<std::string>& paramTypes)
             : name(entryPointName), paramTypes(paramTypes)
         {
-            m_isMangled = ctrace_tools::isMangled(name);
+            m_isMangled = ctrace_tools::mangle::isMangled(name);
 
             if (m_isMangled)
             {
@@ -32,7 +32,7 @@ class EntryPoint
             }
             else
             {
-                mangledName = ctrace_tools::mangleFunction("", name, paramTypes);
+                mangledName = ctrace_tools::mangle::mangleFunction("", name, paramTypes);
             }
         }
         ~EntryPoint() = default;

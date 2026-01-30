@@ -136,25 +136,25 @@ The server responds with `202 Accepted` and stops accepting new requests while a
 ### Mangle/Demangle API
 
 ```c++
-bool hasMangled = ctrace_tools::isMangled(entry_points);
+bool hasMangled = ctrace_tools::mangle::isMangled(entry_points);
 
 std::cout << "Is mangled : " << hasMangled << std::endl;
 if (hasMangled)
     std::cout << abi::__cxa_demangle(entry_points.c_str(), 0, 0, &status) << std::endl;
 
 std::vector<std::string> params1 = {};
-std::string mangled1 = ctrace_tools::mangleFunction("", "single_compute()", params1);
+std::string mangled1 = ctrace_tools::mangle::mangleFunction("", "single_compute()", params1);
 std::cout << "Mangled single_compute(): " << mangled1 << "\n";
 std::cout << abi::__cxa_demangle(mangled1.c_str(), 0, 0, &status) << std::endl;
 
 // Example 2 : with namespace
 std::vector<std::string> params2 = {"std::string", "int"};
-std::string mangled2 = ctrace_tools::mangleFunction("math", "compute", params2);
+std::string mangled2 = ctrace_tools::mangle::mangleFunction("math", "compute", params2);
 std::cout << "Mangled math::compute(std::string, int): " << mangled2 << "\n";
 
 // Example 3 : without parameters with namespace
 std::vector<std::string> params3;
-std::string mangled3 = ctrace_tools::mangleFunction("utils", "init", params3);
+std::string mangled3 = ctrace_tools::mangle::mangleFunction("utils", "init", params3);
 std::cout << "Mangled utils::init(): " << mangled3 << "\n";
 
 ```
