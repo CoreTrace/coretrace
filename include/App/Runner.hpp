@@ -8,6 +8,6 @@ namespace ctrace
 {
     CT_NODISCARD int run_server(const ProgramConfig& config);
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config);
-}
+} // namespace ctrace
 
 #endif // APP_RUNNER_HPP

@@ -14,17 +14,16 @@ namespace ctrace_defs
      */
     enum class LanguageType : int
     {
-        C   = 0,
+        C = 0,
         CPP = 1,
     };
 
     inline const std::vector<std::string> IPC_TYPES = {
-                                                        "standardIO", // default
-                                                        "socket",
-                                                        "serve",
-                                                        // "pipe" // future implementation
-                                                    };
+        "standardIO", // default
+        "socket", "serve",
+        // "pipe" // future implementation
+    };
 
-}
+} // namespace ctrace_defs
 
 #endif // TYPES_HPP

@@ -19,10 +19,10 @@
  */
 class GetoptArgumentParser : public BaseArgumentParser
 {
-private:
+  private:
     std::vector<struct option> _longOptions; ///< List of long options for `getopt_long`.
-    std::vector<OptionInfo> _options; ///< List of registered options.
-    std::string _optString; ///< Option string for `getopt` (e.g., "vha:").
+    std::vector<OptionInfo> _options;        ///< List of registered options.
+    std::string _optString;                  ///< Option string for `getopt` (e.g., "vha:").
 
     /**
      * @brief Removes leading dashes from an option name.
@@ -43,7 +43,7 @@ private:
         return stripped;
     }
 
-public:
+  public:
     /**
      * @brief Adds an option to the parser.
      *
@@ -114,7 +114,8 @@ public:
 
         int longindex = 0;
         int c = 0;
-        while ((c = getopt_long(argc, argv, _optString.c_str(), _longOptions.data(), &longindex)) != -1)
+        while ((c = getopt_long(argc, argv, _optString.c_str(), _longOptions.data(), &longindex)) !=
+               -1)
         {
             if (c == '?')
             {
@@ -129,7 +130,8 @@ public:
 
             for (auto& opt : _options)
             {
-                if (c == opt.shortName || (c != 0 && stripDashes(opt.name) == _longOptions[longindex].name))
+                if (c == opt.shortName ||
+                    (c != 0 && stripDashes(opt.name) == _longOptions[longindex].name))
                 {
                     opt.isSet = true;
 
@@ -146,7 +148,8 @@ public:
                         }
                         else
                         {
-                            setError(ErrorCode::MISSING_ARGUMENT, "Missing argument for option: " + opt.name);
+                            setError(ErrorCode::MISSING_ARGUMENT,
+                                     "Missing argument for option: " + opt.name);
                             return false;
                         }
                     }
@@ -169,7 +172,8 @@ public:
         for (const auto& opt : _options)
         {
             std::cout << opt.name << " -> " << opt.shortName << std::endl;
-            if (opt.name == name || (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
+            if (opt.name == name ||
+                (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
             {
                 return opt.isSet;
             }
@@ -188,7 +192,8 @@ public:
     {
         for (const auto& opt : _options)
         {
-            if (opt.name == name || (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
+            if (opt.name == name ||
+                (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
             {
                 return opt.value;
             }

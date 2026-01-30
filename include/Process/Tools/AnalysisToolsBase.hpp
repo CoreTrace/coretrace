@@ -6,12 +6,14 @@ namespace ctrace
 
     class AnalysisToolBase : public IAnalysisTool
     {
-        protected:
+      protected:
         std::shared_ptr<IpcStrategy> ipc;
-        public:
-        void setIpcStrategy(std::shared_ptr<IpcStrategy> strategy) override {
+
+      public:
+        void setIpcStrategy(std::shared_ptr<IpcStrategy> strategy) override
+        {
             ipc = std::move(strategy);
         }
     };
 
-}
+} // namespace ctrace

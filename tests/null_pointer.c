@@ -3,20 +3,21 @@
 
 int toto(void)
 {
-    int* ptr = NULL;  // Pointeur initialisé à NULL
-    *ptr = 42;        // Déréférencement de pointeur nul
+    int* ptr = NULL; // Pointeur initialisé à NULL
+    *ptr = 42;       // Déréférencement de pointeur nul
 
     return 0;
 }
 
 int main(void)
 {
-    int* ptr = (int*)malloc(sizeof(int));  // Allocation qui peut échouer
+    int* ptr = (int*)malloc(sizeof(int)); // Allocation qui peut échouer
 
-    if (ptr != NULL) {
-        *ptr = 10;  // Accès valide si l'allocation réussit
+    if (ptr != NULL)
+    {
+        *ptr = 10; // Accès valide si l'allocation réussit
     }
-    *ptr = 42;      // Déréférencement potentiel de NULL si malloc échoue
+    *ptr = 42; // Déréférencement potentiel de NULL si malloc échoue
     free(ptr);
     toto();
     return 0;

@@ -16,9 +16,10 @@
  * This allows the application to abstract away platform-specific details when
  * managing processes.
  */
-class ProcessFactory {
-    public:
-        /**
+class ProcessFactory
+{
+  public:
+    /**
          * @brief Creates a platform-specific `Process` instance.
          *
          * This method determines the current operating system at compile time
@@ -31,20 +32,21 @@ class ProcessFactory {
          * @note The method uses preprocessor directives to select the appropriate
          *       implementation for Windows, Linux, or macOS.
          */
-        static std::unique_ptr<Process> createProcess(const std::string& command, const std::vector<std::string>& args = {})
-        {
-            #if defined(_WIN32)
-                ctrace::Thread::Output::cout("Creating Windows process for command: " + command);
-                return std::make_unique<WindowsProcess>(command, args);
-            #elif defined(__linux__)
-                ctrace::Thread::Output::cout("Creating Linux process for command: " + command);
-                return std::make_unique<UnixProcess>(command, args);
-            #elif defined(__APPLE__)
-                ctrace::Thread::Output::cout("Creating macOS process for command: " + command);
-                // return std::make_unique<UnixProcessWithPosixSpawn>(command, args); // doesn't work with tscancode
-                return std::make_unique<UnixProcess>(command, args);
-            #endif
-        }
+    static std::unique_ptr<Process> createProcess(const std::string& command,
+                                                  const std::vector<std::string>& args = {})
+    {
+#if defined(_WIN32)
+        ctrace::Thread::Output::cout("Creating Windows process for command: " + command);
+        return std::make_unique<WindowsProcess>(command, args);
+#elif defined(__linux__)
+        ctrace::Thread::Output::cout("Creating Linux process for command: " + command);
+        return std::make_unique<UnixProcess>(command, args);
+#elif defined(__APPLE__)
+        ctrace::Thread::Output::cout("Creating macOS process for command: " + command);
+        // return std::make_unique<UnixProcessWithPosixSpawn>(command, args); // doesn't work with tscancode
+        return std::make_unique<UnixProcess>(command, args);
+#endif
+    }
 };
 
 #endif // PROCESSFACTORY_HPP

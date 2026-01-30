@@ -7,22 +7,25 @@
 #include "ArgumentParser/BaseArgumentParser.hpp"
 
 // Implémentation avec getopt
-class GetoptArgumentParser : public BaseArgumentParser {
-private:
+class GetoptArgumentParser : public BaseArgumentParser
+{
+  private:
     std::vector<struct option> _longOptions; // Pour getopt_long
-    std::vector<OptionInfo> _options; // Liste des options enregistrées
-    std::string _optString; // Chaîne pour getopt (ex: "vha:")
+    std::vector<OptionInfo> _options;        // Liste des options enregistrées
+    std::string _optString;                  // Chaîne pour getopt (ex: "vha:")
 
     // Convertit le nom long en format attendu par getopt_long (sans "--")
-    static std::string stripDashes(const std::string& name) {
+    static std::string stripDashes(const std::string& name)
+    {
         std::string stripped = name;
-        while (!stripped.empty() && stripped[0] == '-') {
+        while (!stripped.empty() && stripped[0] == '-')
+        {
             stripped.erase(0, 1);
         }
         return stripped;
     }
 
-public:
+  public:
     void addOption(const std::string& name, bool hasArgument, char shortName) override
     {
         std::cout << "GetOpt is called" << std::endl;
@@ -73,30 +76,44 @@ public:
 
         int longindex = 0;
         int c;
-        while ((c = getopt_long(argc, argv, _optString.c_str(), _longOptions.data(), &longindex)) != -1) {
-            if (c == '?') {
+        while ((c = getopt_long(argc, argv, _optString.c_str(), _longOptions.data(), &longindex)) !=
+               -1)
+        {
+            if (c == '?')
+            {
                 setError(ErrorCode::INVALID_OPTION, "Unknown option");
                 return false;
             }
-            if (c == ':') {
+            if (c == ':')
+            {
                 setError(ErrorCode::MISSING_ARGUMENT, "Missing argument");
                 return false;
             }
 
             // Trouver l'option correspondante
-            for (auto& opt : _options) {
-                if (c == opt.shortName || (c != 0 && stripDashes(opt.name) == _longOptions[longindex].name)) {
+            for (auto& opt : _options)
+            {
+                if (c == opt.shortName ||
+                    (c != 0 && stripDashes(opt.name) == _longOptions[longindex].name))
+                {
                     opt.isSet = true;
 
                     // Vérifier si un argument est attendu
-                    if (opt.hasArgument) {
-                        if (optarg) {
+                    if (opt.hasArgument)
+                    {
+                        if (optarg)
+                        {
                             opt.value = optarg; // Format `--option=value`
-                        } else if (optind < argc && argv[optind][0] != '-') {
+                        }
+                        else if (optind < argc && argv[optind][0] != '-')
+                        {
                             opt.value = argv[optind]; // Format `--option value`
-                            optind++; // Avancer l'index
-                        } else {
-                            setError(ErrorCode::MISSING_ARGUMENT, "Missing argument for option: " + opt.name);
+                            optind++;                 // Avancer l'index
+                        }
+                        else
+                        {
+                            setError(ErrorCode::MISSING_ARGUMENT,
+                                     "Missing argument for option: " + opt.name);
                             return false;
                         }
                     }
@@ -108,19 +125,27 @@ public:
         return true;
     }
 
-    bool hasOption(const std::string& name) const override {
-        for (const auto& opt : _options) {
+    bool hasOption(const std::string& name) const override
+    {
+        for (const auto& opt : _options)
+        {
             std::cout << opt.name << " -> " << opt.shortName << std::endl;
-            if (opt.name == name || (opt.shortName != '\0' && std::string(1, opt.shortName) == name)) {
+            if (opt.name == name ||
+                (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
+            {
                 return opt.isSet;
             }
         }
         return false;
     }
 
-    std::string getOptionValue(const std::string& name) const override {
-        for (const auto& opt : _options) {
-            if (opt.name == name || (opt.shortName != '\0' && std::string(1, opt.shortName) == name)) {
+    std::string getOptionValue(const std::string& name) const override
+    {
+        for (const auto& opt : _options)
+        {
+            if (opt.name == name ||
+                (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
+            {
                 return opt.value;
             }
         }
