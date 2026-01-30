@@ -30,6 +30,8 @@ namespace ctrace
         argManager.addOption("--ipc-path", true, 't');
         argManager.addOption("--serve-host", true, 'z');
         argManager.addOption("--serve-port", true, 'y');
+        argManager.addOption("--shutdown-token", true, 'k');
+        argManager.addOption("--shutdown-timeout-ms", true, 'm');
 
         // Parsing des arguments
         argManager.parse(argc, argv);

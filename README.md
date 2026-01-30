@@ -58,6 +58,8 @@ Options:
   --ipc-path <path>        IPC path (default: /tmp/coretrace_ipc).
   --serve-host <host>      HTTP server host when --ipc=serve.
   --serve-port <port>      HTTP server port when --ipc=serve.
+  --shutdown-token <tok>   Token required for POST /shutdown (server mode).
+  --shutdown-timeout-ms <ms> Graceful shutdown timeout in ms (0 = wait indefinitely).
   --async                  Enables asynchronous execution.
 
 Examples:
@@ -79,7 +81,7 @@ Description:
 Start the HTTP server:
 
 ```bash
-./ctrace --ipc serve --serve-host 127.0.0.1 --serve-port 8080
+./ctrace --ipc serve --serve-host 127.0.0.1 --serve-port 8080 --shutdown-token mytoken
 ```
 
 Send a request:
@@ -113,6 +115,23 @@ Response notes:
 - `status` is `ok` or `error`.
 - `result.outputs` groups tool output by tool name.
 - Each output entry has `stream` and `message`. If a tool emits JSON, `message` is returned as a JSON object.
+
+Shutdown the server (HTTP request):
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/shutdown \
+  -H "Authorization: Bearer mytoken"
+```
+
+Alternative header:
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/shutdown \
+  -H "X-Admin-Token: mytoken"
+```
+
+The server responds with `202 Accepted` and stops accepting new requests while allowing in-flight requests to finish
+(up to `--shutdown-timeout-ms` if configured).
 
 ### Mangle/Demangle API
 

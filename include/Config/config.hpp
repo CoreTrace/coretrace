@@ -35,6 +35,8 @@ Options:
   --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
   --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
   --async                  Enables asynchronous execution.
+  --shutdown-token <tok>   Token required for POST /shutdown (server mode).
+  --shutdown-timeout-ms <ms> Graceful shutdown timeout in ms (0 = wait indefinitely).
 
 Examples:
   ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder
@@ -82,6 +84,8 @@ namespace ctrace
         std::string ipcPath = "/tmp/coretrace_ipc"; ///< Path for IPC communication.
         std::string serverHost = "127.0.0.1"; ///< Host for server IPC (if applicable).
         int serverPort = 8080; ///< Port for server IPC (if applicable).
+        std::string shutdownToken; ///< Token required for POST /shutdown.
+        int shutdownTimeoutMs = 0; ///< Shutdown timeout in milliseconds (0 = wait indefinitely).
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
@@ -227,6 +231,18 @@ namespace ctrace
                 {
                     config.global.serverPort = std::stoi(value);
                     std::cout << "[DEBUG] Server port set to " << config.global.serverPort << std::endl;
+                };
+                commands["--shutdown-token"] = [this](const std::string& value)
+                {
+                    config.global.shutdownToken = value;
+                };
+                commands["--shutdown-timeout-ms"] = [this](const std::string& value)
+                {
+                    config.global.shutdownTimeoutMs = std::stoi(value);
+                    if (config.global.shutdownTimeoutMs < 0)
+                    {
+                        config.global.shutdownTimeoutMs = 0;
+                    }
                 };
                 // commands["--output"] = [this](const std::string& value) {
                 //     if (!config.files.empty()) config.files.back().output_file = value;

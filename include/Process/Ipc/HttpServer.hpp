@@ -1,8 +1,12 @@
 // server.cpp
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <initializer_list>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -494,8 +498,11 @@ private:
 class HttpServer
 {
     public:
-        HttpServer(ApiHandler& apiHandler, ILogger& logger)
-            : apiHandler_(apiHandler), logger_(logger)
+        HttpServer(ApiHandler& apiHandler, ILogger& logger, const ctrace::GlobalConfig& config)
+            : apiHandler_(apiHandler),
+              logger_(logger),
+              shutdown_token_(config.shutdownToken),
+              shutdown_timeout_(std::chrono::milliseconds(config.shutdownTimeoutMs))
         {}
 
         void run(const std::string& host, int port)
@@ -503,7 +510,14 @@ class HttpServer
             // CORS
             server_.Options("/api", [this](const httplib::Request&, httplib::Response& res) {
                 set_cors(res);
-                res.status = 200;
+                if (is_shutting_down())
+                {
+                    res.status = 503;
+                }
+                else
+                {
+                    res.status = 200;
+                }
             });
 
             // Endpoint principal
@@ -512,14 +526,61 @@ class HttpServer
                 handle_post_api(req, res);
             });
 
+            // Shutdown endpoint
+            server_.Options("/shutdown", [this](const httplib::Request&, httplib::Response& res) {
+                set_cors(res);
+                if (is_shutting_down())
+                {
+                    res.status = 503;
+                }
+                else
+                {
+                    res.status = 200;
+                }
+            });
+
+            server_.Post("/shutdown", [this](const httplib::Request& req, httplib::Response& res) {
+                set_cors(res);
+                handle_post_shutdown(req, res);
+            });
+
             logger_.info("[SERVER] Listening on http://" + host + ":" + std::to_string(port));
             server_.listen(host.c_str(), port);
+            finalize_shutdown();
         }
 
     private:
+        struct InFlightGuard
+        {
+            explicit InFlightGuard(HttpServer& server) : server_(server)
+            {
+                server_.begin_request();
+            }
+
+            ~InFlightGuard()
+            {
+                server_.end_request();
+            }
+
+            HttpServer& server_;
+        };
+
         httplib::Server server_;
         ApiHandler&     apiHandler_;
         ILogger&        logger_;
+        std::atomic<bool> shutting_down_{false};
+        std::atomic<bool> shutdown_requested_{false};
+        std::atomic<int>  in_flight_{0};
+        std::mutex        shutdown_mutex_;
+        std::condition_variable shutdown_cv_;
+        std::thread       shutdown_thread_;
+        std::string       shutdown_token_;
+        std::chrono::milliseconds shutdown_timeout_{0};
+
+        bool is_shutting_down() const
+        {
+            return shutting_down_.load(std::memory_order_acquire);
+        }
 
         static void set_cors(httplib::Response& res)
         {
@@ -528,8 +589,116 @@ class HttpServer
             res.set_header("Access-Control-Allow-Headers", "Content-Type");
         }
 
+        void begin_request()
+        {
+            in_flight_.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        void end_request()
+        {
+            const int remaining = in_flight_.fetch_sub(1, std::memory_order_acq_rel) - 1;
+            if (remaining == 0)
+            {
+                shutdown_cv_.notify_all();
+            }
+        }
+
+        static void flush_logs()
+        {
+            std::cout << std::flush;
+            std::cerr << std::flush;
+        }
+
+        bool is_authorized_shutdown(const httplib::Request& req) const
+        {
+            if (shutdown_token_.empty())
+            {
+                return false;
+            }
+
+            const std::string bearer = req.get_header_value("Authorization");
+            if (!bearer.empty())
+            {
+                const std::string prefix = "Bearer ";
+                if (bearer.rfind(prefix, 0) == 0)
+                {
+                    return bearer.substr(prefix.size()) == shutdown_token_;
+                }
+                return bearer == shutdown_token_;
+            }
+
+            const std::string admin_token = req.get_header_value("X-Admin-Token");
+            return !admin_token.empty() && admin_token == shutdown_token_;
+        }
+
+        void initiate_shutdown()
+        {
+            bool expected = false;
+            if (!shutdown_requested_.compare_exchange_strong(expected, true))
+            {
+                return;
+            }
+
+            shutting_down_.store(true, std::memory_order_release);
+
+            shutdown_thread_ = std::thread([this]() {
+                logger_.info("[SERVER] Shutdown requested. Stopping listener...");
+                server_.stop();
+                wait_for_inflight_or_timeout();
+            });
+        }
+
+        void wait_for_inflight_or_timeout()
+        {
+            std::unique_lock<std::mutex> lock(shutdown_mutex_);
+            const auto done = [this]() {
+                return in_flight_.load(std::memory_order_acquire) == 0;
+            };
+
+            if (shutdown_timeout_.count() > 0)
+            {
+                if (!shutdown_cv_.wait_for(lock, shutdown_timeout_, done))
+                {
+                    logger_.error("[SERVER] Shutdown timeout exceeded. Forcing exit.");
+                }
+            }
+            else
+            {
+                shutdown_cv_.wait(lock, done);
+            }
+        }
+
+        void finalize_shutdown()
+        {
+            if (shutdown_thread_.joinable())
+            {
+                shutdown_thread_.join();
+            }
+            if (shutdown_requested_.load(std::memory_order_acquire))
+            {
+                logger_.info("[SERVER] Shutdown complete.");
+            }
+            flush_logs();
+        }
+
         void handle_post_api(const httplib::Request& req, httplib::Response& res)
         {
+            if (is_shutting_down())
+            {
+                json err;
+                err["proto"]  = "coretrace-1.0";
+                err["type"]   = "response";
+                err["status"] = "error";
+                err["error"]  = {
+                    {"code", "ServerShuttingDown"},
+                    {"message", "Server is shutting down."}
+                };
+                res.status = 503;
+                res.set_content(err.dump(), "application/json");
+                return;
+            }
+
+            InFlightGuard guard(*this);
             try {
                 json request = json::parse(req.body);
                 json response = apiHandler_.handle_request(request);
@@ -551,5 +720,43 @@ class HttpServer
                 res.status = 400;
                 res.set_content(err.dump(), "application/json");
             }
+        }
+
+        void handle_post_shutdown(const httplib::Request& req, httplib::Response& res)
+        {
+            if (!is_authorized_shutdown(req))
+            {
+                json err;
+                err["status"] = "error";
+                err["error"] = {
+                    {"code", "Unauthorized"},
+                    {"message", shutdown_token_.empty()
+                        ? "Shutdown token not configured."
+                        : "Invalid shutdown token."}
+                };
+                res.status = 403;
+                res.set_content(err.dump(), "application/json");
+                return;
+            }
+
+            if (shutdown_requested_.load(std::memory_order_acquire))
+            {
+                json ok;
+                ok["status"] = "accepted";
+                ok["message"] = "Shutdown already in progress.";
+                ok["timeout_ms"] = shutdown_timeout_.count();
+                res.status = 202;
+                res.set_content(ok.dump(), "application/json");
+                return;
+            }
+
+            json ok;
+            ok["status"] = "accepted";
+            ok["message"] = "Shutdown initiated.";
+            ok["timeout_ms"] = shutdown_timeout_.count();
+            res.status = 202;
+            res.set_content(ok.dump(), "application/json");
+
+            initiate_shutdown();
         }
 };
