@@ -5,7 +5,7 @@
 #include <cxxabi.h>
 #include <memory>
 
-namespace ctrace_tools
+namespace ctrace_tools::mangle
 {
     /**
      * @brief Concept to define types that can be converted to `std::string_view`.

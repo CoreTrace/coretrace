@@ -1,6 +1,6 @@
 #include "ctrace_tools/mangle.hpp"
 
-namespace ctrace_tools {
+namespace ctrace_tools::mangle {
 
     std::string mangleFunction(const std::string& namespaceName,
         const std::string& functionName,

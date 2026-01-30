@@ -18,7 +18,7 @@ namespace ctrace
                   << config.global.serverPort << "...\033[0m\n";
         ConsoleLogger logger;
         ApiHandler apiHandler(logger);
-        HttpServer server(apiHandler, logger);
+        HttpServer server(apiHandler, logger, config.global);
         server.run(config.global.serverHost, config.global.serverPort);
         return EXIT_SUCCESS;
     }
