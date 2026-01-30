@@ -19,55 +19,64 @@
 #include <functional>
 #include <sstream>
 
-class ThreadPool {
-public:
+class ThreadPool
+{
+  public:
     ThreadPool(size_t numThreads)
     {
-        for (size_t i = 0; i < numThreads; ++i) {
-            workers.emplace_back([this] {
-                while (true) {
-                    std::function<void()> task;
+        for (size_t i = 0; i < numThreads; ++i)
+        {
+            workers.emplace_back(
+                [this]
+                {
+                    while (true)
                     {
-                        std::unique_lock<std::mutex> lock(queueMutex);
-                        condition.wait(lock, [this] { return !tasks.empty() || stop; });
-                        if (stop && tasks.empty()) return;
-                        task = std::move(tasks.front());
-                        tasks.pop();
+                        std::function<void()> task;
+                        {
+                            std::unique_lock<std::mutex> lock(queueMutex);
+                            condition.wait(lock, [this] { return !tasks.empty() || stop; });
+                            if (stop && tasks.empty())
+                                return;
+                            task = std::move(tasks.front());
+                            tasks.pop();
+                        }
+                        task();
                     }
-                    task();
-                }
-            });
+                });
         }
     }
 
-    ~ThreadPool() {
+    ~ThreadPool()
+    {
         {
             std::unique_lock<std::mutex> lock(queueMutex);
             stop = true;
         }
         condition.notify_all();
-        for (auto& worker : workers) {
+        for (auto& worker : workers)
+        {
             worker.join();
         }
     }
 
-    template<typename F, typename... Args>
-    auto enqueue(F&& f, Args&&... args) -> std::future<decltype(f(args...))> {
+    template <typename F, typename... Args>
+    auto enqueue(F&& f, Args&&... args) -> std::future<decltype(f(args...))>
+    {
         using return_type = decltype(f(args...));
         auto task = std::make_shared<std::packaged_task<return_type()>>(
-            std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-        );
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...));
         std::future<return_type> res = task->get_future();
         {
             std::unique_lock<std::mutex> lock(queueMutex);
-            if (stop) throw std::runtime_error("Enqueue on stopped ThreadPool");
+            if (stop)
+                throw std::runtime_error("Enqueue on stopped ThreadPool");
             tasks.emplace([task]() { (*task)(); });
         }
         condition.notify_one();
         return res;
     }
 
-private:
+  private:
     std::vector<std::thread> workers;
     std::queue<std::function<void()>> tasks;
     std::mutex queueMutex;
@@ -75,27 +84,23 @@ private:
     bool stop = false;
 };
 
-
 namespace ctrace
 {
 
-class ToolInvoker {
-    public:
-        ToolInvoker(ctrace::ProgramConfig config,
-                    uint8_t nbThreadPool,
-                    std::launch policy,
+    class ToolInvoker
+    {
+      public:
+        ToolInvoker(ctrace::ProgramConfig config, uint8_t nbThreadPool, std::launch policy,
                     std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> output_capture = nullptr)
-            : m_config(config),
-              m_nbThreadPool(nbThreadPool),
-              m_policy(policy),
+            : m_config(config), m_nbThreadPool(nbThreadPool), m_policy(policy),
               m_output_capture(output_capture)
         {
             std::cout << "\033[36mInitializing ToolInvoker...\033[0m\n";
 
-            tools["cppcheck"]   = std::make_unique<CppCheckToolImplementation>();
+            tools["cppcheck"] = std::make_unique<CppCheckToolImplementation>();
             tools["flawfinder"] = std::make_unique<FlawfinderToolImplementation>();
-            tools["tscancode"]  = std::make_unique<TscancodeToolImplementation>();
-            tools["ikos"]       = std::make_unique<IkosToolImplementation>();
+            tools["tscancode"] = std::make_unique<TscancodeToolImplementation>();
+            tools["ikos"] = std::make_unique<IkosToolImplementation>();
             tools["ctrace_stack_analyzer"] = std::make_unique<StackAnalyzerToolImplementation>();
             tools["dyn_tools_1"] = std::make_unique<DynTool1>();
             tools["dyn_tools_2"] = std::make_unique<DynTool2>();
@@ -124,18 +129,19 @@ class ToolInvoker {
             std::vector<std::future<void>> results;
             ThreadPool pool(m_nbThreadPool);
 
-            for (const auto& tool_name : static_tools) {
+            for (const auto& tool_name : static_tools)
+            {
                 // tools.at(tool_name)->execute(file, m_config);
-                results.push_back(std::async(
-                    m_policy,
-                    [this, tool_name, file]()
-                    {
-                        auto& tool = tools.at(tool_name);
-                        ctrace::Thread::Output::CaptureContext ctx{m_output_capture, tool_name, true};
-                        ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
-                        return tool->execute(file, m_config);
-                    }
-                ));
+                results.push_back(std::async(m_policy,
+                                             [this, tool_name, file]()
+                                             {
+                                                 auto& tool = tools.at(tool_name);
+                                                 ctrace::Thread::Output::CaptureContext ctx{
+                                                     m_output_capture, tool_name, true};
+                                                 ctrace::Thread::Output::ScopedCapture capture(
+                                                     m_output_capture ? &ctx : nullptr);
+                                                 return tool->execute(file, m_config);
+                                             }));
             }
             for (auto& result : results)
             {
@@ -156,7 +162,8 @@ class ToolInvoker {
         }
 
         // Execute a specific tool list
-        void runSpecificTools(const std::vector<std::string>& tool_names, const std::string& file) const
+        void runSpecificTools(const std::vector<std::string>& tool_names,
+                              const std::string& file) const
         {
             for (const auto& name : tool_names)
             {
@@ -164,19 +171,21 @@ class ToolInvoker {
                 {
                     auto& tool = tools.at(name);
                     ctrace::Thread::Output::CaptureContext ctx{m_output_capture, name, true};
-                    ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
+                    ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx
+                                                                                   : nullptr);
                     tool->execute(file, m_config);
                 }
                 else
                 {
                     ctrace::Thread::Output::CaptureContext ctx{m_output_capture, name, true};
-                    ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
+                    ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx
+                                                                                   : nullptr);
                     ctrace::Thread::Output::cerr("\033[31mUnknown tool: " + name + "\033[0m");
                 }
             }
         }
 
-    private:
+      private:
         std::unordered_map<std::string, std::unique_ptr<IAnalysisTool>> tools;
         std::vector<std::string> static_tools;
         std::vector<std::string> dynamic_tools;
@@ -186,6 +195,6 @@ class ToolInvoker {
         std::shared_ptr<IpcStrategy> m_ipc;
         std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> m_output_capture;
     };
-}
+} // namespace ctrace
 
 #endif // TOOLS_INVOKER_HPP

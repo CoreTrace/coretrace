@@ -1,9 +1,11 @@
-int main() {
+int main()
+{
     int iii = 0, jjj = 1;
 
     if (jjj)
     {
-        if (iii) {
+        if (iii)
+        {
             jjj = 0;
             return 1;
         }

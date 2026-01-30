@@ -4,12 +4,11 @@
 
 #include <iostream>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     ctrace::ProgramConfig config = ctrace::buildConfig(argc, argv);
 
-    std::cout << ctrace::Color::GREEN
-              << "CoreTrace - Comprehensive Tracing and Analysis Tool"
+    std::cout << ctrace::Color::GREEN << "CoreTrace - Comprehensive Tracing and Analysis Tool"
               << ctrace::Color::RESET << std::endl;
 
     if (config.global.ipc == "serve")

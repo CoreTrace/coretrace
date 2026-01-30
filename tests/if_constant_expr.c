@@ -1,4 +1,5 @@
-int main() {
+int main()
+{
     const int c_test = 1;
 
     if (c_test)

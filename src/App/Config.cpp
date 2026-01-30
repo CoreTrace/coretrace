@@ -8,7 +8,7 @@
 
 namespace ctrace
 {
-    CT_NODISCARD ProgramConfig buildConfig(int argc, char *argv[])
+    CT_NODISCARD ProgramConfig buildConfig(int argc, char* argv[])
     {
         auto parser = createArgumentParser();
         ArgumentManager argManager(std::move(parser));
@@ -46,16 +46,15 @@ namespace ctrace
             processor.execute("--help", "");
             std::exit(0);
         }
-        if (!(argManager.getOptionValue("--ipc") == "serve")
-        && (argManager.hasOption("--serve-host")
-        || argManager.hasOption("--serve-port"))
-        )
+        if (!(argManager.getOptionValue("--ipc") == "serve") &&
+            (argManager.hasOption("--serve-host") || argManager.hasOption("--serve-port")))
         {
-            std::cout << "[INFO] UNCONSISTENT SERVER OPTIONS: --serve-host or --serve-port needed --ipc=server."
+            std::cout << "[INFO] UNCONSISTENT SERVER OPTIONS: --serve-host or --serve-port needed "
+                         "--ipc=server."
                       << std::endl;
             std::exit(1);
         }
 
         return config;
     }
-}
+} // namespace ctrace

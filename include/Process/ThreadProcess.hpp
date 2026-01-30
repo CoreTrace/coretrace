@@ -22,22 +22,23 @@ namespace ctrace
 
             class CaptureBuffer
             {
-                public:
-                    void append(const std::string& tool, const std::string& stream, const std::string& message)
-                    {
-                        std::lock_guard<std::mutex> lock(mutex_);
-                        lines_[tool].push_back({stream, message});
-                    }
+              public:
+                void append(const std::string& tool, const std::string& stream,
+                            const std::string& message)
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    lines_[tool].push_back({stream, message});
+                }
 
-                    std::unordered_map<std::string, std::vector<CapturedLine>> snapshot() const
-                    {
-                        std::lock_guard<std::mutex> lock(mutex_);
-                        return lines_;
-                    }
+                std::unordered_map<std::string, std::vector<CapturedLine>> snapshot() const
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    return lines_;
+                }
 
-                private:
-                    mutable std::mutex mutex_;
-                    std::unordered_map<std::string, std::vector<CapturedLine>> lines_;
+              private:
+                mutable std::mutex mutex_;
+                std::unordered_map<std::string, std::vector<CapturedLine>> lines_;
             };
 
             struct CaptureContext
@@ -52,33 +53,31 @@ namespace ctrace
 
             class ScopedCapture
             {
-                public:
-                    explicit ScopedCapture(const CaptureContext* ctx)
-                        : previous_(capture_context), active_(ctx != nullptr)
+              public:
+                explicit ScopedCapture(const CaptureContext* ctx)
+                    : previous_(capture_context), active_(ctx != nullptr)
+                {
+                    if (active_)
                     {
-                        if (active_)
-                        {
-                            capture_context = ctx;
-                        }
+                        capture_context = ctx;
                     }
+                }
 
-                    ~ScopedCapture()
+                ~ScopedCapture()
+                {
+                    if (active_)
                     {
-                        if (active_)
-                        {
-                            capture_context = previous_;
-                        }
+                        capture_context = previous_;
                     }
+                }
 
-                private:
-                    const CaptureContext* previous_;
-                    bool active_;
+              private:
+                const CaptureContext* previous_;
+                bool active_;
             };
 
-            static void emit_line(const std::string& stream,
-                                  const std::string& message,
-                                  std::ostream& target,
-                                  bool capture_line)
+            static void emit_line(const std::string& stream, const std::string& message,
+                                  std::ostream& target, bool capture_line)
             {
                 const CaptureContext* ctx = capture_context;
                 if (capture_line && ctx && ctx->buffer)
@@ -112,8 +111,8 @@ namespace ctrace
             {
                 emit_line("stderr", message, std::cerr, true);
             }
-        }
-    }
-}
+        } // namespace Output
+    } // namespace Thread
+} // namespace ctrace
 
 #endif // THREAD_PROCESS_HPP

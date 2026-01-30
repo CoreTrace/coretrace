@@ -15,13 +15,13 @@
  */
 class CLI11ArgumentParser : public BaseArgumentParser
 {
-    private:
-        CLI::App app{"CLI11 Argument Parser"}; ///< CLI11 application instance.
-        std::vector<OptionInfo> _options; ///< List of registered options.
-        std::vector<std::pair<std::string, bool*>> _flags; ///< List of flag options (no arguments).
-        std::vector<std::pair<std::string, std::string*>> _values; ///< List of options with arguments.
+  private:
+    CLI::App app{"CLI11 Argument Parser"};             ///< CLI11 application instance.
+    std::vector<OptionInfo> _options;                  ///< List of registered options.
+    std::vector<std::pair<std::string, bool*>> _flags; ///< List of flag options (no arguments).
+    std::vector<std::pair<std::string, std::string*>> _values; ///< List of options with arguments.
 
-        /**
+    /**
          * @brief Checks if an option already exists.
          *
          * This method verifies whether an option with the given name or short name
@@ -31,19 +31,19 @@ class CLI11ArgumentParser : public BaseArgumentParser
          * @param shortName The short name of the option.
          * @return `true` if the option exists, `false` otherwise.
          */
-        [[nodiscard]] bool optionExists(const std::string& name, char shortName) const
+    [[nodiscard]] bool optionExists(const std::string& name, char shortName) const
+    {
+        for (const auto& opt : _options)
         {
-            for (const auto& opt : _options)
+            if (opt.name == name || (shortName != '\0' && opt.shortName == shortName))
             {
-                if (opt.name == name || (shortName != '\0' && opt.shortName == shortName))
-                {
-                    return true;
-                }
+                return true;
             }
-            return false;
         }
+        return false;
+    }
 
-        /**
+    /**
          * @brief Removes leading dashes from an option name.
          *
          * This helper function strips leading dashes (`-` or `--`) from an option name
@@ -52,17 +52,17 @@ class CLI11ArgumentParser : public BaseArgumentParser
          * @param name The option name to process.
          * @return A string without leading dashes.
          */
-        static std::string stripDashes(const std::string& name)
+    static std::string stripDashes(const std::string& name)
+    {
+        std::string stripped = name;
+        while (!stripped.empty() && stripped[0] == '-')
         {
-            std::string stripped = name;
-            while (!stripped.empty() && stripped[0] == '-')
-            {
-                stripped.erase(0, 1);
-            }
-            return stripped;
+            stripped.erase(0, 1);
         }
+        return stripped;
+    }
 
-public:
+  public:
     /**
      * @brief Constructs a `CLI11ArgumentParser` instance.
      *
@@ -104,7 +104,8 @@ public:
         {
             auto* value = new std::string();
             _values.emplace_back(longOpt, value);
-            auto* cliOption = app.add_option("-" + shortOpt + "," + name, *value, "Option with argument");
+            auto* cliOption =
+                app.add_option("-" + shortOpt + "," + name, *value, "Option with argument");
             if (!cliOption)
             {
                 setError(ErrorCode::INVALID_OPTION, "Failed to add option: " + name);
@@ -166,7 +167,8 @@ public:
         for (auto& opt : _options)
         {
             std::string longOpt = stripDashes(opt.name);
-            if (opt.hasArgument) {
+            if (opt.hasArgument)
+            {
                 for (const auto& [name, value] : _values)
                 {
                     if (name == longOpt && !value->empty())
@@ -203,7 +205,8 @@ public:
     {
         for (const auto& opt : _options)
         {
-            if (opt.name == name || (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
+            if (opt.name == name ||
+                (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
             {
                 return opt.isSet;
             }
@@ -222,7 +225,8 @@ public:
     {
         for (const auto& opt : _options)
         {
-            if (opt.name == name || (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
+            if (opt.name == name ||
+                (opt.shortName != '\0' && std::string(1, opt.shortName) == name))
             {
                 return opt.value;
             }

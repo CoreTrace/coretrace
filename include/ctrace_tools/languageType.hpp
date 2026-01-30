@@ -24,6 +24,6 @@ namespace ctrace_tools
      *       not throw exceptions.
      */
     [[nodiscard]] ctrace_defs::LanguageType detectLanguage(std::string_view filename) noexcept;
-}
+} // namespace ctrace_tools
 
 #endif // LANGUAGE_TYPE_HPP

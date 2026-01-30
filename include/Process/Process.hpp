@@ -5,28 +5,30 @@
 #include <vector>
 #include <memory>
 
-class Process {
-    public:
-        virtual ~Process() = default;
+class Process
+{
+  public:
+    virtual ~Process() = default;
 
-        void execute(void)
-        {
-            prepare();
-            run();
-            cleanup();
-        }
+    void execute(void)
+    {
+        prepare();
+        run();
+        cleanup();
+    }
 
-        std::string logOutput;
-    protected:
-        virtual void prepare() = 0;
-        virtual void run() = 0;
-        virtual void cleanup() = 0;
+    std::string logOutput;
 
-        virtual void prepareArguments() = 0;
-        virtual void captureLogs() = 0;
+  protected:
+    virtual void prepare() = 0;
+    virtual void run() = 0;
+    virtual void cleanup() = 0;
 
-        std::vector<std::string> m_arguments;
-        std::stringstream log_buffer;
+    virtual void prepareArguments() = 0;
+    virtual void captureLogs() = 0;
+
+    std::vector<std::string> m_arguments;
+    std::stringstream log_buffer;
 };
 
 #endif // PROCESS_HPP

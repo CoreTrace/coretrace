@@ -9,16 +9,17 @@
 #include "Process.hpp"
 #include "ThreadProcess.hpp"
 #include <mutex>
-    #include <iostream>
+#include <iostream>
 
-class UnixProcess : public Process {
-public:
+class UnixProcess : public Process
+{
+  public:
     UnixProcess(const std::string& command, std::vector<std::string> args) : m_command(command)
     {
         m_arguments = args;
     }
 
-protected:
+  protected:
     void prepare() override
     {
         ctrace::Thread::Output::cout("Preparing Unix/Linux process");
@@ -48,7 +49,8 @@ protected:
         {
             std::vector<char*> execArgs;
             execArgs.push_back(const_cast<char*>(m_command.c_str()));
-            for (auto& arg : m_arguments) {
+            for (auto& arg : m_arguments)
+            {
                 execArgs.push_back(const_cast<char*>(arg.c_str()));
             }
             execArgs.push_back(nullptr);
@@ -59,7 +61,9 @@ protected:
 
             execvp(m_command.c_str(), execArgs.data());
             _exit(EXIT_FAILURE);
-        } else {
+        }
+        else
+        {
             close(logFd);
             int status;
             waitpid(pid, &status, 0);
@@ -110,7 +114,7 @@ protected:
         // std::cout << "Logs captured: " << logOutput << "\n";
     }
 
-private:
+  private:
     std::string m_command;
     std::string log_path_;
 };

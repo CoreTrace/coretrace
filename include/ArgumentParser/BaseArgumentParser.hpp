@@ -13,11 +13,11 @@
  */
 class BaseArgumentParser : public IArgumentParser
 {
-    protected:
-        ErrorCode _lastError; ///< Stores the last error code encountered.
-        std::string _errorMessage; ///< Stores the last error message encountered.
+  protected:
+    ErrorCode _lastError;      ///< Stores the last error code encountered.
+    std::string _errorMessage; ///< Stores the last error message encountered.
 
-        /**
+    /**
          * @brief Sets the last error code and message.
          *
          * This method updates the internal error state with the provided
@@ -26,30 +26,30 @@ class BaseArgumentParser : public IArgumentParser
          * @param code The error code to set.
          * @param message The error message to set (default is an empty string).
          */
-        void setError(ErrorCode code, const std::string& message = "");
+    void setError(ErrorCode code, const std::string& message = "");
 
-    public:
-        /**
+  public:
+    /**
          * @brief Default constructor for `BaseArgumentParser`.
          *
          * Initializes the error state to `ErrorCode::SUCCESS` and clears
          * the error message.
          */
-        BaseArgumentParser();
+    BaseArgumentParser();
 
-        /**
+    /**
          * @brief Retrieves the last error code.
          *
          * @return An `ErrorCode` representing the last error encountered.
          */
-        ErrorCode getLastError() const override;
+    ErrorCode getLastError() const override;
 
-        /**
+    /**
          * @brief Retrieves the last error message.
          *
          * @return A `std::string` containing the last error message.
          */
-        std::string getErrorMessage() const override;
+    std::string getErrorMessage() const override;
 };
 
 #endif // BASE_ARGUMENT_PARSER_HPP

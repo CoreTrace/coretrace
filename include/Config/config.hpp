@@ -60,7 +60,7 @@ namespace ctrace
      */
     struct FileConfig
     {
-        std::string src_file;///< Path to the source file.
+        std::string src_file; ///< Path to the source file.
 
         explicit FileConfig(std::string_view sv) : src_file(sv) {}
         explicit FileConfig(const std::string& str) : src_file(str) {}
@@ -74,24 +74,25 @@ namespace ctrace
      */
     struct GlobalConfig
     {
-        bool verbose = false; ///< Enables verbose output.
+        bool verbose = false;                         ///< Enables verbose output.
         std::launch hasAsync = std::launch::deferred; ///< Enables asynchronous execution.
-        bool hasSarifFormat = false; ///< Indicates if SARIF format is enabled.
-        bool hasStaticAnalysis = false; ///< Indicates if static analysis is enabled.
-        bool hasDynamicAnalysis = false; ///< Indicates if dynamic analysis is enabled.
-        bool hasInvokedSpecificTools = false; ///< Indicates if specific tools are invoked.
-        std::string ipc = ctrace_defs::IPC_TYPES.front(); ///< IPC method to use (e.g., fifo, socket).
+        bool hasSarifFormat = false;                  ///< Indicates if SARIF format is enabled.
+        bool hasStaticAnalysis = false;               ///< Indicates if static analysis is enabled.
+        bool hasDynamicAnalysis = false;              ///< Indicates if dynamic analysis is enabled.
+        bool hasInvokedSpecificTools = false;         ///< Indicates if specific tools are invoked.
+        std::string ipc =
+            ctrace_defs::IPC_TYPES.front();         ///< IPC method to use (e.g., fifo, socket).
         std::string ipcPath = "/tmp/coretrace_ipc"; ///< Path for IPC communication.
-        std::string serverHost = "127.0.0.1"; ///< Host for server IPC (if applicable).
-        int serverPort = 8080; ///< Port for server IPC (if applicable).
-        std::string shutdownToken; ///< Token required for POST /shutdown.
+        std::string serverHost = "127.0.0.1";       ///< Host for server IPC (if applicable).
+        int serverPort = 8080;                      ///< Port for server IPC (if applicable).
+        std::string shutdownToken;                  ///< Token required for POST /shutdown.
         int shutdownTimeoutMs = 0; ///< Shutdown timeout in milliseconds (0 = wait indefinitely).
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
-        std::string entry_points = "main"; ///< Entry points for analysis.
+        std::string entry_points = "main";             ///< Entry points for analysis.
         std::string report_file = "ctrace-report.txt"; ///< Path to the report file.
-        std::string output_file = "ctrace.out"; ///< Path to the output file.
+        std::string output_file = "ctrace.out";        ///< Path to the output file.
     };
 
     /**
@@ -102,7 +103,7 @@ namespace ctrace
      */
     struct ProgramConfig
     {
-        GlobalConfig global; ///< Global configuration settings.
+        GlobalConfig global;           ///< Global configuration settings.
         std::vector<FileConfig> files; ///< List of file-specific configurations.
 
         /**
@@ -130,140 +131,135 @@ namespace ctrace
      * The `ConfigProcessor` class maps command-line options to configuration
      * updates. It uses a command map to associate options with specific actions.
      */
-    class ConfigProcessor {
-        public:
-            /**
+    class ConfigProcessor
+    {
+      public:
+        /**
              * @brief Constructs a `ConfigProcessor` with a reference to the program configuration.
              *
              * @param cfg The program configuration to update.
              */
-            ConfigProcessor(ProgramConfig& cfg) : config(cfg) {
-                // Initialize command mappings.
-                commands["--help"] = [this](const std::string&)
-                {
-                    printHelp();
-                    std::exit(0);
-                };
-                commands["--verbose"] = [this](const std::string&) { config.global.verbose = true; };
-                commands["--sarif-format"] = [this](const std::string&) { config.global.hasSarifFormat = true; };
-                commands["--report-file"] = [this](const std::string& value) { config.global.report_file = value; };
-                commands["--async"] = [this](const std::string&) { config.global.hasAsync = std::launch::async; std::cout << "Asynchronous execution enabled." << std::endl; };
-                commands["--invoke"] = [this](const std::string& value)
-                {
-                    config.global.hasInvokedSpecificTools = true;
-                    auto parts = ctrace_tools::strings::splitByComma(value);
+        ConfigProcessor(ProgramConfig& cfg) : config(cfg)
+        {
+            // Initialize command mappings.
+            commands["--help"] = [this](const std::string&)
+            {
+                printHelp();
+                std::exit(0);
+            };
+            commands["--verbose"] = [this](const std::string&) { config.global.verbose = true; };
+            commands["--sarif-format"] = [this](const std::string&)
+            { config.global.hasSarifFormat = true; };
+            commands["--report-file"] = [this](const std::string& value)
+            { config.global.report_file = value; };
+            commands["--async"] = [this](const std::string&)
+            {
+                config.global.hasAsync = std::launch::async;
+                std::cout << "Asynchronous execution enabled." << std::endl;
+            };
+            commands["--invoke"] = [this](const std::string& value)
+            {
+                config.global.hasInvokedSpecificTools = true;
+                auto parts = ctrace_tools::strings::splitByComma(value);
 
-                    for (const auto& part : parts)
+                for (const auto& part : parts)
+                {
+                    // TODO: Refactor this block for better readability.
+                    if (part == "flawfinder")
                     {
-                        // TODO: Refactor this block for better readability.
-                        if (part == "flawfinder")
-                        {
-                            // config.global.hasStaticAnalysis = true;
-                            config.global.specificTools.emplace_back("flawfinder");
-                        }
-                        if (part == "ikos")
-                        {
-                            // config.global.hasStaticAnalysis = true;
-                            config.global.specificTools.emplace_back("ikos");
-                        }
-                        if (part == "cppcheck")
-                        {
-                            // config.global.hasStaticAnalysis = true;
-                            config.global.specificTools.emplace_back("cppcheck");
-                        }
-                        if (part == "tscancode")
-                        {
-                            // config.global.hasStaticAnalysis = true;
-                            config.global.specificTools.emplace_back("tscancode");
-                        }
-                        if (part == "ctrace_stack_analyzer")
-                        {
-                            // config.global.hasStaticAnalysis = true;
-                            config.global.specificTools.emplace_back("ctrace_stack_analyzer");
-                        }
+                        // config.global.hasStaticAnalysis = true;
+                        config.global.specificTools.emplace_back("flawfinder");
                     }
-                };
-                commands["--input"] = [this](const std::string& value)
-                {
-                    config.addFile(value);
-                };
-                commands["--static"] = [this](const std::string&)
-                {
-                    config.global.hasStaticAnalysis = true;
-                };
-                commands["--dyn"] = [this](const std::string&)
-                {
-                    config.global.hasDynamicAnalysis = true;
-                };
-                commands["--entry-points"] = [this](const std::string& value)
-                {
-                    config.global.entry_points = value;
-                };
-                commands["--ipc"] = [this](const std::string& value)
-                {
-                    auto ipc_list = ctrace_defs::IPC_TYPES;
+                    if (part == "ikos")
+                    {
+                        // config.global.hasStaticAnalysis = true;
+                        config.global.specificTools.emplace_back("ikos");
+                    }
+                    if (part == "cppcheck")
+                    {
+                        // config.global.hasStaticAnalysis = true;
+                        config.global.specificTools.emplace_back("cppcheck");
+                    }
+                    if (part == "tscancode")
+                    {
+                        // config.global.hasStaticAnalysis = true;
+                        config.global.specificTools.emplace_back("tscancode");
+                    }
+                    if (part == "ctrace_stack_analyzer")
+                    {
+                        // config.global.hasStaticAnalysis = true;
+                        config.global.specificTools.emplace_back("ctrace_stack_analyzer");
+                    }
+                }
+            };
+            commands["--input"] = [this](const std::string& value) { config.addFile(value); };
+            commands["--static"] = [this](const std::string&)
+            { config.global.hasStaticAnalysis = true; };
+            commands["--dyn"] = [this](const std::string&)
+            { config.global.hasDynamicAnalysis = true; };
+            commands["--entry-points"] = [this](const std::string& value)
+            { config.global.entry_points = value; };
+            commands["--ipc"] = [this](const std::string& value)
+            {
+                auto ipc_list = ctrace_defs::IPC_TYPES;
 
-                    if (std::find(ipc_list.begin(), ipc_list.end(), value) == ipc_list.end())
+                if (std::find(ipc_list.begin(), ipc_list.end(), value) == ipc_list.end())
+                {
+                    std::cerr << "Invalid IPC type: '" << value << "'\n"
+                              << "Available IPC types: [";
+                    for (const auto& ipc : ipc_list)
                     {
-                        std::cerr << "Invalid IPC type: '" << value << "'\n"
-                                << "Available IPC types: [";
-                        for (const auto& ipc : ipc_list)
-                        {
-                            std::cerr << ipc;
-                            if (ipc != ipc_list.back())
-                                std::cerr << ", ";
-                        }
-                        std::cerr << "]" << std::endl;
-                        std::exit(EXIT_FAILURE);
+                        std::cerr << ipc;
+                        if (ipc != ipc_list.back())
+                            std::cerr << ", ";
                     }
-                    config.global.ipc = value;
-                };
-                commands["--ipc-path"] = [this](const std::string& value)
+                    std::cerr << "]" << std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
+                config.global.ipc = value;
+            };
+            commands["--ipc-path"] = [this](const std::string& value)
+            { config.global.ipcPath = value; };
+            commands["--serve-host"] = [this](const std::string& value)
+            {
+                config.global.serverHost = value;
+                std::cout << "[DEBUG] Server host set to " << config.global.serverHost << std::endl;
+            };
+            commands["--serve-port"] = [this](const std::string& value)
+            {
+                config.global.serverPort = std::stoi(value);
+                std::cout << "[DEBUG] Server port set to " << config.global.serverPort << std::endl;
+            };
+            commands["--shutdown-token"] = [this](const std::string& value)
+            { config.global.shutdownToken = value; };
+            commands["--shutdown-timeout-ms"] = [this](const std::string& value)
+            {
+                config.global.shutdownTimeoutMs = std::stoi(value);
+                if (config.global.shutdownTimeoutMs < 0)
                 {
-                    config.global.ipcPath = value;
-                };
-                commands["--serve-host"] = [this](const std::string& value)
-                {
-                    config.global.serverHost = value;
-                    std::cout << "[DEBUG] Server host set to " << config.global.serverHost << std::endl;
-                };
-                commands["--serve-port"] = [this](const std::string& value)
-                {
-                    config.global.serverPort = std::stoi(value);
-                    std::cout << "[DEBUG] Server port set to " << config.global.serverPort << std::endl;
-                };
-                commands["--shutdown-token"] = [this](const std::string& value)
-                {
-                    config.global.shutdownToken = value;
-                };
-                commands["--shutdown-timeout-ms"] = [this](const std::string& value)
-                {
-                    config.global.shutdownTimeoutMs = std::stoi(value);
-                    if (config.global.shutdownTimeoutMs < 0)
-                    {
-                        config.global.shutdownTimeoutMs = 0;
-                    }
-                };
-                // commands["--output"] = [this](const std::string& value) {
-                //     if (!config.files.empty()) config.files.back().output_file = value;
-                // };
-            }
+                    config.global.shutdownTimeoutMs = 0;
+                }
+            };
+            // commands["--output"] = [this](const std::string& value) {
+            //     if (!config.files.empty()) config.files.back().output_file = value;
+            // };
+        }
 
-            /**
+        /**
              * @brief Executes a command based on the given option and value.
              *
              * @param option The command-line option.
              * @param value The value associated with the option.
              */
-            void execute(const std::string& option, const std::string& value)
+        void execute(const std::string& option, const std::string& value)
+        {
+            if (commands.count(option))
             {
-                if (commands.count(option))
-                {
-                    commands[option](value);
-                }
+                commands[option](value);
             }
+        }
 
-            /**
+        /**
              * @brief Processes all options from the argument manager.
              *
              * This function iterates through the available commands and applies
@@ -271,21 +267,22 @@ namespace ctrace
              *
              * @param argManager The argument manager containing parsed options.
              */
-            void process(ArgumentManager& argManager)
+        void process(ArgumentManager& argManager)
+        {
+            for (const auto& [option, command] : commands)
             {
-                for (const auto& [option, command] : commands)
+                if (argManager.hasOption(option))
                 {
-                    if (argManager.hasOption(option))
-                    {
-                        command(argManager.getOptionValue(option));
-                    }
+                    command(argManager.getOptionValue(option));
                 }
             }
+        }
 
-        private:
-            ProgramConfig& config;  ///< Reference to the program configuration.
-            std::unordered_map<std::string, std::function<void(const std::string&)>> commands; ///< Command map.
+      private:
+        ProgramConfig& config; ///< Reference to the program configuration.
+        std::unordered_map<std::string, std::function<void(const std::string&)>>
+            commands; ///< Command map.
     };
-}
+} // namespace ctrace
 
 #endif // CONFIG_HPP

@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-void print_input(char *input)
+void print_input(char* input)
 {
     printf(input);
 }

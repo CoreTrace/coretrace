@@ -8,9 +8,9 @@
 namespace ctrace_tools
 {
 
-namespace strings
-{
-    /**
+    namespace strings
+    {
+        /**
      * @brief Splits a string into parts based on commas.
      *
      * This function takes an input string and splits it into a vector of substrings,
@@ -26,9 +26,9 @@ namespace strings
      *       should not be ignored. It is also `noexcept`, indicating that it
      *       does not throw exceptions.
      */
-    [[nodiscard]] std::vector<std::string_view> splitByComma(std::string_view input) noexcept;
-}
+        [[nodiscard]] std::vector<std::string_view> splitByComma(std::string_view input) noexcept;
+    } // namespace strings
 
-}
+} // namespace ctrace_tools
 
 #endif // STRINGS_HPP

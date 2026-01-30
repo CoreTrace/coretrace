@@ -3,11 +3,12 @@
 
 int main(void)
 {
-    char* ptr = (char*)malloc(10);  // Allocation de 10 octets
-    if (ptr == NULL) return 1;      // Vérification basique
+    char* ptr = (char*)malloc(10); // Allocation de 10 octets
+    if (ptr == NULL)
+        return 1; // Vérification basique
 
-    free(ptr);                      // Première libération
-    free(ptr);                      // Deuxième libération (double free)
+    free(ptr); // Première libération
+    free(ptr); // Deuxième libération (double free)
 
     return 0;
 }

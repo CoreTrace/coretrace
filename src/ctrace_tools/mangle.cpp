@@ -1,10 +1,10 @@
 #include "ctrace_tools/mangle.hpp"
 
-namespace ctrace_tools::mangle {
+namespace ctrace_tools::mangle
+{
 
-    std::string mangleFunction(const std::string& namespaceName,
-        const std::string& functionName,
-        const std::vector<std::string>& paramTypes)
+    std::string mangleFunction(const std::string& namespaceName, const std::string& functionName,
+                               const std::vector<std::string>& paramTypes)
     {
         std::stringstream mangled;
 
@@ -22,7 +22,8 @@ namespace ctrace_tools::mangle {
         mangled << functionName.length() << functionName;
 
         // Encoder les types de paramètres
-        for (const std::string& param : paramTypes) {
+        for (const std::string& param : paramTypes)
+        {
             if (param == "int")
             {
                 mangled << "i";
@@ -51,8 +52,9 @@ namespace ctrace_tools::mangle {
             {
                 mangled << "v";
             }
-            else {
-            // Pour les types complexes ou non reconnus, encoder avec longueur + nom
+            else
+            {
+                // Pour les types complexes ou non reconnus, encoder avec longueur + nom
                 mangled << param.length() << param;
             }
         }
@@ -66,4 +68,4 @@ namespace ctrace_tools::mangle {
         return mangled.str();
     }
 
-};
+}; // namespace ctrace_tools::mangle

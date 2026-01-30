@@ -6,7 +6,7 @@
 
 namespace ctrace
 {
-    CT_NODISCARD ProgramConfig buildConfig(int argc, char *argv[]);
+    CT_NODISCARD ProgramConfig buildConfig(int argc, char* argv[]);
 }
 
 #endif // APP_CONFIG_HPP

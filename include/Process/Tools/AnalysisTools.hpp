@@ -20,70 +20,71 @@ using json = nlohmann::json;
 
 class EntryPoint
 {
-    public:
-        EntryPoint(const std::string& entryPointName, const std::vector<std::string>& paramTypes)
-            : name(entryPointName), paramTypes(paramTypes)
-        {
-            m_isMangled = ctrace_tools::mangle::isMangled(name);
+  public:
+    EntryPoint(const std::string& entryPointName, const std::vector<std::string>& paramTypes)
+        : name(entryPointName), paramTypes(paramTypes)
+    {
+        m_isMangled = ctrace_tools::mangle::isMangled(name);
 
-            if (m_isMangled)
-            {
-                mangledName = name;
-            }
-            else
-            {
-                mangledName = ctrace_tools::mangle::mangleFunction("", name, paramTypes);
-            }
-        }
-        ~EntryPoint() = default;
-        [[nodiscard]] std::string_view getEntryPointNameCMode() const noexcept
+        if (m_isMangled)
         {
-            if (name.empty())
-            {
-                return "unnamed";
-            }
-            return name;
+            mangledName = name;
         }
-        [[nodiscard]] std::string_view getEntryPointNameCCMode() const noexcept
+        else
         {
-            if (mangledName.empty())
-            {
-                return "unnamed";
-            }
-            return getMangledName();
+            mangledName = ctrace_tools::mangle::mangleFunction("", name, paramTypes);
         }
-        [[nodiscard]] std::string_view getMangledName() const noexcept
+    }
+    ~EntryPoint() = default;
+    [[nodiscard]] std::string_view getEntryPointNameCMode() const noexcept
+    {
+        if (name.empty())
         {
-            if (mangledName.empty())
-            {
-                return "unnamed";
-            }
-            return mangledName;
+            return "unnamed";
         }
-        [[nodiscard]] std::vector<std::string> getParamTypes() const noexcept
+        return name;
+    }
+    [[nodiscard]] std::string_view getEntryPointNameCCMode() const noexcept
+    {
+        if (mangledName.empty())
         {
-            if (paramTypes.empty())
-            {
-                return {"void"};
-            }
-            return paramTypes;
+            return "unnamed";
         }
-    protected:
-        std::string name;
-        std::string mangledName;
-        std::vector<std::string> paramTypes;
-    private:
-        bool m_isMangled = false;
+        return getMangledName();
+    }
+    [[nodiscard]] std::string_view getMangledName() const noexcept
+    {
+        if (mangledName.empty())
+        {
+            return "unnamed";
+        }
+        return mangledName;
+    }
+    [[nodiscard]] std::vector<std::string> getParamTypes() const noexcept
+    {
+        if (paramTypes.empty())
+        {
+            return {"void"};
+        }
+        return paramTypes;
+    }
+
+  protected:
+    std::string name;
+    std::string mangledName;
+    std::vector<std::string> paramTypes;
+
+  private:
+    bool m_isMangled = false;
 };
-
 
 namespace ctrace
 {
 
-// Static analysis tools
-class IkosToolImplementation : public AnalysisToolBase
-{
-    public:
+    // Static analysis tools
+    class IkosToolImplementation : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running IKOS on " + file);
@@ -91,8 +92,8 @@ class IkosToolImplementation : public AnalysisToolBase
             std::string entry_points = config.global.entry_points;
             std::string report_file = config.global.report_file;
 
-
-            try {
+            try
+            {
                 std::vector<std::string> argsProcess;
 
                 if (config.global.hasSarifFormat)
@@ -111,7 +112,8 @@ class IkosToolImplementation : public AnalysisToolBase
                     // std::cout << "C file detected\n";
                     ctrace::Thread::Output::cout("C file detected");
                     EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
-                    ctrace::Thread::Output::cout("Entry point: " + std::string(entryPoint.getEntryPointNameCMode()));
+                    ctrace::Thread::Output::cout("Entry point: " +
+                                                 std::string(entryPoint.getEntryPointNameCMode()));
                     std::string arg = "--entry-points=";
                     arg += entryPoint.getEntryPointNameCMode();
                     argsProcess.push_back(arg);
@@ -120,7 +122,8 @@ class IkosToolImplementation : public AnalysisToolBase
                 {
                     ctrace::Thread::Output::cout("C++ file detected");
                     EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
-                    ctrace::Thread::Output::cout("Entry point: " + std::string(entryPoint.getEntryPointNameCCMode()));
+                    ctrace::Thread::Output::cout("Entry point: " +
+                                                 std::string(entryPoint.getEntryPointNameCCMode()));
                     std::string arg = "--entry-points=";
                     arg += entryPoint.getEntryPointNameCCMode();
                     argsProcess.push_back(arg);
@@ -128,12 +131,14 @@ class IkosToolImplementation : public AnalysisToolBase
                 argsProcess.push_back("--report-file=" + report_file);
                 argsProcess.push_back(src_file);
 
-                auto process = ProcessFactory::createProcess("./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
+                auto process = ProcessFactory::createProcess(
+                    "./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 process->execute();
                 ctrace::Thread::Output::tool_out(process->logOutput);
-
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception& e)
+            {
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 // return 1;
             }
@@ -142,18 +147,18 @@ class IkosToolImplementation : public AnalysisToolBase
         {
             return "ikos";
         }
-};
+    };
 
-class StackAnalyzerToolImplementation : public AnalysisToolBase
-{
-    public:
+    class StackAnalyzerToolImplementation : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override;
         std::string name() const override;
-};
+    };
 
-class FlawfinderToolImplementation : public AnalysisToolBase
-{
-    public:
+    class FlawfinderToolImplementation : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running flawfinder on " + file);
@@ -162,7 +167,8 @@ class FlawfinderToolImplementation : public AnalysisToolBase
             std::string src_file = file;
             std::string entry_points = config.global.entry_points;
 
-            try {
+            try
+            {
                 std::vector<std::string> argsProcess;
                 // = {"flawfinder.py", "-F", "-c", "-C", "-D", "main.c"};
                 argsProcess.push_back("./flawfinder/src/flawfinder-build/flawfinder.py");
@@ -175,7 +181,8 @@ class FlawfinderToolImplementation : public AnalysisToolBase
                     argsProcess.push_back("--sarif");
                 }
                 argsProcess.push_back(src_file);
-                auto process = ProcessFactory::createProcess("python3", argsProcess); // or "cmd.exe" for Windows
+                auto process = ProcessFactory::createProcess(
+                    "python3", argsProcess); // or "cmd.exe" for Windows
                 process->execute();
 
                 if (config.global.ipc == "standardIO")
@@ -186,8 +193,9 @@ class FlawfinderToolImplementation : public AnalysisToolBase
                 {
                     ipc->write(process->logOutput);
                 }
-
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception& e)
+            {
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 return;
             }
@@ -196,24 +204,23 @@ class FlawfinderToolImplementation : public AnalysisToolBase
         {
             return "flawfinder";
         }
-};
+    };
 
-class TscancodeToolImplementation : public AnalysisToolBase
-{
-public:
-    void execute(const std::string& file, ProgramConfig config) const override;
-    std::string name() const override;
+    class TscancodeToolImplementation : public AnalysisToolBase
+    {
+      public:
+        void execute(const std::string& file, ProgramConfig config) const override;
+        std::string name() const override;
 
-protected:
-    std::string_view severityToLevel(const std::string& severity) const;
-    json sarifFormat(const std::string &buffer, const std::string &outputFile) const;
-    json jsonFormat(const std::string &buffer, const std::string &outputFile) const;
-};
+      protected:
+        std::string_view severityToLevel(const std::string& severity) const;
+        json sarifFormat(const std::string& buffer, const std::string& outputFile) const;
+        json jsonFormat(const std::string& buffer, const std::string& outputFile) const;
+    };
 
-
-class CppCheckToolImplementation : public AnalysisToolBase
-{
-    public:
+    class CppCheckToolImplementation : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running ikos on " + file);
@@ -221,7 +228,8 @@ class CppCheckToolImplementation : public AnalysisToolBase
             std::string src_file = file;
             std::string entry_points = config.global.entry_points;
 
-            try {
+            try
+            {
                 std::vector<std::string> argsProcess;
 
                 if (has_sarif_format)
@@ -231,10 +239,13 @@ class CppCheckToolImplementation : public AnalysisToolBase
                 // argsProcess.push_back("--enable=all");
                 argsProcess.push_back(src_file);
 
-                auto process = ProcessFactory::createProcess("/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
+                auto process = ProcessFactory::createProcess(
+                    "/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
                 process->execute();
                 ctrace::Thread::Output::tool_out(process->logOutput);
-            } catch (const std::exception& e) {
+            }
+            catch (const std::exception& e)
+            {
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 return;
             }
@@ -243,12 +254,12 @@ class CppCheckToolImplementation : public AnalysisToolBase
         {
             return "ikos";
         }
-};
+    };
 
     // Outils dynamiques
-class DynTool1 : public AnalysisToolBase
-{
-    public:
+    class DynTool1 : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running dyn_tools_1 on " + file);
@@ -257,11 +268,11 @@ class DynTool1 : public AnalysisToolBase
         {
             return "dyn_tools_1";
         }
-};
+    };
 
-class DynTool2 : public AnalysisToolBase
-{
-    public:
+    class DynTool2 : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running dyn_tools_2 on " + file);
@@ -270,11 +281,11 @@ class DynTool2 : public AnalysisToolBase
         {
             return "dyn_tools_2";
         }
-};
+    };
 
-class DynTool3 : public AnalysisToolBase
-{
-    public:
+    class DynTool3 : public AnalysisToolBase
+    {
+      public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running dyn_tools_3 on " + file);
@@ -283,8 +294,8 @@ class DynTool3 : public AnalysisToolBase
         {
             return "dyn_tools_3";
         }
-};
+    };
 
-}
+} // namespace ctrace
 
 #endif // ANALYSIS_TOOLS_HPP
