@@ -80,3 +80,16 @@ endif()
 include(${CMAKE_SOURCE_DIR}/cmake/tscancode.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
 # include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
+
+# ============
+#  FORMATTING
+# ============
+add_custom_target(format
+  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/format.sh"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Run clang-format on source files")
+
+add_custom_target(format-check
+  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/format-check.sh"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Verify clang-format compliance")
