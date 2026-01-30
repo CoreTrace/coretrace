@@ -41,8 +41,7 @@ namespace ctrace
                     "void"); // dummy to avoid empty vector issue // refaire avec les paramèters réels
 
                 // llvm::outs() << "Function: " << f.name << " " << ((ctrace::stack::isMangled(f.name)) ? ctrace::stack::demangle(f.name.c_str()) : "") <<  "\n";
-                llvm::outs() << "Function: " << f.name << " "
-                             << "\n";
+                llvm::outs() << "Function: " << f.name << " " << "\n";
                 llvm::outs() << "  local stack: " << f.localStack << " bytes\n";
                 llvm::outs() << "  max stack (including callees): " << f.maxStack << " bytes\n";
 
