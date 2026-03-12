@@ -6,8 +6,11 @@ ExternalProject_Add(
     GIT_TAG master
     PREFIX ${CMAKE_BINARY_DIR}/flawfinder
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-        COMMAND cd ${CMAKE_BINARY_DIR}/flawfinder/src/flawfinder
-        COMMAND cp ${CMAKE_BINARY_DIR}/flawfinder/src/flawfinder/flawfinder.py .
+    BUILD_COMMAND
+        ${CMAKE_COMMAND} -E make_directory <BINARY_DIR>
+    COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different
+        <SOURCE_DIR>/flawfinder.py
+        <BINARY_DIR>/flawfinder.py
     INSTALL_COMMAND ""
 )

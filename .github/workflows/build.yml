@@ -1,171 +1,86 @@
-name: Build and Release
+name: Build
 
 on:
-  push:
-    branches: [ main, dev, feature/add-workflow-ci ]
-    tags: [ 'v*' ]
   pull_request:
-    branches: [ main, dev, feature/add-workflow-ci ]
+    branches:
+      - main
+      - dev
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake
-          # Install LLVM and Clang 20
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo apt-add-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main"
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            curl \
+            ca-certificates \
+            lsb-release \
+            software-properties-common
+          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 20
           sudo apt-get update
-          sudo apt-get install -y llvm-20 llvm-20-dev clang-20 libclang-20-dev
-          echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> $GITHUB_ENV
-          echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> $GITHUB_ENV
-
-      - name: Configure CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake .. \
-            -DPARSER_TYPE=CLI11 \
-            -DUSE_THREAD_SANITIZER=ON \
-            -DUSE_ADDRESS_SANITIZER=OFF
-
-      - name: Build
-        run: |
-          cd build
-          make -j4
-
-      - name: Test
-        run: |
-          cd build
-          ./ctrace -h
-
-      - name: Package Linux Release
-        run: |
-          cd build
-          tar -czf ctrace-linux.tar.gz ctrace
-
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ctrace-linux
-          path: build/ctrace-linux.tar.gz
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+          sudo apt-get install -y --no-install-recommends \
+            llvm-20 \
+            llvm-20-dev \
+            clang-20 \
+            libclang-20-dev
+          echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
+          echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake llvm@20
-          echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> $GITHUB_ENV
-          echo "Clang_DIR=$(brew --prefix llvm@20)/lib/cmake/clang" >> $GITHUB_ENV
-          echo "$(brew --prefix llvm@20)/bin" >> $GITHUB_PATH
+          set -euo pipefail
+          brew install cmake ninja llvm@20
+          echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
+          echo "Clang_DIR=$(brew --prefix llvm@20)/lib/cmake/clang" >> "$GITHUB_ENV"
+          echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
 
       - name: Configure CMake
         run: |
-          mkdir -p build
-          cd build
-          cmake .. \
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
             -DPARSER_TYPE=CLI11 \
-            -DUSE_THREAD_SANITIZER=ON \
-            -DUSE_ADDRESS_SANITIZER=OFF
+            -DUSE_THREAD_SANITIZER=OFF \
+            -DUSE_ADDRESS_SANITIZER=OFF \
+            -DLLVM_DIR="${LLVM_DIR}" \
+            -DClang_DIR="${Clang_DIR}"
 
       - name: Build
         run: |
-          cd build
-          make -j4
+          set -euo pipefail
+          cmake --build build --config Release -j4
 
-      - name: Test
+      - name: Smoke test
         run: |
-          cd build
-          ./ctrace -h
-
-      - name: Package macOS Release
-        run: |
-          cd build
-          tar -czf ctrace-macos.tar.gz ctrace
-
-      - name: Upload macOS Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ctrace-macos
-          path: build/ctrace-macos.tar.gz
-
-  release:
-    needs: [build-linux, build-macos]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/add-workflow-ci'
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Generate version number
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # Si c'est déjà un tag, utiliser le nom du tag
-            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            # Vérifier si le message de commit contient un tag spécifié
-            COMMIT_MSG="${{ github.event.head_commit.message }}"
-
-            # Chercher [tag:vX.X.X] ou [release:vX.X.X] dans le message de commit
-            if [[ $COMMIT_MSG =~ \[tag:([vV]?[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
-              CUSTOM_TAG="${BASH_REMATCH[1]}"
-              # S'assurer que le tag commence par 'v'
-              if [[ ! $CUSTOM_TAG =~ ^v ]]; then
-                CUSTOM_TAG="v${CUSTOM_TAG}"
-              fi
-              echo "tag_name=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
-              echo "Custom tag found: ${CUSTOM_TAG}"
-            elif [[ $COMMIT_MSG =~ \[release:([vV]?[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
-              CUSTOM_TAG="${BASH_REMATCH[1]}"
-              # S'assurer que le tag commence par 'v'
-              if [[ ! $CUSTOM_TAG =~ ^v ]]; then
-                CUSTOM_TAG="v${CUSTOM_TAG}"
-              fi
-              echo "tag_name=${CUSTOM_TAG}" >> $GITHUB_OUTPUT
-              echo "Custom release tag found: ${CUSTOM_TAG}"
-            else
-              # Générer un nouveau numéro de version 0.x.0 automatique
-              COMMIT_COUNT=$(git rev-list --count HEAD)
-              VERSION="0.${COMMIT_COUNT}.0"
-              echo "tag_name=v${VERSION}" >> $GITHUB_OUTPUT
-              echo "Auto-generated tag: v${VERSION}"
-            fi
-          fi
-
-      - name: Download Linux Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ctrace-linux
-
-      - name: Download macOS Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ctrace-macos
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.tag_name }}
-          name: ctrace ${{ steps.version.outputs.tag_name }}
-          files: |
-            ctrace-linux.tar.gz
-            ctrace-macos.tar.gz
-          draft: false
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          set -euo pipefail
+          ./build/ctrace -h

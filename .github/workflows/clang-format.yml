@@ -2,12 +2,13 @@ name: clang-format
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, dev]
   pull_request:
+    branches: [main, dev]
 
 jobs:
   format-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4

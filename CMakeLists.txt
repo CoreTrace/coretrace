@@ -72,13 +72,23 @@ target_link_libraries(ctrace PRIVATE httplib::httplib)
 # === OPTIONAL DEPENDENCIES ===
 
 option(USE_EXTERNAL_CLI11 "Download CLI11" OFF)
+
 if (USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")
     include(${CMAKE_SOURCE_DIR}/cmake/CLI11.cmake)
     target_link_libraries(ctrace PRIVATE CLI11::CLI11)
 endif()
 
-include(${CMAKE_SOURCE_DIR}/cmake/tscancode.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
+option(ENABLE_TSCANCODE "Download Tscancode" OFF)
+
+if (ENABLE_TSCANCODE)
+    include(${CMAKE_SOURCE_DIR}/cmake/tscancode.cmake)
+endif()
+
+option(ENABLE_FLAWFINDER "Enable flawfinder external project integration" OFF)
+
+if (ENABLE_FLAWFINDER)
+    include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
+endif()
 # include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
 
 # ============
