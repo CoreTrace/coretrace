@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1.7
+
+FROM ubuntu:24.04 AS base
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG LLVM_VERSION=20
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    software-properties-common \
+    build-essential \
+    cmake \
+    ninja-build \
+    python3 \
+    git \
+    tar \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh \
+    && chmod +x /tmp/llvm.sh \
+    && /tmp/llvm.sh ${LLVM_VERSION} \
+    && rm -f /tmp/llvm.sh \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+      llvm-${LLVM_VERSION} \
+      llvm-${LLVM_VERSION}-dev \
+      clang-${LLVM_VERSION} \
+      libclang-${LLVM_VERSION}-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /repo
+
+FROM base AS builder
+
+ARG LLVM_VERSION=20
+
+COPY . /repo
+
+RUN cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DPARSER_TYPE=CLI11 \
+        -DUSE_THREAD_SANITIZER=OFF \
+        -DUSE_ADDRESS_SANITIZER=OFF \
+        -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm \
+        -DClang_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang \
+    && cmake --build build -j"$(nproc)" \
+    && ./build/ctrace -h >/dev/null
+
+FROM builder AS packager
+
+ARG VERSION=dev
+ARG TARGETARCH
+ARG PROJECT_NAME=coretrace
+ARG BINARY_NAME=ctrace
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) arch_label="amd64" ;; \
+      arm64) arch_label="arm64" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    package_name="${PROJECT_NAME}-${VERSION}-linux-${arch_label}"; \
+    mkdir -p "/out/${package_name}"; \
+    install -m 0755 "/repo/build/${BINARY_NAME}" "/out/${package_name}/${BINARY_NAME}"; \
+    install -m 0644 /repo/README.md "/out/${package_name}/README.md"; \
+    install -m 0644 /repo/LICENSE "/out/${package_name}/LICENSE"; \
+    tar -C /out -czf "/out/${package_name}.tar.gz" "${package_name}"; \
+    (cd /out && sha256sum "${package_name}.tar.gz" > "${package_name}.tar.gz.sha256"); \
+    rm -rf "/out/${package_name}"
+
+FROM scratch AS artifacts
+
+COPY --from=packager /out/ /
