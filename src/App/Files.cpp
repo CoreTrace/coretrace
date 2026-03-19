@@ -4,15 +4,61 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <string_view>
+#include <system_error>
+#include <unordered_set>
 
 namespace ctrace
 {
+    namespace
+    {
+        [[nodiscard]] bool hasPathSegment(const std::filesystem::path& path,
+                                          std::string_view segment)
+        {
+            if (segment.empty())
+            {
+                return false;
+            }
+            for (const auto& part : path)
+            {
+                if (part == std::filesystem::path(segment))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    } // namespace
+
     CT_NODISCARD std::vector<std::string> resolveSourceFiles(const ProgramConfig& config)
     {
         using json = nlohmann::json;
 
         std::vector<std::string> sourceFiles;
-        sourceFiles.reserve(config.files.size());
+        std::unordered_set<std::string> seenPaths;
+        seenPaths.reserve(config.files.size() + 1);
+
+        auto fileEntries = config.files;
+        std::filesystem::path autoDiscoveredCompdbPath;
+        bool hasAutoDiscoveredCompdbPath = false;
+        if (fileEntries.empty() && !config.global.compile_commands.empty())
+        {
+            std::filesystem::path compdbPath(config.global.compile_commands);
+            std::error_code fsErr;
+            if (std::filesystem::is_directory(compdbPath, fsErr))
+            {
+                compdbPath /= "compile_commands.json";
+            }
+            if (std::filesystem::is_regular_file(compdbPath, fsErr))
+            {
+                compdbPath = compdbPath.lexically_normal();
+                fileEntries.emplace_back(compdbPath.string());
+                autoDiscoveredCompdbPath = compdbPath;
+                hasAutoDiscoveredCompdbPath = true;
+            }
+        }
+
+        sourceFiles.reserve(fileEntries.size());
 
         const auto appendResolved = [&](const std::string& candidate,
                                         const std::filesystem::path& baseDir) -> bool
@@ -27,13 +73,39 @@ namespace ctrace
                 resolved = baseDir / resolved;
             }
             resolved = resolved.lexically_normal();
-            sourceFiles.emplace_back(resolved.string());
+            const auto resolvedStr = resolved.string();
+            if (!seenPaths.insert(resolvedStr).second)
+            {
+                return false;
+            }
+            sourceFiles.emplace_back(resolvedStr);
             return true;
         };
 
-        for (const auto& fileConfig : config.files)
+        for (const auto& fileConfig : fileEntries)
         {
             const std::string& entry = fileConfig.src_file;
+            const std::filesystem::path entryPath(entry);
+            const bool isCompdbAutoDiscoveryEntry =
+                hasAutoDiscoveredCompdbPath &&
+                (entryPath.lexically_normal() == autoDiscoveredCompdbPath);
+            const bool filterDependencyEntries =
+                isCompdbAutoDiscoveryEntry && !config.global.include_compdb_deps;
+
+            const auto shouldSkipDependencyEntry = [&](const std::string& candidate,
+                                                       const std::filesystem::path& baseDir) -> bool
+            {
+                if (!filterDependencyEntries || candidate.empty())
+                {
+                    return false;
+                }
+                std::filesystem::path resolved(candidate);
+                if (resolved.is_relative() && !baseDir.empty())
+                {
+                    resolved = baseDir / resolved;
+                }
+                return hasPathSegment(resolved.lexically_normal(), "_deps");
+            };
 
             bool expanded = false;
             if (!entry.empty() && (entry.ends_with(".json") || entry.ends_with(".JSON")))
@@ -57,28 +129,54 @@ namespace ctrace
                             {
                                 if (item.is_string())
                                 {
-                                    appended |=
-                                        appendResolved(item.get<std::string>(), manifestDir);
+                                    const auto candidate = item.get<std::string>();
+                                    if (shouldSkipDependencyEntry(candidate, manifestDir))
+                                    {
+                                        continue;
+                                    }
+                                    appended |= appendResolved(candidate, manifestDir);
                                 }
                                 else if (item.is_object())
                                 {
                                     if (const auto it = item.find("file");
                                         it != item.end() && it->is_string())
                                     {
-                                        appended |=
-                                            appendResolved(it->get<std::string>(), manifestDir);
+                                        std::filesystem::path entryBase = manifestDir;
+                                        if (const auto itDir = item.find("directory");
+                                            itDir != item.end() && itDir->is_string())
+                                        {
+                                            entryBase = itDir->get<std::string>();
+                                            if (entryBase.is_relative())
+                                            {
+                                                entryBase = manifestDir / entryBase;
+                                            }
+                                        }
+                                        const auto candidate = it->get<std::string>();
+                                        if (shouldSkipDependencyEntry(candidate, entryBase))
+                                        {
+                                            continue;
+                                        }
+                                        appended |= appendResolved(candidate, entryBase);
                                     }
                                     else if (const auto itSrc = item.find("src_file");
                                              itSrc != item.end() && itSrc->is_string())
                                     {
-                                        appended |=
-                                            appendResolved(itSrc->get<std::string>(), manifestDir);
+                                        const auto candidate = itSrc->get<std::string>();
+                                        if (shouldSkipDependencyEntry(candidate, manifestDir))
+                                        {
+                                            continue;
+                                        }
+                                        appended |= appendResolved(candidate, manifestDir);
                                     }
                                     else if (const auto itPath = item.find("path");
                                              itPath != item.end() && itPath->is_string())
                                     {
-                                        appended |=
-                                            appendResolved(itPath->get<std::string>(), manifestDir);
+                                        const auto candidate = itPath->get<std::string>();
+                                        if (shouldSkipDependencyEntry(candidate, manifestDir))
+                                        {
+                                            continue;
+                                        }
+                                        appended |= appendResolved(candidate, manifestDir);
                                     }
                                 }
                             }
@@ -128,7 +226,11 @@ namespace ctrace
 
             if (!expanded)
             {
-                sourceFiles.emplace_back(entry);
+                if (!entry.empty() && (entry.ends_with(".json") || entry.ends_with(".JSON")))
+                {
+                    continue;
+                }
+                (void)appendResolved(entry, {});
             }
         }
 
