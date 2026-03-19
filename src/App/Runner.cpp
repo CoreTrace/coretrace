@@ -3,18 +3,18 @@
 #include "App/Files.hpp"
 #include "Process/Ipc/HttpServer.hpp"
 #include "Process/Tools/ToolsInvoker.hpp"
-#include "ctrace_tools/colors.hpp"
+
+#include <coretrace/logger.hpp>
 
 #include <cstdlib>
-#include <iostream>
 #include <thread>
 
 namespace ctrace
 {
     CT_NODISCARD int run_server(const ProgramConfig& config)
     {
-        std::cout << "\033[36mStarting IPC server at " << config.global.serverHost << ":"
-                  << config.global.serverPort << "...\033[0m\n";
+        coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n",
+                       config.global.serverHost, std::to_string(config.global.serverPort));
         ConsoleLogger logger;
         ApiHandler apiHandler(logger);
         HttpServer server(apiHandler, logger, config.global);
@@ -24,58 +24,72 @@ namespace ctrace
 
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config)
     {
-        ctrace::ToolInvoker invoker(config, std::thread::hardware_concurrency(),
-                                    config.global.hasAsync);
+        const auto availableThreads = std::thread::hardware_concurrency();
+        const auto poolSize = (availableThreads == 0) ? 1U : availableThreads;
+        ctrace::ToolInvoker invoker(config, poolSize, config.global.hasAsync);
 
-        std::cout << ctrace::Color::CYAN << "asynchronous execution: "
-                  << (config.global.hasAsync == std::launch::async ? ctrace::Color::GREEN
-                                                                   : ctrace::Color::RED)
-                  << (config.global.hasAsync == std::launch::async ? "enabled" : "disabled")
-                  << ctrace::Color::RESET << std::endl;
+        if (config.global.hasAsync == std::launch::async)
+        {
+            coretrace::set_thread_safe(true);
+            coretrace::log(coretrace::Level::Info, "Asynchronous execution enabled.\n");
+        }
 
-        std::cout << ctrace::Color::CYAN << "verbose: "
-                  << (config.global.verbose ? ctrace::Color::GREEN : ctrace::Color::RED)
-                  << config.global.verbose << ctrace::Color::RESET << std::endl;
-
-        std::cout << ctrace::Color::CYAN << "sarif format: "
-                  << (config.global.hasSarifFormat ? ctrace::Color::GREEN : ctrace::Color::RED)
-                  << config.global.hasSarifFormat << ctrace::Color::RESET << std::endl;
-
-        std::cout << ctrace::Color::CYAN << "dynamic analysis: "
-                  << (config.global.hasDynamicAnalysis ? ctrace::Color::GREEN : ctrace::Color::RED)
-                  << config.global.hasDynamicAnalysis << ctrace::Color::RESET << std::endl;
-
-        std::cout << ctrace::Color::CYAN << "Report file: " << ctrace::Color::YELLOW
-                  << config.global.report_file << ctrace::Color::RESET << std::endl;
-
-        std::cout << ctrace::Color::CYAN << "entry point: " << ctrace::Color::YELLOW
-                  << config.global.entry_points << ctrace::Color::RESET << std::endl;
+        coretrace::log(coretrace::Level::Debug, "Verbose mode enabled.\n");
+        coretrace::log(coretrace::Level::Debug, "Asynchronous execution: {}\n",
+                       (config.global.hasAsync == std::launch::async ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "Verbose mode: {}\n",
+                       (config.global.verbose ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "Static analysis: {}\n",
+                       (config.global.hasStaticAnalysis ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "Dynamic analysis: {}\n",
+                       (config.global.hasDynamicAnalysis ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "SARIF format: {}\n",
+                       (config.global.hasSarifFormat ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "Report file: {}\n", config.global.report_file);
+        coretrace::log(coretrace::Level::Debug, "Entry points: {}\n", config.global.entry_points);
+        coretrace::log(coretrace::Level::Debug, "Include compile_commands deps: {}\n",
+                       (config.global.include_compdb_deps ? "enabled" : "disabled"));
+        if (!config.global.config_file.empty())
+        {
+            coretrace::log(coretrace::Level::Debug, "Config file in use: {}\n",
+                           config.global.config_file);
+        }
+        else
+        {
+            coretrace::log(coretrace::Level::Debug,
+                           "Config file in use: none (CLI/runtime values only)\n");
+        }
 
         std::vector<std::string> sourceFiles = ctrace::resolveSourceFiles(config);
+        if (sourceFiles.empty())
+        {
+            coretrace::log(coretrace::Level::Error,
+                           "No input files resolved. Provide --input or --compile-commands.\n");
+            return EXIT_FAILURE;
+        }
 
         for (const auto& file : sourceFiles)
         {
-            std::cout << ctrace::Color::CYAN << "File: " << ctrace::Color::YELLOW << file
-                      << ctrace::Color::RESET << std::endl;
+            coretrace::log(coretrace::Level::Info, "Processing file: {}\n", file);
+        }
 
-            if (config.global.hasStaticAnalysis)
-            {
-                std::cout << ctrace::Color::CYAN << "Running static analysis..."
-                          << ctrace::Color::RESET << std::endl;
-                invoker.runStaticTools(file);
-            }
-            if (config.global.hasDynamicAnalysis)
-            {
-                std::cout << ctrace::Color::CYAN << "Running dynamic analysis..."
-                          << ctrace::Color::RESET << std::endl;
-                invoker.runDynamicTools(file);
-            }
-            if (config.global.hasInvokedSpecificTools)
-            {
-                std::cout << ctrace::Color::CYAN << "Running specific tools..."
-                          << ctrace::Color::RESET << std::endl;
-                invoker.runSpecificTools(config.global.specificTools, file);
-            }
+        if (config.global.hasStaticAnalysis)
+        {
+            coretrace::log(coretrace::Level::Info, "Running static analysis on {} file(s)\n",
+                           sourceFiles.size());
+            invoker.runStaticTools(sourceFiles);
+        }
+        if (config.global.hasDynamicAnalysis)
+        {
+            coretrace::log(coretrace::Level::Info, "Running dynamic analysis on {} file(s)\n",
+                           sourceFiles.size());
+            invoker.runDynamicTools(sourceFiles);
+        }
+        if (config.global.hasInvokedSpecificTools)
+        {
+            coretrace::log(coretrace::Level::Info, "Running specific tools on {} file(s)\n",
+                           sourceFiles.size());
+            invoker.runSpecificTools(config.global.specificTools, sourceFiles);
         }
         return 0;
     }
