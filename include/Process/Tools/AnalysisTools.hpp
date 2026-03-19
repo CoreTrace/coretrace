@@ -153,7 +153,17 @@ namespace ctrace
     {
       public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override;
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files,
+                          ctrace::ProgramConfig config) const override;
+        [[nodiscard]] DiagnosticSummary lastDiagnosticsSummary() const override;
         std::string name() const override;
+
+      private:
+        mutable DiagnosticSummary m_lastDiagnosticsSummary{};
     };
 
     class FlawfinderToolImplementation : public AnalysisToolBase
