@@ -547,7 +547,6 @@ namespace ctrace
                            inputFiles.size());
         }
 
-        llvm::LLVMContext ctx;
         const auto analyzerArgBuild = buildAnalyzerArgs(inputFiles, config);
         const std::vector<std::string>& analyzerArgs = analyzerArgBuild.args;
 
@@ -593,7 +592,7 @@ namespace ctrace
 #endif
 
         const ctrace::stack::app::RunResult runResult =
-            ctrace::stack::app::runAnalyzerApp(std::move(parseResult.parsed), ctx);
+            ctrace::stack::app::runAnalyzerApp(std::move(parseResult.parsed));
 
         std::string capturedStdout;
         std::string capturedStderr;
