@@ -23,6 +23,10 @@
 #include <utility>
 #include <vector>
 
+#if __has_include(<version>)
+#include <version>
+#endif
+
 class ThreadPool
 {
   public:
@@ -63,6 +67,13 @@ class ThreadPool
             stopping = true;
         }
         condition.notify_all();
+        for (auto& worker : workers)
+        {
+            if (worker.joinable())
+            {
+                worker.join();
+            }
+        }
     }
 
     template <typename F> auto enqueue(F&& f) -> std::future<std::invoke_result_t<std::decay_t<F>>>
@@ -82,7 +93,12 @@ class ThreadPool
     }
 
   private:
-    std::vector<std::jthread> workers;
+#if defined(__cpp_lib_jthread) && (__cpp_lib_jthread >= 201911L)
+    using WorkerThread = std::jthread;
+#else
+    using WorkerThread = std::thread;
+#endif
+    std::vector<WorkerThread> workers;
     std::queue<std::function<void()>> tasks;
     std::mutex queueMutex;
     std::condition_variable condition;
