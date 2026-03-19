@@ -1,0 +1,24 @@
+{
+  "invoke": [
+    "ctrace_stack_analyzer"
+  ],
+  "stack_analyzer": {
+    "compile_commands": "",
+    "include_compdb_deps": false,
+    "analysis-profile": "full",
+    "timing": true,
+    "smt": "on",
+    "smt-backend": "z3",
+    "smt-secondary-backend": "single",
+    "smt-mode": "single",
+    "smt-timeout-ms": 80,
+    "smt-rules": ["recursion","integer-overflow","size-minus-k","stack-buffer","oob-read","type-confusion"],
+    "entry_points": [],
+    "demangle": true,
+    "quiet": false,
+    "stack_limit": 8388608,
+    "resource_model": "../../coretrace-stack-analyzer/models/resource-lifetime/generic.txt",
+    "escape_model": "../../coretrace-stack-analyzer/models/stack-escape/generic.txt",
+    "buffer_model": "../../coretrace-stack-analyzer/models/buffer-overflow/generic.txt"
+  }
+}
