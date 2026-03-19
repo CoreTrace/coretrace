@@ -1,4 +1,5 @@
 #include "App/Config.hpp"
+#include "App/ToolConfig.hpp"
 
 #include "ArgumentParser/ArgumentManager.hpp"
 #include "ArgumentParser/ArgumentParserFactory.hpp"
@@ -17,6 +18,7 @@ namespace ctrace
         // TODO : lvl verbosity
         argManager.addOption("--verbose", false, 'v');
         argManager.addFlag("--help", 'h');
+        argManager.addFlag("--quiet", 'q');
         argManager.addOption("--output", true, 'o');
         argManager.addOption("--invoke", true, 'i');
         argManager.addOption("--sarif-format", false, 'f');
@@ -24,6 +26,22 @@ namespace ctrace
         argManager.addOption("--static", false, 'x');
         argManager.addOption("--dyn", false, 'd');
         argManager.addOption("--entry-points", true, 'e');
+        argManager.addOption("--config", true, 'j');
+        argManager.addOption("--compile-commands", true, 'c');
+        argManager.addOption("--include-compdb-deps", false, 'u');
+        argManager.addOption("--analysis-profile", true, 'P');
+        argManager.addOption("--smt", true, 'S');
+        argManager.addOption("--smt-backend", true, 'N');
+        argManager.addOption("--smt-secondary-backend", true, 'W');
+        argManager.addOption("--smt-mode", true, 'M');
+        argManager.addOption("--smt-timeout-ms", true, 'T');
+        argManager.addOption("--smt-budget-nodes", true, 'G');
+        argManager.addOption("--smt-rules", true, 'U');
+        argManager.addOption("--resource-model", true, 'R');
+        argManager.addOption("--escape-model", true, 'E');
+        argManager.addOption("--buffer-model", true, 'B');
+        argManager.addOption("--demangle", false, 'g');
+        argManager.addOption("--stack-limit", true, 'l');
         argManager.addOption("--report-file", true, 'r');
         argManager.addOption("--async", false, 'a');
         argManager.addOption("--ipc", true, 'p');
@@ -38,6 +56,17 @@ namespace ctrace
 
         // Traitement avec Command
         ConfigProcessor processor(config);
+        if (argManager.hasOption("--config"))
+        {
+            const auto configPath = argManager.getOptionValue("--config");
+            std::string toolConfigError;
+            if (!ctrace::applyToolConfigFile(config, configPath, toolConfigError))
+            {
+                std::cerr << "Error: failed to load config '" << configPath
+                          << "': " << toolConfigError << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+        }
         processor.process(argManager);
         // processor.execute(argManager);
 

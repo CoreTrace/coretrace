@@ -2,6 +2,7 @@
 #define CONFIG_HPP
 
 #include <cstdlib>
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -12,6 +13,8 @@
 #include "ArgumentParser/ArgumentParserFactory.hpp"
 #include "ctrace_tools/strings.hpp"
 #include "ctrace_defs/types.hpp"
+
+#include <coretrace/logger.hpp>
 
 static void printHelp(void)
 {
@@ -27,6 +30,21 @@ Options:
   --report-file <path>     Specifies the path to the report file (default: ctrace-report.txt).
   --output-file <path>     Specifies the output file for the analysed binary (default: ctrace.out).
   --entry-points <names>   Sets the entry points for analysis (default: main). Accepts a comma-separated list.
+  --config <path>          Loads settings from a JSON config file.
+  --compile-commands <path> Path to compile_commands.json for tools that support it.
+  --include-compdb-deps    Includes dependency entries (e.g. _deps) when auto-loading files from compile_commands.json.
+  --analysis-profile <p>   Stack analyzer profile: fast|full.
+  --smt <on|off>           Enables/disables SMT refinement in stack analyzer.
+  --smt-backend <name>     Primary SMT backend (e.g. z3, interval).
+  --smt-secondary-backend <name> Secondary backend for multi-solver modes.
+  --smt-mode <mode>        SMT mode: single|portfolio|cross-check|dual-consensus.
+  --smt-timeout-ms <n>     SMT timeout in milliseconds.
+  --smt-budget-nodes <n>   SMT node budget per query.
+  --smt-rules <list>       Comma-separated SMT-enabled rules.
+  --resource-model <path>  Path to the resource lifetime model for stack analyzer.
+  --escape-model <path>    Path to the stack escape model for stack analyzer.
+  --buffer-model <path>    Path to the buffer overflow model for stack analyzer.
+  --demangle               Displays demangled function names in supported tools.
   --static                 Enables static analysis.
   --dyn                    Enables dynamic analysis.
   --invoke <tools>         Invokes specific tools (comma-separated).
@@ -66,15 +84,23 @@ namespace ctrace
         explicit FileConfig(const std::string& str) : src_file(str) {}
     };
 
+    struct SpecificConfig
+    {
+        std::string tool_name; ///< Name of the specific tool.
+        bool timing = false;   ///< Indicates if timing information should be displayed.
+    };
+
     /**
      * @brief Represents the global configuration for the program.
      *
      * The `GlobalConfig` struct stores various global settings, such as verbosity,
      * analysis options, and file paths for reports and outputs.
      */
-    struct GlobalConfig
+    struct GlobalConfig : public SpecificConfig
     {
-        bool verbose = false;                         ///< Enables verbose output.
+        bool verbose = false;  ///< Enables verbose output.
+        bool quiet = false;    ///< Suppresses non-essential output.
+        bool demangle = false; ///< Enables demangled function names in supported tools.
         std::launch hasAsync = std::launch::deferred; ///< Enables asynchronous execution.
         bool hasSarifFormat = false;                  ///< Indicates if SARIF format is enabled.
         bool hasStaticAnalysis = false;               ///< Indicates if static analysis is enabled.
@@ -90,9 +116,25 @@ namespace ctrace
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
-        std::string entry_points = "main";             ///< Entry points for analysis.
+        std::string entry_points = "";                 ///< Entry points for analysis.
         std::string report_file = "ctrace-report.txt"; ///< Path to the report file.
         std::string output_file = "ctrace.out";        ///< Path to the output file.
+        std::string config_file;                       ///< Path to the JSON config file.
+        std::string compile_commands;                  ///< Path to compile_commands.json.
+        bool include_compdb_deps =
+            false; ///< Includes dependency entries from compile_commands.json auto-discovery.
+        std::string analysis_profile;       ///< Stack analyzer analysis profile (fast|full).
+        std::string smt;                    ///< SMT enable switch (on|off).
+        std::string smt_backend;            ///< SMT primary backend.
+        std::string smt_secondary_backend;  ///< SMT secondary backend.
+        std::string smt_mode;               ///< SMT mode.
+        uint32_t smt_timeout_ms = 0;        ///< SMT timeout in milliseconds (0 = analyzer default).
+        uint64_t smt_budget_nodes = 0;      ///< SMT node budget (0 = analyzer default).
+        std::vector<std::string> smt_rules; ///< SMT-enabled rule ids.
+        std::string resource_model;         ///< Path to stack analyzer resource model.
+        std::string escape_model;           ///< Path to stack analyzer escape model.
+        std::string buffer_model;           ///< Path to stack analyzer buffer model.
+        uint64_t stack_limit = 8 * 1024 * 1024; ///< Stack limit in bytes.
     };
 
     /**
@@ -148,6 +190,8 @@ namespace ctrace
                 std::exit(0);
             };
             commands["--verbose"] = [this](const std::string&) { config.global.verbose = true; };
+            commands["--quiet"] = [this](const std::string&) { config.global.quiet = true; };
+            commands["--demangle"] = [this](const std::string&) { config.global.demangle = true; };
             commands["--sarif-format"] = [this](const std::string&)
             { config.global.hasSarifFormat = true; };
             commands["--report-file"] = [this](const std::string& value)
@@ -199,6 +243,78 @@ namespace ctrace
             { config.global.hasDynamicAnalysis = true; };
             commands["--entry-points"] = [this](const std::string& value)
             { config.global.entry_points = value; };
+            commands["--config"] = [this](const std::string& value)
+            { config.global.config_file = value; };
+            commands["--compile-commands"] = [this](const std::string& value)
+            { config.global.compile_commands = value; };
+            commands["--include-compdb-deps"] = [this](const std::string&)
+            { config.global.include_compdb_deps = true; };
+            commands["--analysis-profile"] = [this](const std::string& value)
+            { config.global.analysis_profile = value; };
+            commands["--smt"] = [this](const std::string& value) { config.global.smt = value; };
+            commands["--smt-backend"] = [this](const std::string& value)
+            { config.global.smt_backend = value; };
+            commands["--smt-secondary-backend"] = [this](const std::string& value)
+            { config.global.smt_secondary_backend = value; };
+            commands["--smt-mode"] = [this](const std::string& value)
+            { config.global.smt_mode = value; };
+            commands["--smt-timeout-ms"] = [this](const std::string& value)
+            {
+                try
+                {
+                    config.global.smt_timeout_ms = static_cast<uint32_t>(std::stoul(value));
+                }
+                catch (const std::exception& e)
+                {
+                    coretrace::log(coretrace::Level::Error,
+                                   "Invalid smt timeout value: '{}'. Error: {}\n", value, e.what());
+                    std::exit(EXIT_FAILURE);
+                }
+            };
+            commands["--smt-budget-nodes"] = [this](const std::string& value)
+            {
+                try
+                {
+                    config.global.smt_budget_nodes = std::stoull(value);
+                }
+                catch (const std::exception& e)
+                {
+                    coretrace::log(coretrace::Level::Error,
+                                   "Invalid smt budget value: '{}'. Error: {}\n", value, e.what());
+                    std::exit(EXIT_FAILURE);
+                }
+            };
+            commands["--smt-rules"] = [this](const std::string& value)
+            {
+                config.global.smt_rules.clear();
+                for (const auto rule : ctrace_tools::strings::splitByComma(value))
+                {
+                    config.global.smt_rules.emplace_back(rule);
+                }
+            };
+            commands["--resource-model"] = [this](const std::string& value)
+            { config.global.resource_model = value; };
+            commands["--escape-model"] = [this](const std::string& value)
+            { config.global.escape_model = value; };
+            commands["--buffer-model"] = [this](const std::string& value)
+            { config.global.buffer_model = value; };
+            commands["--stack-limit"] = [this](const std::string& value)
+            {
+                try
+                {
+                    config.global.stack_limit = std::stoul(value);
+                    coretrace::log(coretrace::Level::Info, "Stack limit set to {} bytes",
+                                   config.global.stack_limit);
+                }
+                catch (const std::exception& e)
+                {
+                    coretrace::log(coretrace::Level::Error,
+                                   "Invalid stack limit value: '{}'. Error: {}\n", value, e.what());
+                    coretrace::log(coretrace::Level::Error,
+                                   "Please provide a valid unsigned integer.\n");
+                    std::exit(EXIT_FAILURE);
+                }
+            };
             commands["--ipc"] = [this](const std::string& value)
             {
                 auto ipc_list = ctrace_defs::IPC_TYPES;
@@ -223,12 +339,14 @@ namespace ctrace
             commands["--serve-host"] = [this](const std::string& value)
             {
                 config.global.serverHost = value;
-                std::cout << "[DEBUG] Server host set to " << config.global.serverHost << std::endl;
+                coretrace::log(coretrace::Level::Debug, "Server host set to {}",
+                               config.global.serverHost);
             };
             commands["--serve-port"] = [this](const std::string& value)
             {
                 config.global.serverPort = std::stoi(value);
-                std::cout << "[DEBUG] Server port set to " << config.global.serverPort << std::endl;
+                coretrace::log(coretrace::Level::Debug, "Server port set to {}",
+                               config.global.serverPort);
             };
             commands["--shutdown-token"] = [this](const std::string& value)
             { config.global.shutdownToken = value; };

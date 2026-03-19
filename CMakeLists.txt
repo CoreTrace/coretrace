@@ -19,6 +19,7 @@ set(COMMON_SOURCES
     src/ArgumentParser/ArgumentManager.cpp
     src/ArgumentParser/ArgumentParserFactory.cpp
     src/App/Config.cpp
+    src/App/ToolConfig.cpp
     src/App/Files.cpp
     src/App/Runner.cpp
     src/ctrace_tools/mangle.cpp
@@ -65,6 +66,9 @@ target_link_libraries(ctrace PRIVATE nlohmann_json::nlohmann_json)
 
 include(${CMAKE_SOURCE_DIR}/cmake/stackUsageAnalyzer.cmake)
 target_link_libraries(ctrace PRIVATE coretrace::stack_usage_analyzer_lib)
+
+include(${CMAKE_SOURCE_DIR}/cmake/logger/coretraceLog.cmake)
+target_link_libraries(ctrace PRIVATE coretrace::logger)
 
 include(${CMAKE_SOURCE_DIR}/cmake/httpLib.cmake)
 target_link_libraries(ctrace PRIVATE httplib::httplib)

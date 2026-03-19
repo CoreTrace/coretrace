@@ -3,7 +3,9 @@
 
 #include <iostream>
 #include <memory>
+#include <cstddef>
 #include <string>
+#include <vector>
 
 #include "Config/config.hpp"
 
@@ -11,6 +13,12 @@ class IpcStrategy;
 
 namespace ctrace
 {
+    struct DiagnosticSummary
+    {
+        std::size_t info = 0;
+        std::size_t warning = 0;
+        std::size_t error = 0;
+    };
 
     /**
      * @brief Interface for an analysis tool (Strategy pattern).
@@ -39,6 +47,47 @@ namespace ctrace
              * @param config The program configuration to use during the analysis.
              */
         virtual void execute(const std::string& file, ctrace::ProgramConfig config) const = 0;
+
+        /**
+             * @brief Indicates whether the tool can process multiple inputs in one run.
+             *
+             * Tools returning true will be scheduled once with the full resolved input list.
+             * Default behavior keeps per-file execution.
+             */
+        [[nodiscard]] virtual bool supportsBatchExecution() const
+        {
+            return false;
+        }
+
+        /**
+             * @brief Executes the analysis tool on multiple files in one run.
+             *
+             * Default implementation falls back to per-file execution.
+             *
+             * @param files The list of files to analyze.
+             * @param config The program configuration to use during the analysis.
+             */
+        virtual void executeBatch(const std::vector<std::string>& files,
+                                  ctrace::ProgramConfig config) const
+        {
+            for (const auto& file : files)
+            {
+                execute(file, config);
+            }
+        }
+
+        /**
+             * @brief Returns the last diagnostics summary produced by the tool.
+             *
+             * Tools that do not expose structured diagnostics can keep the default
+             * implementation returning a zeroed summary.
+             *
+             * @return DiagnosticSummary Counts grouped by severity.
+             */
+        [[nodiscard]] virtual DiagnosticSummary lastDiagnosticsSummary() const
+        {
+            return {};
+        }
 
         /**
              * @brief Retrieves the name of the analysis tool.

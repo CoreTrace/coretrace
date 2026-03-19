@@ -5,6 +5,7 @@ int a[10];
 int main(int argc, char* argv[])
 {
     size_t i = 0;
+    printf("%c\n", a[0]);
     for (; i < 10; i++)
     {
         a[i] = i;

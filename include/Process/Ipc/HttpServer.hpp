@@ -15,8 +15,11 @@
 #include <nlohmann/json.hpp> // nlohmann::json (header-only)
 
 #include "Config/config.hpp"
+#include "App/Files.hpp"
+#include "App/ToolConfig.hpp"
 #include "Process/Tools/ToolsInvoker.hpp"
 #include "ctrace_tools/strings.hpp"
+#include "coretrace/logger.hpp"
 
 using json = nlohmann::json;
 
@@ -37,22 +40,22 @@ class ConsoleLogger : public ILogger
   public:
     void info(const std::string& msg) override
     {
-        std::cout << "[INFO] :: " << msg << '\n';
+        coretrace::log(coretrace::Level::Info, msg);
     }
 
     void error(const std::string& msg) override
     {
-        std::cerr << "[ERROR] :: " << msg << '\n';
+        coretrace::log(coretrace::Level::Error, msg);
     }
 
     void debug(const std::string& msg)
     {
-        std::cout << "[DEBUG] :: " << msg << '\n';
+        coretrace::log(coretrace::Level::Debug, msg);
     }
 
     void warn(const std::string& msg)
     {
-        std::cout << "[WARN] :: " << msg << '\n';
+        coretrace::log(coretrace::Level::Warn, msg);
     }
 };
 
@@ -310,6 +313,7 @@ class ApiHandler
                                    {"sarif_format", &config.global.hasSarifFormat},
                                    {"static_analysis", &config.global.hasStaticAnalysis},
                                    {"dynamic_analysis", &config.global.hasDynamicAnalysis},
+                                   {"include_compdb_deps", &config.global.include_compdb_deps},
                                }))
         {
             return false;
@@ -318,12 +322,38 @@ class ApiHandler
         {
             return false;
         }
-        if (!apply_string_fields(params, err,
-                                 {
-                                     {"report_file", &config.global.report_file},
-                                     {"output_file", &config.global.output_file},
-                                     {"ipc_path", &config.global.ipcPath},
-                                 }))
+        std::string configPath;
+        if (!read_string(params, "config", configPath, err))
+        {
+            return false;
+        }
+        if (!configPath.empty())
+        {
+            std::string toolConfigError;
+            if (!ctrace::applyToolConfigFile(config, configPath, toolConfigError))
+            {
+                err = {"InvalidParams", "Failed to load config: " + toolConfigError};
+                return false;
+            }
+            config.global.config_file = configPath;
+        }
+        if (!apply_string_fields(
+                params, err,
+                {
+                    {"report_file", &config.global.report_file},
+                    {"output_file", &config.global.output_file},
+                    {"config", &config.global.config_file},
+                    {"compile_commands", &config.global.compile_commands},
+                    {"analysis_profile", &config.global.analysis_profile},
+                    {"smt", &config.global.smt},
+                    {"smt_backend", &config.global.smt_backend},
+                    {"smt_secondary_backend", &config.global.smt_secondary_backend},
+                    {"smt_mode", &config.global.smt_mode},
+                    {"resource_model", &config.global.resource_model},
+                    {"escape_model", &config.global.escape_model},
+                    {"buffer_model", &config.global.buffer_model},
+                    {"ipc_path", &config.global.ipcPath},
+                }))
         {
             return false;
         }
@@ -339,6 +369,11 @@ class ApiHandler
                                   config.global.hasInvokedSpecificTools = true;
                                   config.global.specificTools = values;
                               }))
+        {
+            return false;
+        }
+        if (!apply_list_param(params, "smt_rules", err, [&](const std::vector<std::string>& values)
+                              { config.global.smt_rules = values; }))
         {
             return false;
         }
@@ -367,11 +402,6 @@ class ApiHandler
     static bool run_analysis(const ctrace::ProgramConfig& config, ILogger& logger, json& result,
                              ParseError& err)
     {
-        if (config.files.empty())
-        {
-            err = {"MissingInput", "Input files are required for analysis."};
-            return false;
-        }
         if (!config.global.hasStaticAnalysis && !config.global.hasDynamicAnalysis &&
             !config.global.hasInvokedSpecificTools)
         {
@@ -392,32 +422,51 @@ class ApiHandler
         const uint8_t pool_size = static_cast<uint8_t>(threads);
         auto output_capture = std::make_shared<ctrace::Thread::Output::CaptureBuffer>();
         ctrace::ToolInvoker invoker(config, pool_size, config.global.hasAsync, output_capture);
+        const auto sourceFiles = ctrace::resolveSourceFiles(config);
 
-        size_t processed = 0;
-        for (const auto& file : config.files)
+        if (config.global.verbose)
         {
-            if (file.src_file.empty())
+            if (!config.global.config_file.empty())
             {
-                continue;
+                logger.info("Config file in use: " + config.global.config_file);
             }
-            ++processed;
+            else
+            {
+                logger.info("Config file in use: none (request values only)");
+            }
+        }
+
+        std::vector<std::string> validSourceFiles;
+        validSourceFiles.reserve(sourceFiles.size());
+        for (const auto& file : sourceFiles)
+        {
+            if (!file.empty())
+            {
+                validSourceFiles.push_back(file);
+            }
+        }
+
+        const size_t processed = validSourceFiles.size();
+        if (processed > 0)
+        {
             if (config.global.hasStaticAnalysis)
             {
-                invoker.runStaticTools(file.src_file);
+                invoker.runStaticTools(validSourceFiles);
             }
             if (config.global.hasDynamicAnalysis)
             {
-                invoker.runDynamicTools(file.src_file);
+                invoker.runDynamicTools(validSourceFiles);
             }
             if (config.global.hasInvokedSpecificTools)
             {
-                invoker.runSpecificTools(config.global.specificTools, file.src_file);
+                invoker.runSpecificTools(config.global.specificTools, validSourceFiles);
             }
         }
 
         if (processed == 0)
         {
-            err = {"MissingInput", "Input files are required for analysis."};
+            err = {"MissingInput",
+                   "Input files are required for analysis (or provide --compile-commands)."};
             return false;
         }
 
@@ -429,6 +478,17 @@ class ApiHandler
         result["invoked_tools"] = config.global.specificTools;
         result["sarif_format"] = config.global.hasSarifFormat;
         result["report_file"] = config.global.report_file;
+        result["config"] = config.global.config_file;
+        result["include_compdb_deps"] = config.global.include_compdb_deps;
+        result["resource_model"] = config.global.resource_model;
+        result["escape_model"] = config.global.escape_model;
+        result["buffer_model"] = config.global.buffer_model;
+        result["analysis_profile"] = config.global.analysis_profile;
+        result["smt"] = config.global.smt;
+        result["smt_backend"] = config.global.smt_backend;
+        result["smt_secondary_backend"] = config.global.smt_secondary_backend;
+        result["smt_mode"] = config.global.smt_mode;
+        result["smt_rules"] = config.global.smt_rules;
         if (output_capture)
         {
             json outputs = json::object();
@@ -556,7 +616,7 @@ class HttpServer
                          handle_post_shutdown(req, res);
                      });
 
-        logger_.info("[SERVER] Listening on http://" + host + ":" + std::to_string(port));
+        logger_.info("Listening on http://" + host + ":" + std::to_string(port));
         server_.listen(host.c_str(), port);
         finalize_shutdown();
     }
