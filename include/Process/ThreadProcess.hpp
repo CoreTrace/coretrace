@@ -112,7 +112,7 @@ namespace ctrace
                 emit_line("stderr", message, std::cerr, true);
             }
         } // namespace Output
-    }     // namespace Thread
+    } // namespace Thread
 } // namespace ctrace
 
 #endif // THREAD_PROCESS_HPP

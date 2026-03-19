@@ -267,8 +267,7 @@ namespace ctrace
             }
 
             const auto containsExclusiveCaptureTool =
-                std::any_of(tool_names.begin(), tool_names.end(),
-                            [](const std::string& tool_name)
+                std::any_of(tool_names.begin(), tool_names.end(), [](const std::string& tool_name)
                             { return requiresExclusiveProcessCapture(tool_name); });
 
             if (containsExclusiveCaptureTool)

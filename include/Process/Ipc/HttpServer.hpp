@@ -372,8 +372,7 @@ class ApiHandler
         {
             return false;
         }
-        if (!apply_list_param(params, "smt_rules", err,
-                              [&](const std::vector<std::string>& values)
+        if (!apply_list_param(params, "smt_rules", err, [&](const std::vector<std::string>& values)
                               { config.global.smt_rules = values; }))
         {
             return false;
