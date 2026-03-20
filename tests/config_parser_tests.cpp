@@ -195,14 +195,8 @@ namespace
 )json");
 
         std::vector<std::string> args = {
-            "ctrace",
-            "--config",
-            path.string(),
-            "--verbose",
-            "--report-file",
-            "from-cli.txt",
-            "--output-file",
-            "from-cli.out",
+            "ctrace",        "--config",     path.string(),   "--verbose",
+            "--report-file", "from-cli.txt", "--output-file", "from-cli.out",
         };
         std::vector<char*> argv;
         argv.reserve(args.size());
