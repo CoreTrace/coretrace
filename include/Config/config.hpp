@@ -8,9 +8,11 @@
 #include <vector>
 #include <future>
 #include <functional>
+#include <optional>
 #include <unordered_map>
 #include "ArgumentParser/ArgumentManager.hpp"
 #include "ArgumentParser/ArgumentParserFactory.hpp"
+#include "App/SupportedTools.hpp"
 #include "ctrace_tools/strings.hpp"
 #include "ctrace_defs/types.hpp"
 
@@ -48,10 +50,13 @@ Options:
   --static                 Enables static analysis.
   --dyn                    Enables dynamic analysis.
   --invoke <tools>         Invokes specific tools (comma-separated).
-                           Available tools: flawfinder, ikos, cppcheck, tscancode.
+                           Available tools: flawfinder, ikos, cppcheck, tscancode, ctrace_stack_analyzer.
   --input <files>          Specifies the source files to analyse (comma-separated).
+  --timing                 Enables stack analyzer timing output.
   --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
   --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
+  --serve-host <host>      HTTP server host when --ipc=serve.
+  --serve-port <port>      HTTP server port when --ipc=serve.
   --async                  Enables asynchronous execution.
   --shutdown-token <tok>   Token required for POST /shutdown (server mode).
   --shutdown-timeout-ms <ms> Graceful shutdown timeout in ms (0 = wait indefinitely).
@@ -116,7 +121,7 @@ namespace ctrace
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
-        std::string entry_points = "";                 ///< Entry points for analysis.
+        std::string entry_points = "main";             ///< Entry points for analysis.
         std::string report_file = "ctrace-report.txt"; ///< Path to the report file.
         std::string output_file = "ctrace.out";        ///< Path to the output file.
         std::string config_file;                       ///< Path to the JSON config file.
@@ -134,6 +139,35 @@ namespace ctrace
         std::string resource_model;         ///< Path to stack analyzer resource model.
         std::string escape_model;           ///< Path to stack analyzer escape model.
         std::string buffer_model;           ///< Path to stack analyzer buffer model.
+        std::string stack_analyzer_mode = "ir"; ///< Stack analyzer execution mode.
+        std::string stack_analyzer_output_format; ///< Stack analyzer output format.
+        std::string stack_analyzer_config; ///< Optional analyzer-native key=value config path.
+        bool stack_analyzer_print_effective_config = false; ///< Print analyzer effective config.
+        bool stack_analyzer_compdb_fast = false; ///< Enables fast compile DB mode in analyzer.
+        bool stack_analyzer_include_stl = false; ///< Include STL/system functions in analyzer.
+        bool stack_analyzer_dump_filter = false; ///< Enables analyzer filter tracing.
+        bool stack_analyzer_warnings_only = false; ///< Emit warning/error diagnostics only.
+        bool stack_analyzer_resource_summary_cache_memory_only =
+            false; ///< Keep resource summary cache in memory only.
+        std::optional<bool>
+            stack_analyzer_resource_cross_tu; ///< Override analyzer resource cross-TU toggle.
+        std::optional<bool>
+            stack_analyzer_uninitialized_cross_tu; ///< Override uninitialized cross-TU toggle.
+        std::string stack_analyzer_jobs; ///< Analyzer jobs value ("auto" or positive integer).
+        std::string stack_analyzer_base_dir; ///< Base directory for SARIF URI normalization.
+        std::string stack_analyzer_dump_ir; ///< Dump LLVM IR path (file/dir).
+        std::string
+            stack_analyzer_resource_summary_cache_dir; ///< Resource summary cache directory.
+        std::string stack_analyzer_compile_ir_cache_dir; ///< Compile IR cache directory.
+        std::string stack_analyzer_compile_ir_format; ///< Compile IR format (bc|ll).
+        std::vector<std::string> stack_analyzer_only_files; ///< --only-file filters.
+        std::vector<std::string> stack_analyzer_only_dirs; ///< --only-dir filters.
+        std::vector<std::string> stack_analyzer_exclude_dirs; ///< --exclude-dir filters.
+        std::vector<std::string> stack_analyzer_only_functions; ///< --only-func filters.
+        std::vector<std::string> stack_analyzer_include_dirs; ///< -I include directories.
+        std::vector<std::string> stack_analyzer_defines; ///< -D preprocessor defines.
+        std::vector<std::string> stack_analyzer_compile_args; ///< --compile-arg values.
+        std::vector<std::string> stack_analyzer_extra_args; ///< Extra stack analyzer args.
         uint64_t stack_limit = 8 * 1024 * 1024; ///< Stack limit in bytes.
     };
 
@@ -196,6 +230,8 @@ namespace ctrace
             { config.global.hasSarifFormat = true; };
             commands["--report-file"] = [this](const std::string& value)
             { config.global.report_file = value; };
+            commands["--output-file"] = [this](const std::string& value)
+            { config.global.output_file = value; };
             commands["--async"] = [this](const std::string&)
             {
                 config.global.hasAsync = std::launch::async;
@@ -203,38 +239,20 @@ namespace ctrace
             };
             commands["--invoke"] = [this](const std::string& value)
             {
-                config.global.hasInvokedSpecificTools = true;
-                auto parts = ctrace_tools::strings::splitByComma(value);
-
-                for (const auto& part : parts)
+                std::vector<std::string> parts;
+                for (const auto part : ctrace_tools::strings::splitByComma(value))
                 {
-                    // TODO: Refactor this block for better readability.
-                    if (part == "flawfinder")
-                    {
-                        // config.global.hasStaticAnalysis = true;
-                        config.global.specificTools.emplace_back("flawfinder");
-                    }
-                    if (part == "ikos")
-                    {
-                        // config.global.hasStaticAnalysis = true;
-                        config.global.specificTools.emplace_back("ikos");
-                    }
-                    if (part == "cppcheck")
-                    {
-                        // config.global.hasStaticAnalysis = true;
-                        config.global.specificTools.emplace_back("cppcheck");
-                    }
-                    if (part == "tscancode")
-                    {
-                        // config.global.hasStaticAnalysis = true;
-                        config.global.specificTools.emplace_back("tscancode");
-                    }
-                    if (part == "ctrace_stack_analyzer")
-                    {
-                        // config.global.hasStaticAnalysis = true;
-                        config.global.specificTools.emplace_back("ctrace_stack_analyzer");
-                    }
+                    parts.emplace_back(part);
                 }
+                std::string normalizeError;
+                const auto normalized = normalizeAndValidateToolList(parts, normalizeError);
+                if (!normalizeError.empty())
+                {
+                    std::cerr << normalizeError << std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
+                config.global.specificTools = normalized;
+                config.global.hasInvokedSpecificTools = !normalized.empty();
             };
             commands["--input"] = [this](const std::string& value) { config.addFile(value); };
             commands["--static"] = [this](const std::string&)
@@ -298,6 +316,8 @@ namespace ctrace
             { config.global.escape_model = value; };
             commands["--buffer-model"] = [this](const std::string& value)
             { config.global.buffer_model = value; };
+            commands["--timing"] = [this](const std::string&)
+            { config.global.timing = true; };
             commands["--stack-limit"] = [this](const std::string& value)
             {
                 try

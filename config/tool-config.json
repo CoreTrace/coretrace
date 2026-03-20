@@ -1,24 +1,90 @@
 {
-  "invoke": [
-    "ctrace_stack_analyzer"
-  ],
+  "schema_version": 1,
+  "analysis": {
+    "static": false,
+    "dynamic": false,
+    "invoke": [
+      "ctrace_stack_analyzer"
+    ]
+  },
+  "files": {
+    "input": [],
+    "entry_points": [
+    ],
+    "compile_commands": "",
+    "include_compdb_deps": false
+  },
+  "output": {
+    "sarif_format": false,
+    "report_file": "coretrace-results.json",
+    "output_file": "ctrace.out",
+    "verbose": false,
+    "quiet": false,
+    "demangle": true
+  },
+  "runtime": {
+    "async": false,
+    "ipc": "standardIO",
+    "ipc_path": "/tmp/coretrace_ipc"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "shutdown_token": "",
+    "shutdown_timeout_ms": 0
+  },
   "stack_analyzer": {
+    "mode": "ir",
+    "output_format": "json",
+    "config": "",
+    "print_effective_config": false,
     "compile_commands": "",
     "include_compdb_deps": false,
-    "analysis-profile": "full",
-    "timing": true,
+    "compdb_fast": false,
+    "jobs": "",
+    "include_dirs": [],
+    "defines": [],
+    "compile_args": [],
+    "entry_points": [
+    ],
+    "only_functions": [],
+    "only_files": [],
+    "only_dirs": [],
+    "exclude_dirs": [],
+    "analysis_profile": "full",
     "smt": "on",
-    "smt-backend": "z3",
-    "smt-secondary-backend": "single",
-    "smt-mode": "single",
-    "smt-timeout-ms": 80,
-    "smt-rules": ["recursion","integer-overflow","size-minus-k","stack-buffer","oob-read","type-confusion"],
-    "entry_points": [],
-    "demangle": true,
-    "quiet": false,
+    "smt_backend": "z3",
+    "smt_secondary_backend": "",
+    "smt_mode": "single",
+    "smt_timeout_ms": 80,
+    "smt_budget_nodes": 20000,
+    "smt_rules": [
+      "recursion",
+      "integer-overflow",
+      "size-minus-k",
+      "stack-buffer",
+      "oob-read",
+      "type-confusion"
+    ],
+    "resource_model": "",
+    "escape_model": "",
+    "buffer_model": "",
+    "resource_cross_tu": true,
+    "uninitialized_cross_tu": true,
+    "resource_summary_cache_dir": ".cache/resource-lifetime",
+    "resource_summary_cache_memory_only": false,
+    "compile_ir_cache_dir": "",
+    "compile_ir_format": "bc",
+    "include_stl": false,
     "stack_limit": 8388608,
-    "resource_model": "../../coretrace-stack-analyzer/models/resource-lifetime/generic.txt",
-    "escape_model": "../../coretrace-stack-analyzer/models/stack-escape/generic.txt",
-    "buffer_model": "../../coretrace-stack-analyzer/models/buffer-overflow/generic.txt"
+    "base_dir": "",
+    "dump_filter": false,
+    "dump_ir": "",
+    "verbose": false,
+    "demangle": true,
+    "quiet": true,
+    "timing": false,
+    "warnings_only": false,
+    "extra_args": []
   }
 }

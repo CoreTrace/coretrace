@@ -19,7 +19,7 @@ namespace ctrace
         argManager.addOption("--verbose", false, 'v');
         argManager.addFlag("--help", 'h');
         argManager.addFlag("--quiet", 'q');
-        argManager.addOption("--output", true, 'o');
+        argManager.addOption("--output-file", true, 'o');
         argManager.addOption("--invoke", true, 'i');
         argManager.addOption("--sarif-format", false, 'f');
         argManager.addOption("--input", true, 's');
@@ -40,6 +40,7 @@ namespace ctrace
         argManager.addOption("--resource-model", true, 'R');
         argManager.addOption("--escape-model", true, 'E');
         argManager.addOption("--buffer-model", true, 'B');
+        argManager.addOption("--timing", false, 'H');
         argManager.addOption("--demangle", false, 'g');
         argManager.addOption("--stack-limit", true, 'l');
         argManager.addOption("--report-file", true, 'r');
