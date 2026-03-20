@@ -66,9 +66,9 @@
       "oob-read",
       "type-confusion"
     ],
-    "resource_model": "",
-    "escape_model": "",
-    "buffer_model": "",
+    "resource_model": "models/resource-lifetime/generic.txt",
+    "escape_model": "models/stack-escape/generic.txt",
+    "buffer_model": "models/buffer-overflow/generic.txt",
     "resource_cross_tu": true,
     "uninitialized_cross_tu": true,
     "resource_summary_cache_dir": ".cache/resource-lifetime",
