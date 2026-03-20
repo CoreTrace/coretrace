@@ -139,13 +139,13 @@ namespace ctrace
         std::string resource_model;         ///< Path to stack analyzer resource model.
         std::string escape_model;           ///< Path to stack analyzer escape model.
         std::string buffer_model;           ///< Path to stack analyzer buffer model.
-        std::string stack_analyzer_mode = "ir"; ///< Stack analyzer execution mode.
+        std::string stack_analyzer_mode = "ir";   ///< Stack analyzer execution mode.
         std::string stack_analyzer_output_format; ///< Stack analyzer output format.
         std::string stack_analyzer_config; ///< Optional analyzer-native key=value config path.
         bool stack_analyzer_print_effective_config = false; ///< Print analyzer effective config.
-        bool stack_analyzer_compdb_fast = false; ///< Enables fast compile DB mode in analyzer.
-        bool stack_analyzer_include_stl = false; ///< Include STL/system functions in analyzer.
-        bool stack_analyzer_dump_filter = false; ///< Enables analyzer filter tracing.
+        bool stack_analyzer_compdb_fast = false;   ///< Enables fast compile DB mode in analyzer.
+        bool stack_analyzer_include_stl = false;   ///< Include STL/system functions in analyzer.
+        bool stack_analyzer_dump_filter = false;   ///< Enables analyzer filter tracing.
         bool stack_analyzer_warnings_only = false; ///< Emit warning/error diagnostics only.
         bool stack_analyzer_resource_summary_cache_memory_only =
             false; ///< Keep resource summary cache in memory only.
@@ -153,22 +153,22 @@ namespace ctrace
             stack_analyzer_resource_cross_tu; ///< Override analyzer resource cross-TU toggle.
         std::optional<bool>
             stack_analyzer_uninitialized_cross_tu; ///< Override uninitialized cross-TU toggle.
-        std::string stack_analyzer_jobs; ///< Analyzer jobs value ("auto" or positive integer).
+        std::string stack_analyzer_jobs;     ///< Analyzer jobs value ("auto" or positive integer).
         std::string stack_analyzer_base_dir; ///< Base directory for SARIF URI normalization.
-        std::string stack_analyzer_dump_ir; ///< Dump LLVM IR path (file/dir).
+        std::string stack_analyzer_dump_ir;  ///< Dump LLVM IR path (file/dir).
         std::string
-            stack_analyzer_resource_summary_cache_dir; ///< Resource summary cache directory.
-        std::string stack_analyzer_compile_ir_cache_dir; ///< Compile IR cache directory.
-        std::string stack_analyzer_compile_ir_format; ///< Compile IR format (bc|ll).
-        std::vector<std::string> stack_analyzer_only_files; ///< --only-file filters.
-        std::vector<std::string> stack_analyzer_only_dirs; ///< --only-dir filters.
+            stack_analyzer_resource_summary_cache_dir;        ///< Resource summary cache directory.
+        std::string stack_analyzer_compile_ir_cache_dir;      ///< Compile IR cache directory.
+        std::string stack_analyzer_compile_ir_format;         ///< Compile IR format (bc|ll).
+        std::vector<std::string> stack_analyzer_only_files;   ///< --only-file filters.
+        std::vector<std::string> stack_analyzer_only_dirs;    ///< --only-dir filters.
         std::vector<std::string> stack_analyzer_exclude_dirs; ///< --exclude-dir filters.
         std::vector<std::string> stack_analyzer_only_functions; ///< --only-func filters.
-        std::vector<std::string> stack_analyzer_include_dirs; ///< -I include directories.
-        std::vector<std::string> stack_analyzer_defines; ///< -D preprocessor defines.
-        std::vector<std::string> stack_analyzer_compile_args; ///< --compile-arg values.
-        std::vector<std::string> stack_analyzer_extra_args; ///< Extra stack analyzer args.
-        uint64_t stack_limit = 8 * 1024 * 1024; ///< Stack limit in bytes.
+        std::vector<std::string> stack_analyzer_include_dirs;   ///< -I include directories.
+        std::vector<std::string> stack_analyzer_defines;        ///< -D preprocessor defines.
+        std::vector<std::string> stack_analyzer_compile_args;   ///< --compile-arg values.
+        std::vector<std::string> stack_analyzer_extra_args;     ///< Extra stack analyzer args.
+        uint64_t stack_limit = 8 * 1024 * 1024;                 ///< Stack limit in bytes.
     };
 
     /**
@@ -316,8 +316,7 @@ namespace ctrace
             { config.global.escape_model = value; };
             commands["--buffer-model"] = [this](const std::string& value)
             { config.global.buffer_model = value; };
-            commands["--timing"] = [this](const std::string&)
-            { config.global.timing = true; };
+            commands["--timing"] = [this](const std::string&) { config.global.timing = true; };
             commands["--stack-limit"] = [this](const std::string& value)
             {
                 try

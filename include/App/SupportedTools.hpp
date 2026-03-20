@@ -9,11 +9,7 @@
 namespace ctrace
 {
     inline constexpr std::array<std::string_view, 5> SUPPORTED_TOOLS = {
-        "flawfinder",
-        "ikos",
-        "cppcheck",
-        "tscancode",
-        "ctrace_stack_analyzer",
+        "flawfinder", "ikos", "cppcheck", "tscancode", "ctrace_stack_analyzer",
     };
 
     inline bool isSupportedToolName(std::string_view name)
@@ -42,8 +38,8 @@ namespace ctrace
         return joined;
     }
 
-    inline std::vector<std::string> normalizeAndValidateToolList(const std::vector<std::string>& tools,
-                                                                 std::string& error)
+    inline std::vector<std::string>
+    normalizeAndValidateToolList(const std::vector<std::string>& tools, std::string& error)
     {
         std::vector<std::string> normalized;
         normalized.reserve(tools.size());

@@ -161,9 +161,9 @@ namespace
         appendFlagOption(args, report, "--STL", config.global.stack_analyzer_include_stl,
                          "stack_analyzer.include_stl enabled",
                          "stack_analyzer.include_stl disabled");
-        appendFlagOption(args, report, "--warnings-only", config.global.stack_analyzer_warnings_only,
-                         "stack_analyzer.warnings_only enabled",
-                         "stack_analyzer.warnings_only disabled");
+        appendFlagOption(
+            args, report, "--warnings-only", config.global.stack_analyzer_warnings_only,
+            "stack_analyzer.warnings_only enabled", "stack_analyzer.warnings_only disabled");
         appendFlagOption(args, report, "--dump-filter", config.global.stack_analyzer_dump_filter,
                          "stack_analyzer.dump_filter enabled",
                          "stack_analyzer.dump_filter disabled");
@@ -222,8 +222,7 @@ namespace
         }
         else
         {
-            appendBridgeDecision(report, "--only-file", false,
-                                 "empty stack_analyzer.only_files");
+            appendBridgeDecision(report, "--only-file", false, "empty stack_analyzer.only_files");
         }
 
         if (!config.global.stack_analyzer_only_dirs.empty())
@@ -236,8 +235,7 @@ namespace
         }
         else
         {
-            appendBridgeDecision(report, "--only-dir", false,
-                                 "empty stack_analyzer.only_dirs");
+            appendBridgeDecision(report, "--only-dir", false, "empty stack_analyzer.only_dirs");
         }
 
         if (!config.global.stack_analyzer_exclude_dirs.empty())
@@ -259,8 +257,8 @@ namespace
             args.emplace_back("--only-func");
             args.emplace_back(joinCsv(config.global.stack_analyzer_only_functions));
             appendBridgeDecision(report, "--only-func", true,
-                                 "value='" +
-                                     joinCsv(config.global.stack_analyzer_only_functions) + "'");
+                                 "value='" + joinCsv(config.global.stack_analyzer_only_functions) +
+                                     "'");
         }
         else
         {
@@ -284,8 +282,7 @@ namespace
         }
         else
         {
-            appendBridgeDecision(report, "-I", false,
-                                 "empty stack_analyzer.include_dirs");
+            appendBridgeDecision(report, "-I", false, "empty stack_analyzer.include_dirs");
         }
 
         if (!config.global.stack_analyzer_defines.empty())
@@ -343,8 +340,7 @@ namespace
         if (config.global.stack_analyzer_uninitialized_cross_tu.has_value())
         {
             const bool enabled = *config.global.stack_analyzer_uninitialized_cross_tu;
-            args.emplace_back(enabled ? "--uninitialized-cross-tu"
-                                      : "--no-uninitialized-cross-tu");
+            args.emplace_back(enabled ? "--uninitialized-cross-tu" : "--no-uninitialized-cross-tu");
             appendBridgeDecision(report, "uninitialized_cross_tu", true,
                                  enabled ? "enabled" : "disabled");
         }
@@ -501,8 +497,7 @@ namespace
         lowered.reserve(input.size());
         for (const char ch : input)
         {
-            lowered.push_back(static_cast<char>(
-                std::tolower(static_cast<unsigned char>(ch))));
+            lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
         }
         return lowered;
     }
@@ -1017,7 +1012,8 @@ namespace ctrace
         {
             m_lastDiagnosticsSummary = *parsedSummary;
         }
-        else if (const auto parsedSummary = parseDiagnosticsSummaryFromStructuredOutput(capturedStdout);
+        else if (const auto parsedSummary =
+                     parseDiagnosticsSummaryFromStructuredOutput(capturedStdout);
                  parsedSummary.has_value())
         {
             m_lastDiagnosticsSummary = *parsedSummary;
@@ -1027,7 +1023,8 @@ namespace ctrace
         {
             m_lastDiagnosticsSummary = *parsedSummary;
         }
-        else if (const auto parsedSummary = parseDiagnosticsSummaryFromStructuredOutput(capturedStderr);
+        else if (const auto parsedSummary =
+                     parseDiagnosticsSummaryFromStructuredOutput(capturedStderr);
                  parsedSummary.has_value())
         {
             m_lastDiagnosticsSummary = *parsedSummary;

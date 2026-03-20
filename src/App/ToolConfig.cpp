@@ -36,16 +36,15 @@ namespace ctrace
 
         [[nodiscard]] std::string toLower(std::string value)
         {
-            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
-                           { return static_cast<char>(std::tolower(ch)); });
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
             return value;
         }
 
         [[nodiscard]] std::string trimCopy(std::string_view input)
         {
             std::size_t start = 0;
-            while (start < input.size() &&
-                   std::isspace(static_cast<unsigned char>(input[start])))
+            while (start < input.size() && std::isspace(static_cast<unsigned char>(input[start])))
             {
                 ++start;
             }
@@ -242,9 +241,10 @@ namespace ctrace
             return true;
         }
 
-        [[nodiscard]] bool readOptionalScalarAsStringAny(
-            const json& object, std::initializer_list<const char*> keys, std::string& out,
-            std::string& errorMessage, const std::string& locationPath, bool& hasValue)
+        [[nodiscard]] bool
+        readOptionalScalarAsStringAny(const json& object, std::initializer_list<const char*> keys,
+                                      std::string& out, std::string& errorMessage,
+                                      const std::string& locationPath, bool& hasValue)
         {
             const auto* value = findFirstValueForKeys(object, keys);
             if (value == nullptr || value->is_null())
@@ -327,12 +327,10 @@ namespace ctrace
             return parseUint64(*value, out, errorMessage, locationPath);
         }
 
-        [[nodiscard]] bool readOptionalStringListAny(const json& object,
-                                                     std::initializer_list<const char*> keys,
-                                                     std::vector<std::string>& out,
-                                                     std::string& errorMessage,
-                                                     const std::string& locationPath,
-                                                     bool& hasValue)
+        [[nodiscard]] bool
+        readOptionalStringListAny(const json& object, std::initializer_list<const char*> keys,
+                                  std::vector<std::string>& out, std::string& errorMessage,
+                                  const std::string& locationPath, bool& hasValue)
         {
             const auto* value = findFirstValueForKeys(object, keys);
             if (value == nullptr || value->is_null())
@@ -424,7 +422,8 @@ namespace ctrace
             return false;
         }
 
-        [[nodiscard]] bool validateSmtMode(const std::string& value, const std::string& locationPath,
+        [[nodiscard]] bool validateSmtMode(const std::string& value,
+                                           const std::string& locationPath,
                                            std::string& errorMessage)
         {
             if (value.empty())
@@ -529,9 +528,8 @@ namespace ctrace
 
             if (trimmed.empty())
             {
-                errorMessage =
-                    "Invalid value '" + value + "' for '" + locationPath +
-                    "'. Allowed values: [auto, positive integer]";
+                errorMessage = "Invalid value '" + value + "' for '" + locationPath +
+                               "'. Allowed values: [auto, positive integer]";
                 return false;
             }
 
@@ -539,9 +537,8 @@ namespace ctrace
             {
                 if (!std::isdigit(static_cast<unsigned char>(ch)))
                 {
-                    errorMessage =
-                        "Invalid value '" + value + "' for '" + locationPath +
-                        "'. Allowed values: [auto, positive integer]";
+                    errorMessage = "Invalid value '" + value + "' for '" + locationPath +
+                                   "'. Allowed values: [auto, positive integer]";
                     return false;
                 }
             }
@@ -553,9 +550,8 @@ namespace ctrace
             }
             catch (const std::exception&)
             {
-                errorMessage =
-                    "Invalid value '" + value + "' for '" + locationPath +
-                    "'. Allowed values: [auto, positive integer]";
+                errorMessage = "Invalid value '" + value + "' for '" + locationPath +
+                               "'. Allowed values: [auto, positive integer]";
                 return false;
             }
 
@@ -718,10 +714,9 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.compile_commands = stringValue.empty()
-                                                     ? std::string()
-                                                     : resolvePathFromBase(configDir, stringValue)
-                                                           .string();
+                config.global.compile_commands =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             bool boolValue = false;
@@ -777,8 +772,8 @@ namespace ctrace
                 config.global.verbose = boolValue;
             }
 
-            if (!readOptionalBoolAny(section, {"quiet"}, boolValue, errorMessage,
-                                     "output.quiet", hasValue))
+            if (!readOptionalBoolAny(section, {"quiet"}, boolValue, errorMessage, "output.quiet",
+                                     hasValue))
             {
                 return false;
             }
@@ -892,8 +887,8 @@ namespace ctrace
 
             bool hasValue = false;
             std::string stringValue;
-            if (!readOptionalStringAny(section, {"host"}, stringValue, errorMessage,
-                                       "server.host", hasValue))
+            if (!readOptionalStringAny(section, {"host"}, stringValue, errorMessage, "server.host",
+                                       hasValue))
             {
                 return false;
             }
@@ -1100,11 +1095,9 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_config = stringValue.empty()
-                                                          ? std::string()
-                                                          : resolvePathFromBase(configDir,
-                                                                                stringValue)
-                                                                .string();
+                config.global.stack_analyzer_config =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             bool boolValue = false;
@@ -1138,17 +1131,14 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.compile_commands = stringValue.empty()
-                                                     ? std::string()
-                                                     : resolvePathFromBase(configDir, stringValue)
-                                                           .string();
+                config.global.compile_commands =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
-            if (!readOptionalStringListAny(section,
-                                           {"compile_args", "compile-args", "compile_arg",
-                                            "compile-arg"},
-                                           listValue, errorMessage,
-                                           std::string(location) + ".compile_args", hasValue))
+            if (!readOptionalStringListAny(
+                    section, {"compile_args", "compile-args", "compile_arg", "compile-arg"},
+                    listValue, errorMessage, std::string(location) + ".compile_args", hasValue))
             {
                 return false;
             }
@@ -1157,11 +1147,9 @@ namespace ctrace
                 config.global.stack_analyzer_compile_args = listValue;
             }
 
-            if (!readOptionalStringListAny(section,
-                                           {"include_dirs", "include-dirs", "include_dir",
-                                            "include-dir"},
-                                           listValue, errorMessage,
-                                           std::string(location) + ".include_dirs", hasValue))
+            if (!readOptionalStringListAny(
+                    section, {"include_dirs", "include-dirs", "include_dir", "include-dir"},
+                    listValue, errorMessage, std::string(location) + ".include_dirs", hasValue))
             {
                 return false;
             }
@@ -1181,45 +1169,42 @@ namespace ctrace
             }
 
             if (!readOptionalStringAny(section, {"resource_model", "resource-model"}, stringValue,
-                                       errorMessage,
-                                       std::string(location) + ".resource_model", hasValue))
+                                       errorMessage, std::string(location) + ".resource_model",
+                                       hasValue))
             {
                 return false;
             }
             if (hasValue)
             {
-                config.global.resource_model = stringValue.empty()
-                                                   ? std::string()
-                                                   : resolvePathFromBase(configDir, stringValue)
-                                                         .string();
+                config.global.resource_model =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             if (!readOptionalStringAny(section, {"escape_model", "escape-model"}, stringValue,
-                                       errorMessage,
-                                       std::string(location) + ".escape_model", hasValue))
+                                       errorMessage, std::string(location) + ".escape_model",
+                                       hasValue))
             {
                 return false;
             }
             if (hasValue)
             {
-                config.global.escape_model = stringValue.empty()
-                                                 ? std::string()
-                                                 : resolvePathFromBase(configDir, stringValue)
-                                                       .string();
+                config.global.escape_model =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             if (!readOptionalStringAny(section, {"buffer_model", "buffer-model"}, stringValue,
-                                       errorMessage,
-                                       std::string(location) + ".buffer_model", hasValue))
+                                       errorMessage, std::string(location) + ".buffer_model",
+                                       hasValue))
             {
                 return false;
             }
             if (hasValue)
             {
-                config.global.buffer_model = stringValue.empty()
-                                                 ? std::string()
-                                                       : resolvePathFromBase(configDir, stringValue)
-                                                             .string();
+                config.global.buffer_model =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             if (!readOptionalBoolAny(section, {"demangle"}, boolValue, errorMessage,
@@ -1286,8 +1271,8 @@ namespace ctrace
 
             uint64_t uintValue = 0;
             if (!readOptionalUint64Any(section, {"stack_limit", "stack-limit"}, uintValue,
-                                       errorMessage,
-                                       std::string(location) + ".stack_limit", hasValue))
+                                       errorMessage, std::string(location) + ".stack_limit",
+                                       hasValue))
             {
                 return false;
             }
@@ -1318,9 +1303,8 @@ namespace ctrace
             }
             if (hasValue)
             {
-                if (!validateAnalysisProfile(stringValue,
-                                             std::string(location) + ".analysis_profile",
-                                             errorMessage))
+                if (!validateAnalysisProfile(
+                        stringValue, std::string(location) + ".analysis_profile", errorMessage))
                 {
                     return false;
                 }
@@ -1349,11 +1333,9 @@ namespace ctrace
                 config.global.smt_backend = stringValue;
             }
 
-            if (!readOptionalStringAny(section,
-                                       {"smt-secondary-backend", "smt_secondary_backend"},
+            if (!readOptionalStringAny(section, {"smt-secondary-backend", "smt_secondary_backend"},
                                        stringValue, errorMessage,
-                                       std::string(location) + ".smt_secondary_backend",
-                                       hasValue))
+                                       std::string(location) + ".smt_secondary_backend", hasValue))
             {
                 return false;
             }
@@ -1362,9 +1344,8 @@ namespace ctrace
                 config.global.smt_secondary_backend = stringValue;
             }
 
-            if (!readOptionalStringAny(section, {"smt-mode", "smt_mode"}, stringValue,
-                                       errorMessage, std::string(location) + ".smt_mode",
-                                       hasValue))
+            if (!readOptionalStringAny(section, {"smt-mode", "smt_mode"}, stringValue, errorMessage,
+                                       std::string(location) + ".smt_mode", hasValue))
             {
                 return false;
             }
@@ -1379,8 +1360,8 @@ namespace ctrace
             }
 
             if (!readOptionalUint64Any(section, {"smt-timeout-ms", "smt_timeout_ms"}, uintValue,
-                                       errorMessage,
-                                       std::string(location) + ".smt_timeout_ms", hasValue))
+                                       errorMessage, std::string(location) + ".smt_timeout_ms",
+                                       hasValue))
             {
                 return false;
             }
@@ -1394,9 +1375,9 @@ namespace ctrace
                 config.global.smt_timeout_ms = static_cast<uint32_t>(uintValue);
             }
 
-            if (!readOptionalUint64Any(section, {"smt-budget-nodes", "smt_budget_nodes"},
-                                       uintValue, errorMessage,
-                                       std::string(location) + ".smt_budget_nodes", hasValue))
+            if (!readOptionalUint64Any(section, {"smt-budget-nodes", "smt_budget_nodes"}, uintValue,
+                                       errorMessage, std::string(location) + ".smt_budget_nodes",
+                                       hasValue))
             {
                 return false;
             }
@@ -1429,10 +1410,9 @@ namespace ctrace
                 config.global.stack_analyzer_only_functions = listValue;
             }
 
-            if (!readOptionalStringListAny(section,
-                                           {"only_files", "only-files", "only_file", "only-file"},
-                                           listValue, errorMessage,
-                                           std::string(location) + ".only_files", hasValue))
+            if (!readOptionalStringListAny(
+                    section, {"only_files", "only-files", "only_file", "only-file"}, listValue,
+                    errorMessage, std::string(location) + ".only_files", hasValue))
             {
                 return false;
             }
@@ -1441,10 +1421,9 @@ namespace ctrace
                 config.global.stack_analyzer_only_files = listValue;
             }
 
-            if (!readOptionalStringListAny(section,
-                                           {"only_dirs", "only-dirs", "only_dir", "only-dir"},
-                                           listValue, errorMessage,
-                                           std::string(location) + ".only_dirs", hasValue))
+            if (!readOptionalStringListAny(
+                    section, {"only_dirs", "only-dirs", "only_dir", "only-dir"}, listValue,
+                    errorMessage, std::string(location) + ".only_dirs", hasValue))
             {
                 return false;
             }
@@ -1453,11 +1432,9 @@ namespace ctrace
                 config.global.stack_analyzer_only_dirs = listValue;
             }
 
-            if (!readOptionalStringListAny(section,
-                                           {"exclude_dirs", "exclude-dirs", "exclude_dir",
-                                            "exclude-dir"},
-                                           listValue, errorMessage,
-                                           std::string(location) + ".exclude_dirs", hasValue))
+            if (!readOptionalStringListAny(
+                    section, {"exclude_dirs", "exclude-dirs", "exclude_dir", "exclude-dir"},
+                    listValue, errorMessage, std::string(location) + ".exclude_dirs", hasValue))
             {
                 return false;
             }
@@ -1477,9 +1454,9 @@ namespace ctrace
                 config.global.stack_analyzer_only_functions = listValue;
             }
 
-            if (!readOptionalBoolAny(section, {"resource_cross_tu", "resource-cross-tu"},
-                                     boolValue, errorMessage,
-                                     std::string(location) + ".resource_cross_tu", hasValue))
+            if (!readOptionalBoolAny(section, {"resource_cross_tu", "resource-cross-tu"}, boolValue,
+                                     errorMessage, std::string(location) + ".resource_cross_tu",
+                                     hasValue))
             {
                 return false;
             }
@@ -1499,8 +1476,7 @@ namespace ctrace
                 config.global.stack_analyzer_resource_cross_tu = !boolValue;
             }
 
-            if (!readOptionalBoolAny(section,
-                                     {"uninitialized_cross_tu", "uninitialized-cross-tu"},
+            if (!readOptionalBoolAny(section, {"uninitialized_cross_tu", "uninitialized-cross-tu"},
                                      boolValue, errorMessage,
                                      std::string(location) + ".uninitialized_cross_tu", hasValue))
             {
@@ -1511,11 +1487,9 @@ namespace ctrace
                 config.global.stack_analyzer_uninitialized_cross_tu = boolValue;
             }
 
-            if (!readOptionalBoolAny(section,
-                                     {"no_uninitialized_cross_tu", "no-uninitialized-cross-tu"},
-                                     boolValue, errorMessage,
-                                     std::string(location) + ".no_uninitialized_cross_tu",
-                                     hasValue))
+            if (!readOptionalBoolAny(
+                    section, {"no_uninitialized_cross_tu", "no-uninitialized-cross-tu"}, boolValue,
+                    errorMessage, std::string(location) + ".no_uninitialized_cross_tu", hasValue))
             {
                 return false;
             }
@@ -1524,13 +1498,10 @@ namespace ctrace
                 config.global.stack_analyzer_uninitialized_cross_tu = !boolValue;
             }
 
-            if (!readOptionalStringAny(section,
-                                       {"resource_summary_cache_dir",
-                                        "resource-summary-cache-dir"},
-                                       stringValue, errorMessage,
-                                       std::string(location) +
-                                           ".resource_summary_cache_dir",
-                                       hasValue))
+            if (!readOptionalStringAny(
+                    section, {"resource_summary_cache_dir", "resource-summary-cache-dir"},
+                    stringValue, errorMessage,
+                    std::string(location) + ".resource_summary_cache_dir", hasValue))
             {
                 return false;
             }
@@ -1541,13 +1512,11 @@ namespace ctrace
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
 
-            if (!readOptionalBoolAny(section,
-                                     {"resource_summary_cache_memory_only",
-                                      "resource-summary-cache-memory-only"},
-                                     boolValue, errorMessage,
-                                     std::string(location) +
-                                         ".resource_summary_cache_memory_only",
-                                     hasValue))
+            if (!readOptionalBoolAny(
+                    section,
+                    {"resource_summary_cache_memory_only", "resource-summary-cache-memory-only"},
+                    boolValue, errorMessage,
+                    std::string(location) + ".resource_summary_cache_memory_only", hasValue))
             {
                 return false;
             }
@@ -1558,8 +1527,7 @@ namespace ctrace
 
             if (!readOptionalStringAny(section, {"compile_ir_cache_dir", "compile-ir-cache-dir"},
                                        stringValue, errorMessage,
-                                       std::string(location) + ".compile_ir_cache_dir",
-                                       hasValue))
+                                       std::string(location) + ".compile_ir_cache_dir", hasValue))
             {
                 return false;
             }
@@ -1578,9 +1546,8 @@ namespace ctrace
             }
             if (hasValue)
             {
-                if (!validateCompileIRFormat(stringValue,
-                                             std::string(location) + ".compile_ir_format",
-                                             errorMessage))
+                if (!validateCompileIRFormat(
+                        stringValue, std::string(location) + ".compile_ir_format", errorMessage))
                 {
                     return false;
                 }
@@ -1598,19 +1565,16 @@ namespace ctrace
                 config.global.stack_analyzer_include_stl = boolValue;
             }
 
-            if (!readOptionalStringAny(section, {"base_dir", "base-dir"}, stringValue,
-                                       errorMessage, std::string(location) + ".base_dir",
-                                       hasValue))
+            if (!readOptionalStringAny(section, {"base_dir", "base-dir"}, stringValue, errorMessage,
+                                       std::string(location) + ".base_dir", hasValue))
             {
                 return false;
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_base_dir = stringValue.empty()
-                                                            ? std::string()
-                                                            : resolvePathFromBase(configDir,
-                                                                                  stringValue)
-                                                                  .string();
+                config.global.stack_analyzer_base_dir =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             if (!readOptionalBoolAny(section, {"dump_filter", "dump-filter"}, boolValue,
@@ -1631,11 +1595,9 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_dump_ir = stringValue.empty()
-                                                           ? std::string()
-                                                           : resolvePathFromBase(configDir,
-                                                                                 stringValue)
-                                                                 .string();
+                config.global.stack_analyzer_dump_ir =
+                    stringValue.empty() ? std::string()
+                                        : resolvePathFromBase(configDir, stringValue).string();
             }
 
             if (!readOptionalBoolAny(section, {"warnings_only", "warnings-only"}, boolValue,
@@ -1735,8 +1697,8 @@ namespace ctrace
             if (version != kToolConfigSchemaVersion)
             {
                 errorMessage = "Unsupported schema_version '" + std::to_string(version) +
-                               "'. Supported version: " +
-                               std::to_string(kToolConfigSchemaVersion) + ".";
+                               "'. Supported version: " + std::to_string(kToolConfigSchemaVersion) +
+                               ".";
                 return false;
             }
             return true;
@@ -1744,8 +1706,7 @@ namespace ctrace
 
         [[nodiscard]] bool applyCanonicalSections(const json& root,
                                                   const std::filesystem::path& configDir,
-                                                  ProgramConfig& config,
-                                                  std::string& errorMessage)
+                                                  ProgramConfig& config, std::string& errorMessage)
         {
             if (const auto it = root.find("analysis"); it != root.end() && !it->is_null())
             {
@@ -1857,8 +1818,7 @@ namespace ctrace
             return false;
         }
 
-        const std::filesystem::path configDir =
-            std::filesystem::absolute(path).parent_path();
+        const std::filesystem::path configDir = std::filesystem::absolute(path).parent_path();
         config.global.config_file = path.lexically_normal().string();
 
         if (const auto* analyzerSection = findStackAnalyzerSection(root, errorMessage);
