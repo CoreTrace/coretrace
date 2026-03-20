@@ -1857,7 +1857,8 @@ namespace ctrace
             return false;
         }
 
-        const std::filesystem::path configDir = path.parent_path();
+        const std::filesystem::path configDir =
+            std::filesystem::absolute(path).parent_path();
         config.global.config_file = path.lexically_normal().string();
 
         if (const auto* analyzerSection = findStackAnalyzerSection(root, errorMessage);
