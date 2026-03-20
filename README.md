@@ -53,17 +53,34 @@ Usage:
 Options:
   --help                   Displays this help message.
   --verbose                Enables detailed (verbose) output.
+  --quiet                  Suppresses non-essential output.
   --sarif-format           Generates a report in SARIF format.
   --report-file <path>     Specifies the path to the report file (default: ctrace-report.txt).
   --output-file <path>     Specifies the output file for the analysed binary (default: ctrace.out).
   --entry-points <names>   Sets the entry points for analysis (default: main). Accepts a comma-separated list.
+  --config <path>          Loads settings from a JSON config file.
+  --compile-commands <path> Path to compile_commands.json for tools that support it.
+  --include-compdb-deps    Includes dependency entries (e.g. _deps) when auto-loading files from compile_commands.json.
+  --analysis-profile <p>   Stack analyzer profile: fast|full.
+  --smt <on|off>           Enables/disables SMT refinement in stack analyzer.
+  --smt-backend <name>     Primary SMT backend (e.g. z3, interval).
+  --smt-secondary-backend <name> Secondary backend for multi-solver modes.
+  --smt-mode <mode>        SMT mode: single|portfolio|cross-check|dual-consensus.
+  --smt-timeout-ms <n>     SMT timeout in milliseconds.
+  --smt-budget-nodes <n>   SMT node budget per query.
+  --smt-rules <list>       Comma-separated SMT-enabled rules.
+  --resource-model <path>  Path to the resource lifetime model for stack analyzer.
+  --escape-model <path>    Path to the stack escape model for stack analyzer.
+  --buffer-model <path>    Path to the buffer overflow model for stack analyzer.
+  --timing                 Enables stack analyzer timing output.
+  --demangle               Displays demangled function names in supported tools.
   --static                 Enables static analysis.
   --dyn                    Enables dynamic analysis.
   --invoke <tools>         Invokes specific tools (comma-separated).
-                           Available tools: flawfinder, ikos, cppcheck, tscancode.
+                           Available tools: flawfinder, ikos, cppcheck, tscancode, ctrace_stack_analyzer.
   --input <files>          Specifies the source files to analyse (comma-separated).
-  --ipc <method>           IPC method: standardIO, socket, or serve.
-  --ipc-path <path>        IPC path (default: /tmp/coretrace_ipc).
+  --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
+  --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
   --serve-host <host>      HTTP server host when --ipc=serve.
   --serve-port <port>      HTTP server port when --ipc=serve.
   --shutdown-token <tok>   Token required for POST /shutdown (server mode).
@@ -79,6 +96,12 @@ Description:
   analysis. It can be finely configured to detect vulnerabilities, security issues,
   and memory misuse.
 ```
+
+### CONFIGURATION
+
+- Canonical default config: `config/tool-config.json`
+- Full schema and semantics: `docs/configuration.md`
+- Precedence: built-in defaults < config file < CLI
 
 ```bash
 ./ctrace --input ../tests/EmptyForStatement.cc --entry-points=main --verbose --static --dyn

@@ -107,3 +107,24 @@ add_custom_target(format-check
   COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/format-check.sh"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Verify clang-format compliance")
+
+# ============
+#    TESTS
+# ============
+enable_testing()
+
+add_executable(ctrace_config_tests
+    tests/config_parser_tests.cpp
+    src/App/ToolConfig.cpp
+    src/App/Config.cpp
+    src/ArgumentParser/BaseArgumentParser.cpp
+    src/ArgumentParser/ArgumentManager.cpp
+    src/ArgumentParser/ArgumentParserFactory.cpp
+    src/ArgumentParser/CLI11/CLI11ArgumentParser.cpp
+    src/ArgumentParser/GetOpt/GetoptArgumentParser.cpp
+    src/ctrace_tools/strings.cpp
+)
+
+target_link_libraries(ctrace_config_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+
+add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)

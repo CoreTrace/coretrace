@@ -1,0 +1,6 @@
+# Upstream default models — generated at CMake configure time from _deps/.
+# Do not commit: they are copied from coretrace-stack-analyzer via FetchContent.
+# Custom model files at this level (e.g. resource-lifetime-gc-temp.txt) are NOT ignored.
+resource-lifetime/
+buffer-overflow/
+stack-escape/
