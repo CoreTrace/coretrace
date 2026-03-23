@@ -3,8 +3,10 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <initializer_list>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -110,6 +112,12 @@ class ApiHandler
         std::string* target;
     };
 
+    struct Uint64Field
+    {
+        const char* key;
+        uint64_t* target;
+    };
+
     ILogger& logger_;
 
     static void log_request(ILogger& logger, const json& request)
@@ -146,6 +154,22 @@ class ApiHandler
             return false;
         }
         out = it->get<std::string>();
+        return true;
+    }
+
+    static bool read_uint64(const json& params, const char* key, uint64_t& out, ParseError& err)
+    {
+        const auto it = params.find(key);
+        if (it == params.end() || it->is_null())
+        {
+            return true;
+        }
+        if (!it->is_number_unsigned())
+        {
+            err = {"InvalidParams", std::string("Expected unsigned integer for '") + key + "'."};
+            return false;
+        }
+        out = it->get<uint64_t>();
         return true;
     }
 
@@ -214,6 +238,19 @@ class ApiHandler
         for (const auto& field : fields)
         {
             if (!read_string(params, field.key, *field.target, err))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static bool apply_uint64_fields(const json& params, ParseError& err,
+                                    std::initializer_list<Uint64Field> fields)
+    {
+        for (const auto& field : fields)
+        {
+            if (!read_uint64(params, field.key, *field.target, err))
             {
                 return false;
             }
@@ -310,10 +347,13 @@ class ApiHandler
         if (!apply_bool_fields(params, err,
                                {
                                    {"verbose", &config.global.verbose},
+                                   {"quiet", &config.global.quiet},
+                                   {"demangle", &config.global.demangle},
                                    {"sarif_format", &config.global.hasSarifFormat},
                                    {"static_analysis", &config.global.hasStaticAnalysis},
                                    {"dynamic_analysis", &config.global.hasDynamicAnalysis},
                                    {"include_compdb_deps", &config.global.include_compdb_deps},
+                                   {"timing", &config.global.timing},
                                }))
         {
             return false;
@@ -352,11 +392,33 @@ class ApiHandler
                     {"resource_model", &config.global.resource_model},
                     {"escape_model", &config.global.escape_model},
                     {"buffer_model", &config.global.buffer_model},
+                    {"stack_analyzer_mode", &config.global.stack_analyzer_mode},
+                    {"stack_analyzer_output_format", &config.global.stack_analyzer_output_format},
                     {"ipc_path", &config.global.ipcPath},
                 }))
         {
             return false;
         }
+        uint64_t smt_timeout = config.global.smt_timeout_ms;
+        uint64_t smt_budget = config.global.smt_budget_nodes;
+        uint64_t stack_limit = config.global.stack_limit;
+        if (!apply_uint64_fields(params, err,
+                                 {
+                                     {"smt_timeout_ms", &smt_timeout},
+                                     {"smt_budget_nodes", &smt_budget},
+                                     {"stack_limit", &stack_limit},
+                                 }))
+        {
+            return false;
+        }
+        if (smt_timeout > std::numeric_limits<uint32_t>::max())
+        {
+            err = {"InvalidParams", "smt_timeout_ms is too large."};
+            return false;
+        }
+        config.global.smt_timeout_ms = static_cast<uint32_t>(smt_timeout);
+        config.global.smt_budget_nodes = smt_budget;
+        config.global.stack_limit = stack_limit;
         if (!apply_list_param(params, "entry_points", err,
                               [&](const std::vector<std::string>& values)
                               { config.global.entry_points = join_with_comma(values); }))
@@ -374,6 +436,12 @@ class ApiHandler
         }
         if (!apply_list_param(params, "smt_rules", err, [&](const std::vector<std::string>& values)
                               { config.global.smt_rules = values; }))
+        {
+            return false;
+        }
+        if (!apply_list_param(params, "stack_analyzer_extra_args", err,
+                              [&](const std::vector<std::string>& values)
+                              { config.global.stack_analyzer_extra_args = values; }))
         {
             return false;
         }
@@ -488,7 +556,14 @@ class ApiHandler
         result["smt_backend"] = config.global.smt_backend;
         result["smt_secondary_backend"] = config.global.smt_secondary_backend;
         result["smt_mode"] = config.global.smt_mode;
+        result["smt_timeout_ms"] = config.global.smt_timeout_ms;
+        result["smt_budget_nodes"] = config.global.smt_budget_nodes;
         result["smt_rules"] = config.global.smt_rules;
+        result["timing"] = config.global.timing;
+        result["stack_limit"] = config.global.stack_limit;
+        result["stack_analyzer_mode"] = config.global.stack_analyzer_mode;
+        result["stack_analyzer_output_format"] = config.global.stack_analyzer_output_format;
+        result["stack_analyzer_extra_args"] = config.global.stack_analyzer_extra_args;
         if (output_capture)
         {
             json outputs = json::object();
