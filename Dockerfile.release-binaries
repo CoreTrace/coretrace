@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     git \
     tar \
+    patchelf \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh \
@@ -44,6 +45,7 @@ RUN cmake -S . -B build -G Ninja \
         -DPARSER_TYPE=CLI11 \
         -DUSE_THREAD_SANITIZER=OFF \
         -DUSE_ADDRESS_SANITIZER=OFF \
+        -DCLANG_LINK_CLANG_DYLIB=ON \
         -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm \
         -DClang_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang \
     && cmake --build build -j"$(nproc)" \
@@ -56,6 +58,7 @@ ARG TARGETARCH
 ARG PROJECT_NAME=coretrace
 ARG BINARY_NAME=ctrace
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eux; \
     case "${TARGETARCH}" in \
       amd64) arch_label="amd64" ;; \
@@ -63,13 +66,27 @@ RUN set -eux; \
       *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     package_name="${PROJECT_NAME}-${VERSION}-linux-${arch_label}"; \
-    mkdir -p "/out/${package_name}"; \
-    install -m 0755 "/repo/build/${BINARY_NAME}" "/out/${package_name}/${BINARY_NAME}"; \
-    install -m 0644 /repo/README.md "/out/${package_name}/README.md"; \
-    install -m 0644 /repo/LICENSE "/out/${package_name}/LICENSE"; \
-    tar -C /out -czf "/out/${package_name}.tar.gz" "${package_name}"; \
+    staging="/staging/${package_name}"; \
+    \
+    # Install via CMake (binary in bin/, shared libs in lib/, config in share/) \
+    cmake --install build --prefix "${staging}" --strip; \
+    \
+    # Patch RPATH on bundled shared libs so they resolve each other \
+    find "${staging}/lib" -name '*.so*' -type f -exec \
+        patchelf --set-rpath '$ORIGIN' {} \; ; \
+    \
+    # Verify all shared libraries resolve via RPATH alone (no LD_LIBRARY_PATH) \
+    ldd "${staging}/bin/${BINARY_NAME}" | { ! grep 'not found'; }; \
+    \
+    # Add metadata files \
+    install -m 0644 /repo/README.md "${staging}/README.md"; \
+    install -m 0644 /repo/LICENSE "${staging}/LICENSE"; \
+    \
+    # Create archive and checksum \
+    mkdir -p /out; \
+    tar -C /staging -czf "/out/${package_name}.tar.gz" "${package_name}"; \
     (cd /out && sha256sum "${package_name}.tar.gz" > "${package_name}.tar.gz.sha256"); \
-    rm -rf "/out/${package_name}"
+    rm -rf /staging
 
 FROM scratch AS artifacts
 

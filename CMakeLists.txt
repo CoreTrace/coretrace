@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.21)
 
 project(ArgumentManagerProject VERSION 1.0 LANGUAGES CXX)
 
@@ -107,6 +107,48 @@ add_custom_target(format-check
   COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/format-check.sh"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Verify clang-format compliance")
+
+# ============
+#   INSTALL
+# ============
+include(GNUInstallDirs)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set_target_properties(ctrace PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib"
+    )
+
+    install(TARGETS ctrace
+        RUNTIME_DEPENDENCY_SET ctrace_deps
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    install(RUNTIME_DEPENDENCY_SET ctrace_deps
+        PRE_EXCLUDE_REGEXES
+            "^libc\\.so"
+            "^libm\\.so"
+            "^libdl\\.so"
+            "^librt\\.so"
+            "^libpthread\\.so"
+            "^ld-linux"
+            "^libstdc\\+\\+"
+            "^libgcc_s"
+        DIRECTORIES
+            "/usr/lib/llvm-20/lib"
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+else()
+    install(TARGETS ctrace
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/config/
+    DESTINATION config
+    FILES_MATCHING
+        PATTERN "*.json"
+        PATTERN "*.txt"
+)
 
 # ============
 #    TESTS
