@@ -6,7 +6,11 @@ FetchContent_Declare(
   GIT_TAG v0.17.0
 )
 
-FetchContent_MakeAvailable(stack_analyzer)
+FetchContent_GetProperties(stack_analyzer)
+if(NOT stack_analyzer_POPULATED)
+    FetchContent_Populate(stack_analyzer)
+    add_subdirectory(${stack_analyzer_SOURCE_DIR} ${stack_analyzer_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 # Copy upstream default models into config/models/ so that tool-config.json
 # can reference them with paths relative to the config directory, without
