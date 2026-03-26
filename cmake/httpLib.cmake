@@ -6,4 +6,8 @@ FetchContent_Declare(
     GIT_TAG v0.14.3
 )
 
-FetchContent_MakeAvailable(cpp_httplib)
+FetchContent_GetProperties(cpp_httplib)
+if(NOT cpp_httplib_POPULATED)
+    FetchContent_Populate(cpp_httplib)
+    add_subdirectory(${cpp_httplib_SOURCE_DIR} ${cpp_httplib_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
