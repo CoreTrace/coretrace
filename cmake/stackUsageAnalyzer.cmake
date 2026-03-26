@@ -4,13 +4,10 @@ FetchContent_Declare(
   stack_analyzer
   GIT_REPOSITORY https://github.com/CoreTrace/coretrace-stack-analyzer.git
   GIT_TAG v0.17.0
+  EXCLUDE_FROM_ALL
 )
 
-FetchContent_GetProperties(stack_analyzer)
-if(NOT stack_analyzer_POPULATED)
-    FetchContent_Populate(stack_analyzer)
-    add_subdirectory(${stack_analyzer_SOURCE_DIR} ${stack_analyzer_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
+FetchContent_MakeAvailable(stack_analyzer)
 
 # Copy upstream default models into config/models/ so that tool-config.json
 # can reference them with paths relative to the config directory, without
