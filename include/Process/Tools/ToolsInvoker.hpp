@@ -188,6 +188,21 @@ namespace ctrace
             runToolList(deduplicateToolNames(tool_names), files);
         }
 
+        [[nodiscard]] DiagnosticSummary diagnosticsSummaryTotal() const
+        {
+            std::lock_guard<std::mutex> lock(m_diagnosticsSummaryMutex);
+
+            DiagnosticSummary total{};
+            for (const auto& [_, summary] : m_diagnosticsSummaryByTool)
+            {
+                total.info += summary.info;
+                total.warning += summary.warning;
+                total.error += summary.error;
+            }
+
+            return total;
+        }
+
       private:
         void registerTool(const std::string& name, std::unique_ptr<IAnalysisTool> tool)
         {
@@ -212,12 +227,12 @@ namespace ctrace
             {
                 std::lock_guard<std::mutex> lock(*lock_it->second);
                 tool_it->second->execute(file, m_config);
-                logDiagnosticsSummary(tool_name, *tool_it->second);
+                recordDiagnosticsSummary(tool_name, *tool_it->second);
                 return;
             }
 
             tool_it->second->execute(file, m_config);
-            logDiagnosticsSummary(tool_name, *tool_it->second);
+            recordDiagnosticsSummary(tool_name, *tool_it->second);
         }
 
         void executeBatchTool(const std::string& tool_name, const std::vector<std::string>& files)
@@ -242,12 +257,12 @@ namespace ctrace
             {
                 std::lock_guard<std::mutex> lock(*lock_it->second);
                 tool_it->second->executeBatch(files, m_config);
-                logDiagnosticsSummary(tool_name, *tool_it->second);
+                recordDiagnosticsSummary(tool_name, *tool_it->second);
                 return;
             }
 
             tool_it->second->executeBatch(files, m_config);
-            logDiagnosticsSummary(tool_name, *tool_it->second);
+            recordDiagnosticsSummary(tool_name, *tool_it->second);
         }
 
         void runToolList(const std::vector<std::string>& tool_names, const std::string& file)
@@ -393,12 +408,18 @@ namespace ctrace
             return tool_name == "ctrace_stack_analyzer";
         }
 
-        static void logDiagnosticsSummary(const std::string& tool_name, const IAnalysisTool& tool)
+        void recordDiagnosticsSummary(const std::string& tool_name, const IAnalysisTool& tool)
         {
             const auto summary = tool.lastDiagnosticsSummary();
             coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
                            "Diagnostics summary: info={}, warning={}, error={}\n", summary.info,
                            summary.warning, summary.error);
+
+            std::lock_guard<std::mutex> lock(m_diagnosticsSummaryMutex);
+            auto& total = m_diagnosticsSummaryByTool[tool_name];
+            total.info += summary.info;
+            total.warning += summary.warning;
+            total.error += summary.error;
         }
 
         std::unordered_map<std::string, std::unique_ptr<IAnalysisTool>> tools;
@@ -411,6 +432,8 @@ namespace ctrace
         std::shared_ptr<IpcStrategy> m_ipc;
         std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> m_output_capture;
         std::unique_ptr<ThreadPool> m_threadPool;
+        mutable std::mutex m_diagnosticsSummaryMutex;
+        std::unordered_map<std::string, DiagnosticSummary> m_diagnosticsSummaryByTool;
     };
 } // namespace ctrace
 
