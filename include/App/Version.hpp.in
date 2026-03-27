@@ -1,0 +1,13 @@
+#pragma once
+
+#include <string_view>
+
+namespace ctrace::build
+{
+    inline constexpr std::string_view kVersion = "@CTRACE_VERSION_STRING@";
+
+    [[nodiscard]] constexpr std::string_view version() noexcept
+    {
+        return kVersion;
+    }
+} // namespace ctrace::build

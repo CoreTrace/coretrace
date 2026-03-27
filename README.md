@@ -44,7 +44,7 @@ or
 ### ARGUMENT
 
 ```bash
-./ctrace [-h|--help]
+./ctrace [--help|--version]
 ctrace - Static & Dynamic C/C++ Code Analysis Tool
 
 Usage:
@@ -52,6 +52,7 @@ Usage:
 
 Options:
   --help                   Displays this help message.
+  --version                Displays build version information.
   --verbose                Enables detailed (verbose) output.
   --quiet                  Suppresses non-essential output.
   --sarif-format           Generates a report in SARIF format.
@@ -95,6 +96,24 @@ Description:
   ctrace is a modular C/C++ code analysis tool that combines both static and dynamic
   analysis. It can be finely configured to detect vulnerabilities, security issues,
   and memory misuse.
+```
+
+### VERSION
+
+```bash
+./ctrace --version
+```
+
+Version resolution is centralized at configure time:
+
+- release builds pass an explicit version string from CI, so published binaries print the exact GitHub release tag
+- local Git builds resolve the version from `git describe --tags --dirty --always --match 'v*'`
+- if Git metadata is unavailable, the build falls back to `dev`
+
+You can also override the embedded version manually:
+
+```bash
+cmake .. -DCORETRACE_VERSION_OVERRIDE=v0.74.0
 ```
 
 ### CONFIGURATION

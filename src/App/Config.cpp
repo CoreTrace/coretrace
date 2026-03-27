@@ -18,6 +18,7 @@ namespace ctrace
         // TODO : lvl verbosity
         argManager.addOption("--verbose", false, 'v');
         argManager.addFlag("--help", 'h');
+        argManager.addFlag("--version", 'V');
         argManager.addFlag("--quiet", 'q');
         argManager.addOption("--output-file", true, 'o');
         argManager.addOption("--invoke", true, 'i');
@@ -55,6 +56,24 @@ namespace ctrace
         // Parsing des arguments
         argManager.parse(argc, argv);
 
+        if (argManager.hasNoOption())
+        {
+            printHelp();
+            std::exit(0);
+        }
+
+        if (argManager.hasOption("--help"))
+        {
+            printHelp();
+            std::exit(0);
+        }
+
+        if (argManager.hasOption("--version"))
+        {
+            printVersion();
+            std::exit(0);
+        }
+
         // Traitement avec Command
         ConfigProcessor processor(config);
         if (argManager.hasOption("--config"))
@@ -71,11 +90,6 @@ namespace ctrace
         processor.process(argManager);
         // processor.execute(argManager);
 
-        if (argManager.hasNoOption())
-        {
-            processor.execute("--help", "");
-            std::exit(0);
-        }
         if (!(argManager.getOptionValue("--ipc") == "serve") &&
             (argManager.hasOption("--serve-host") || argManager.hasOption("--serve-port")))
         {

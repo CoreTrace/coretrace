@@ -5,8 +5,19 @@ project(ArgumentManagerProject VERSION 1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(${CMAKE_SOURCE_DIR}/cmake/CoreTraceVersion.cmake)
+coretrace_resolve_version(CTRACE_VERSION_STRING CTRACE_VERSION_SOURCE)
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/include/App")
+configure_file(${CMAKE_SOURCE_DIR}/include/App/Version.hpp.in
+               ${CMAKE_BINARY_DIR}/generated/include/App/Version.hpp
+               @ONLY)
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/external)
+include_directories(${CMAKE_BINARY_DIR}/generated/include)
+
+message(STATUS "CoreTrace version: ${CTRACE_VERSION_STRING} (${CTRACE_VERSION_SOURCE})")
 
 set(PARSER_TYPE "CLI11" CACHE STRING "Type of parser to use (Getopt or CLI11)")
 set_property(CACHE PARSER_TYPE PROPERTY STRINGS "Getopt" "CLI11")
