@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   stack_analyzer
   GIT_REPOSITORY https://github.com/CoreTrace/coretrace-stack-analyzer.git
-  GIT_TAG v0.17.0
+  GIT_TAG v0.18.1
   EXCLUDE_FROM_ALL
 )
 
