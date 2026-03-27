@@ -564,6 +564,10 @@ class ApiHandler
         result["stack_analyzer_mode"] = config.global.stack_analyzer_mode;
         result["stack_analyzer_output_format"] = config.global.stack_analyzer_output_format;
         result["stack_analyzer_extra_args"] = config.global.stack_analyzer_extra_args;
+        const auto diagnosticsSummaryTotal = invoker.diagnosticsSummaryTotal();
+        result["diagnostics_summary_total"] = {{"info", diagnosticsSummaryTotal.info},
+                                               {"warning", diagnosticsSummaryTotal.warning},
+                                               {"error", diagnosticsSummaryTotal.error}};
         if (output_capture)
         {
             json outputs = json::object();
