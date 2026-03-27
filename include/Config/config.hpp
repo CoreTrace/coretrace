@@ -128,7 +128,7 @@ namespace ctrace
 
         std::vector<std::string> specificTools; ///< List of specific tools to invoke.
 
-        std::string entry_points = "";             ///< Entry points for analysis.
+        std::string entry_points = "";                 ///< Entry points for analysis.
         std::string report_file = "ctrace-report.txt"; ///< Path to the report file.
         std::string output_file = "ctrace.out";        ///< Path to the output file.
         std::string config_file;                       ///< Path to the JSON config file.
