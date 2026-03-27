@@ -13,6 +13,7 @@
 #include "ArgumentParser/ArgumentManager.hpp"
 #include "ArgumentParser/ArgumentParserFactory.hpp"
 #include "App/SupportedTools.hpp"
+#include "App/Version.hpp"
 #include "ctrace_tools/strings.hpp"
 #include "ctrace_defs/types.hpp"
 
@@ -27,6 +28,7 @@ Usage:
 
 Options:
   --help                   Displays this help message.
+  --version                Displays build version information.
   --verbose                Enables detailed (verbose) output.
   --sarif-format           Generates a report in SARIF format.
   --report-file <path>     Specifies the path to the report file (default: ctrace-report.txt).
@@ -70,6 +72,11 @@ Description:
   analysis. It can be finely configured to detect vulnerabilities, security issues,
   and memory misuse.
 )" << std::endl;
+}
+
+static void printVersion(void)
+{
+    std::cout << "ctrace " << ctrace::build::version() << std::endl;
 }
 
 namespace ctrace
@@ -218,11 +225,6 @@ namespace ctrace
         ConfigProcessor(ProgramConfig& cfg) : config(cfg)
         {
             // Initialize command mappings.
-            commands["--help"] = [this](const std::string&)
-            {
-                printHelp();
-                std::exit(0);
-            };
             commands["--verbose"] = [this](const std::string&) { config.global.verbose = true; };
             commands["--quiet"] = [this](const std::string&) { config.global.quiet = true; };
             commands["--demangle"] = [this](const std::string&) { config.global.demangle = true; };

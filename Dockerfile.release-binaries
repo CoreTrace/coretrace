@@ -37,6 +37,7 @@ WORKDIR /repo
 FROM base AS builder
 
 ARG LLVM_VERSION=20
+ARG VERSION=dev
 
 COPY . /repo
 
@@ -46,9 +47,11 @@ RUN cmake -S . -B build -G Ninja \
         -DUSE_THREAD_SANITIZER=OFF \
         -DUSE_ADDRESS_SANITIZER=OFF \
         -DCLANG_LINK_CLANG_DYLIB=ON \
+        -DCORETRACE_VERSION_OVERRIDE="${VERSION}" \
         -DLLVM_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/llvm \
         -DClang_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang \
     && cmake --build build -j"$(nproc)" \
+    && ./build/ctrace --version >/dev/null \
     && ./build/ctrace -h >/dev/null
 
 FROM builder AS packager
