@@ -27,6 +27,7 @@ Usage:
 
 Options:
   --help                   Displays this help message.
+  --version                Displays the version number.
   --verbose                Enables detailed (verbose) output.
   --sarif-format           Generates a report in SARIF format.
   --report-file <path>     Specifies the path to the report file (default: ctrace-report.txt).
@@ -221,6 +222,11 @@ namespace ctrace
             commands["--help"] = [this](const std::string&)
             {
                 printHelp();
+                std::exit(0);
+            };
+            commands["--version"] = [this](const std::string&)
+            {
+                std::cout << "ctrace version 1.0" << std::endl;
                 std::exit(0);
             };
             commands["--verbose"] = [this](const std::string&) { config.global.verbose = true; };
