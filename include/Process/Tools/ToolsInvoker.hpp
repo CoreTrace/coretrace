@@ -115,7 +115,7 @@ namespace ctrace
             : m_config(std::move(config)), m_nbThreadPool(nbThreadPool == 0 ? 1 : nbThreadPool),
               m_policy(policy), m_output_capture(output_capture)
         {
-            coretrace::log(coretrace::Level::Info, "Initializing ToolInvoker...\n");
+            coretrace::log(coretrace::Level::Debug, "Initializing ToolInvoker...\n");
 
             registerTool("cppcheck", std::make_unique<CppCheckToolImplementation>());
             registerTool("flawfinder", std::make_unique<FlawfinderToolImplementation>());
@@ -133,7 +133,7 @@ namespace ctrace
             if (m_config.global.ipc == "standardIO")
             {
                 m_ipc = nullptr; // Use std::cout directely
-                coretrace::log(coretrace::Level::Info, "Using standardIO for IPC.\n");
+                coretrace::log(coretrace::Level::Debug, "Using standardIO for IPC.\n");
             }
             else
             {
