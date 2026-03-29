@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef ANALYSIS_TOOLS_HPP
 #define ANALYSIS_TOOLS_HPP
 

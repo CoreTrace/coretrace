@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef CLI11_ARGUMENT_PARSER_HPP
 #define CLI11_ARGUMENT_PARSER_HPP
 

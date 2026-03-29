@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef APP_SUPPORTED_TOOLS_HPP
 #define APP_SUPPORTED_TOOLS_HPP
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef ARGUMENTMANAGER_HPP
 #define ARGUMENTMANAGER_HPP
 
