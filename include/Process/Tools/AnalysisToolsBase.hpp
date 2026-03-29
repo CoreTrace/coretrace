@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "IAnalysisTools.hpp"
 #include "../Ipc/IpcStrategy.hpp"
 

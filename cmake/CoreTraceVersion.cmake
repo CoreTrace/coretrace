@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 set(CORETRACE_VERSION_OVERRIDE "" CACHE STRING
     "Explicit CoreTrace version string embedded in the binary")
 

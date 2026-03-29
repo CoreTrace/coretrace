@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef LANGUAGE_TYPE_HPP
 #define LANGUAGE_TYPE_HPP
 

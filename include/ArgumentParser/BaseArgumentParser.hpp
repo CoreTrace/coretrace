@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef BASE_ARGUMENT_PARSER_HPP
 #define BASE_ARGUMENT_PARSER_HPP
 

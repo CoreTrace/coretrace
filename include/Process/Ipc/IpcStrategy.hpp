@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #ifndef IPC_STRATEGY_HPP
 #define IPC_STRATEGY_HPP
 
