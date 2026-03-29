@@ -31,7 +31,7 @@ namespace ctrace
         if (config.global.hasAsync == std::launch::async)
         {
             coretrace::set_thread_safe(true);
-            coretrace::log(coretrace::Level::Info, "Asynchronous execution enabled.\n");
+            coretrace::log(coretrace::Level::Debug, "Asynchronous execution enabled.\n");
         }
 
         coretrace::log(coretrace::Level::Debug, "Verbose mode enabled.\n");
@@ -70,7 +70,7 @@ namespace ctrace
 
         for (const auto& file : sourceFiles)
         {
-            coretrace::log(coretrace::Level::Info, "Processing file: {}\n", file);
+            coretrace::log(coretrace::Level::Debug, "Processing file: {}\n", file);
         }
 
         if (config.global.hasStaticAnalysis)
