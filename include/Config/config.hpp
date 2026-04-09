@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include "ArgumentParser/ArgumentManager.hpp"
 #include "ArgumentParser/ArgumentParserFactory.hpp"
+#include "App/Platform.hpp"
 #include "App/SupportedTools.hpp"
 #include "App/Version.hpp"
 #include "ctrace_tools/strings.hpp"
@@ -22,57 +23,54 @@
 
 static void printHelp(void)
 {
-    std::cout << R"(ctrace - Static & Dynamic C/C++ Code Analysis Tool
-
-Usage:
-  ctrace [options]
-
-Options:
-  --help                   Displays this help message.
-  --version                Displays build version information.
-  --verbose                Enables detailed (verbose) output.
-  --sarif-format           Generates a report in SARIF format.
-  --report-file <path>     Specifies the path to the report file (default: ctrace-report.txt).
-  --output-file <path>     Specifies the output file for the analysed binary (default: ctrace.out).
-  --entry-points <names>   Sets the entry points for analysis (default: main). Accepts a comma-separated list.
-  --config <path>          Loads settings from a JSON config file.
-  --compile-commands <path> Path to compile_commands.json for tools that support it.
-  --include-compdb-deps    Includes dependency entries (e.g. _deps) when auto-loading files from compile_commands.json.
-  --analysis-profile <p>   Stack analyzer profile: fast|full.
-  --smt <on|off>           Enables/disables SMT refinement in stack analyzer.
-  --smt-backend <name>     Primary SMT backend (e.g. z3, interval).
-  --smt-secondary-backend <name> Secondary backend for multi-solver modes.
-  --smt-mode <mode>        SMT mode: single|portfolio|cross-check|dual-consensus.
-  --smt-timeout-ms <n>     SMT timeout in milliseconds.
-  --smt-budget-nodes <n>   SMT node budget per query.
-  --smt-rules <list>       Comma-separated SMT-enabled rules.
-  --resource-model <path>  Path to the resource lifetime model for stack analyzer.
-  --escape-model <path>    Path to the stack escape model for stack analyzer.
-  --buffer-model <path>    Path to the buffer overflow model for stack analyzer.
-  --demangle               Displays demangled function names in supported tools.
-  --static                 Enables static analysis.
-  --dyn                    Enables dynamic analysis.
-  --invoke <tools>         Invokes specific tools (comma-separated).
-                           Available tools: flawfinder, ikos, cppcheck, tscancode, ctrace_stack_analyzer.
-  --input <files>          Specifies the source files to analyse (comma-separated).
-  --timing                 Enables stack analyzer timing output.
-  --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
-  --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
-  --serve-host <host>      HTTP server host when --ipc=serve.
-  --serve-port <port>      HTTP server port when --ipc=serve.
-  --async                  Enables asynchronous execution.
-  --shutdown-token <tok>   Token required for POST /shutdown (server mode).
-  --shutdown-timeout-ms <ms> Graceful shutdown timeout in ms (0 = wait indefinitely).
-
-Examples:
-  ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder
-  ctrace --verbose --report-file=analysis.txt --sarif-format
-
-Description:
-  ctrace is a modular C/C++ code analysis tool that combines both static and dynamic
-  analysis. It can be finely configured to detect vulnerabilities, security issues,
-  and memory misuse.
-)" << std::endl;
+    std::cout << "ctrace - Static & Dynamic C/C++ Code Analysis Tool\n\n"
+              << "Usage:\n"
+              << "  ctrace [options]\n\n"
+              << "Options:\n"
+              << "  --help                   Displays this help message.\n"
+              << "  --version                Displays build version information.\n"
+              << "  --verbose                Enables detailed (verbose) output.\n"
+              << "  --sarif-format           Generates a report in SARIF format.\n"
+              << "  --report-file <path>     Specifies the path to the report file (default: ctrace-report.txt).\n"
+              << "  --output-file <path>     Specifies the output file for the analysed binary (default: ctrace.out).\n"
+              << "  --entry-points <names>   Sets the entry points for analysis (default: main). Accepts a comma-separated list.\n"
+              << "  --config <path>          Loads settings from a JSON config file.\n"
+              << "  --compile-commands <path> Path to compile_commands.json for tools that support it.\n"
+              << "  --include-compdb-deps    Includes dependency entries (e.g. _deps) when auto-loading files from compile_commands.json.\n"
+              << "  --analysis-profile <p>   Stack analyzer profile: fast|full.\n"
+              << "  --smt <on|off>           Enables/disables SMT refinement in stack analyzer.\n"
+              << "  --smt-backend <name>     Primary SMT backend (e.g. z3, interval).\n"
+              << "  --smt-secondary-backend <name> Secondary backend for multi-solver modes.\n"
+              << "  --smt-mode <mode>        SMT mode: single|portfolio|cross-check|dual-consensus.\n"
+              << "  --smt-timeout-ms <n>     SMT timeout in milliseconds.\n"
+              << "  --smt-budget-nodes <n>   SMT node budget per query.\n"
+              << "  --smt-rules <list>       Comma-separated SMT-enabled rules.\n"
+              << "  --resource-model <path>  Path to the resource lifetime model for stack analyzer.\n"
+              << "  --escape-model <path>    Path to the stack escape model for stack analyzer.\n"
+              << "  --buffer-model <path>    Path to the buffer overflow model for stack analyzer.\n"
+              << "  --demangle               Displays demangled function names in supported tools.\n"
+              << "  --static                 Enables static analysis.\n"
+              << "  --dyn                    Enables dynamic analysis.\n"
+              << "  --invoke <tools>         Invokes specific tools (comma-separated).\n"
+              << "                           Available tools: flawfinder, ikos, cppcheck, tscancode, ctrace_stack_analyzer.\n"
+              << "  --input <files>          Specifies the source files to analyse (comma-separated).\n"
+              << "  --timing                 Enables stack analyzer timing output.\n"
+              << "  --ipc <method>           Specifies the IPC method to use (e.g., socket).\n"
+              << "  --ipc-path <path>        Specifies the IPC path (default: "
+              << ctrace::platform::defaultIpcPath() << ").\n"
+              << "  --serve-host <host>      HTTP server host when --ipc=serve.\n"
+              << "  --serve-port <port>      HTTP server port when --ipc=serve.\n"
+              << "  --async                  Enables asynchronous execution.\n"
+              << "  --shutdown-token <tok>   Token required for POST /shutdown (server mode).\n"
+              << "  --shutdown-timeout-ms <ms> Graceful shutdown timeout in ms (0 = wait indefinitely).\n\n"
+              << "Examples:\n"
+              << "  ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder\n"
+              << "  ctrace --verbose --report-file=analysis.txt --sarif-format\n\n"
+              << "Description:\n"
+              << "  ctrace is a modular C/C++ code analysis tool that combines both static and dynamic\n"
+              << "  analysis. It can be finely configured to detect vulnerabilities, security issues,\n"
+              << "  and memory misuse.\n"
+              << std::endl;
 }
 
 static void printVersion(void)
@@ -121,7 +119,7 @@ namespace ctrace
         bool hasInvokedSpecificTools = false;         ///< Indicates if specific tools are invoked.
         std::string ipc =
             ctrace_defs::IPC_TYPES.front();         ///< IPC method to use (e.g., fifo, socket).
-        std::string ipcPath = "/tmp/coretrace_ipc"; ///< Path for IPC communication.
+        std::string ipcPath = ctrace::platform::defaultIpcPath(); ///< Path for IPC communication.
         std::string serverHost = "127.0.0.1";       ///< Host for server IPC (if applicable).
         int serverPort = 8080;                      ///< Port for server IPC (if applicable).
         std::string shutdownToken;                  ///< Token required for POST /shutdown.

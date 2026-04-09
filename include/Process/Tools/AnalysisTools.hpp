@@ -6,6 +6,7 @@
 
 // #include "IAnalysisTools.hpp"
 #include "AnalysisToolsBase.hpp"
+#include "App/ToolResolver.hpp"
 #include "ctrace_tools/languageType.hpp"
 #include "ctrace_tools/mangle.hpp"
 #include "../ProcessFactory.hpp"
@@ -132,8 +133,11 @@ namespace ctrace
                 argsProcess.push_back("--report-file=" + report_file);
                 argsProcess.push_back(src_file);
 
-                auto process = ProcessFactory::createProcess(
-                    "./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
+                const auto command = ctrace::resolveIkosCommand();
+                argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
+                                   command.prefixArguments.end());
+                auto process =
+                    ProcessFactory::createProcess(command.executable, argsProcess);
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 process->execute();
                 ctrace::Thread::Output::tool_out(process->logOutput);
@@ -182,7 +186,6 @@ namespace ctrace
             {
                 std::vector<std::string> argsProcess;
                 // = {"flawfinder.py", "-F", "-c", "-C", "-D", "main.c"};
-                argsProcess.push_back("./flawfinder/src/flawfinder-build/flawfinder.py");
                 // argsProcess.push_back("-F");
                 argsProcess.push_back("-c");
                 argsProcess.push_back("-C");
@@ -192,8 +195,11 @@ namespace ctrace
                     argsProcess.push_back("--sarif");
                 }
                 argsProcess.push_back(src_file);
-                auto process = ProcessFactory::createProcess(
-                    "python3", argsProcess); // or "cmd.exe" for Windows
+                const auto command = ctrace::resolveFlawfinderCommand();
+                argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
+                                   command.prefixArguments.end());
+                auto process =
+                    ProcessFactory::createProcess(command.executable, argsProcess);
                 process->execute();
 
                 if (config.global.ipc == "standardIO")
@@ -234,7 +240,7 @@ namespace ctrace
       public:
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
-            ctrace::Thread::Output::cout("Running ikos on " + file);
+            ctrace::Thread::Output::cout("Running cppcheck on " + file);
             bool has_sarif_format = config.global.hasSarifFormat;
             std::string src_file = file;
             std::string entry_points = config.global.entry_points;
@@ -250,8 +256,11 @@ namespace ctrace
                 // argsProcess.push_back("--enable=all");
                 argsProcess.push_back(src_file);
 
-                auto process = ProcessFactory::createProcess(
-                    "/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
+                const auto command = ctrace::resolveCppcheckCommand();
+                argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
+                                   command.prefixArguments.end());
+                auto process =
+                    ProcessFactory::createProcess(command.executable, argsProcess);
                 process->execute();
                 ctrace::Thread::Output::tool_out(process->logOutput);
             }
@@ -263,7 +272,7 @@ namespace ctrace
         }
         std::string name() const override
         {
-            return "ikos";
+            return "cppcheck";
         }
     };
 

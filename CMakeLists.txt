@@ -1,10 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.28)
+cmake_policy(SET CMP0091 NEW)
 
 project(ArgumentManagerProject VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+function(coretrace_force_msvc_runtime target_name)
+    if(MSVC AND TARGET "${target_name}")
+        set_property(TARGET "${target_name}" PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+endfunction()
 
 include(${CMAKE_SOURCE_DIR}/cmake/CoreTraceVersion.cmake)
 coretrace_resolve_version(CTRACE_VERSION_STRING CTRACE_VERSION_SOURCE)
@@ -42,17 +54,21 @@ set(COMMON_SOURCES
     main.cpp
 )
 
-set(SPECIFIC_SOURCES
-    src/ArgumentParser/GetOpt/GetoptArgumentParser.cpp
-    src/ArgumentParser/CLI11/CLI11ArgumentParser.cpp
-)
+if (PARSER_TYPE STREQUAL "Getopt")
+    if (WIN32)
+        message(FATAL_ERROR "PARSER_TYPE=Getopt is not supported on Windows. Use CLI11 instead.")
+    endif()
+elseif (PARSER_TYPE STREQUAL "CLI11")
+else()
+    message(FATAL_ERROR "Unsupported PARSER_TYPE: ${PARSER_TYPE}")
+endif()
 
 set(SOURCES
     ${COMMON_SOURCES}
-    ${SPECIFIC_SOURCES}
 )
 
 add_executable(ctrace ${SOURCES})
+coretrace_force_msvc_runtime(ctrace)
 
 if (PARSER_TYPE STREQUAL "Getopt")
     target_compile_definitions(ctrace PRIVATE USE_GETOPT)
@@ -84,6 +100,10 @@ target_link_libraries(ctrace PRIVATE coretrace::logger)
 
 include(${CMAKE_SOURCE_DIR}/cmake/httpLib.cmake)
 target_link_libraries(ctrace PRIVATE httplib::httplib)
+
+if (WIN32)
+    target_link_libraries(ctrace PRIVATE ws2_32)
+endif()
 
 # === OPTIONAL DEPENDENCIES ===
 
@@ -174,11 +194,14 @@ add_executable(ctrace_config_tests
     src/ArgumentParser/BaseArgumentParser.cpp
     src/ArgumentParser/ArgumentManager.cpp
     src/ArgumentParser/ArgumentParserFactory.cpp
-    src/ArgumentParser/CLI11/CLI11ArgumentParser.cpp
-    src/ArgumentParser/GetOpt/GetoptArgumentParser.cpp
     src/ctrace_tools/strings.cpp
 )
+coretrace_force_msvc_runtime(ctrace_config_tests)
 
 target_link_libraries(ctrace_config_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+
+if (WIN32)
+    target_link_libraries(ctrace_config_tests PRIVATE ws2_32)
+endif()
 
 add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)
