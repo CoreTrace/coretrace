@@ -11,6 +11,9 @@ param(
     [string]$Arch = "x64",
     [string]$Toolset = "",
     [string]$ParserType = "CLI11",
+    [string]$CompilerSourceDir = "",
+    [string]$StackAnalyzerSourceDir = "",
+    [string]$LoggerSourceDir = "",
     [string]$VersionOverride = "",
     [switch]$PackageZip
 )
@@ -195,6 +198,24 @@ $cmakeArgs = @(
     "-DLLVM_DIR=$resolvedLLVMDir",
     "-DClang_DIR=$resolvedClangDir"
 )
+
+if ($CompilerSourceDir -ne "")
+{
+    $resolvedCompilerSourceDir = (Resolve-Path $CompilerSourceDir).Path
+    $cmakeArgs += "-DFETCHCONTENT_SOURCE_DIR_CC=$resolvedCompilerSourceDir"
+}
+
+if ($StackAnalyzerSourceDir -ne "")
+{
+    $resolvedStackAnalyzerSourceDir = (Resolve-Path $StackAnalyzerSourceDir).Path
+    $cmakeArgs += "-DFETCHCONTENT_SOURCE_DIR_STACK_ANALYZER=$resolvedStackAnalyzerSourceDir"
+}
+
+if ($LoggerSourceDir -ne "")
+{
+    $resolvedLoggerSourceDir = (Resolve-Path $LoggerSourceDir).Path
+    $cmakeArgs += "-DFETCHCONTENT_SOURCE_DIR_CORETRACE_LOGGER=$resolvedLoggerSourceDir"
+}
 
 if ($Generator -like "Visual Studio*")
 {

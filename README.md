@@ -21,15 +21,19 @@ make -j4
 
 ### WINDOWS
 
-CoreTrace can be built as a native `ctrace.exe` on Windows. The recommended path is documented in [`docs/windows-port.md`](docs/windows-port.md) and automated with [`scripts/build-windows.ps1`](scripts/build-windows.ps1).
+CoreTrace can be built as a native `ctrace.exe` on Windows with [`scripts/build-windows.ps1`](scripts/build-windows.ps1).
 
 Example:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 `
-  -LLVMDir "C:\Program Files\LLVM\lib\cmake\llvm" `
+  -LLVMDir "C:\LLVM\lib\cmake\llvm" `
+  -CompilerSourceDir "C:\Users\shookapic\Documents\coretrace-compiler" `
+  -StackAnalyzerSourceDir "C:\Users\shookapic\Documents\coretrace-stack-analyzer" `
+  -LoggerSourceDir "C:\Users\shookapic\Documents\coretrace-log" `
   -PackageZip
 ```
+! Change **-LLVMDIR** according to your LLVM installation path !
 
 ### CODE STYLE (clang-format)
 
