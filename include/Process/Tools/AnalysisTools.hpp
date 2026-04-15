@@ -136,8 +136,7 @@ namespace ctrace
                 const auto command = ctrace::resolveIkosCommand();
                 argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
                                    command.prefixArguments.end());
-                auto process =
-                    ProcessFactory::createProcess(command.executable, argsProcess);
+                auto process = ProcessFactory::createProcess(command.executable, argsProcess);
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 process->execute();
                 ctrace::Thread::Output::tool_out(process->logOutput);
@@ -198,8 +197,7 @@ namespace ctrace
                 const auto command = ctrace::resolveFlawfinderCommand();
                 argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
                                    command.prefixArguments.end());
-                auto process =
-                    ProcessFactory::createProcess(command.executable, argsProcess);
+                auto process = ProcessFactory::createProcess(command.executable, argsProcess);
                 process->execute();
 
                 if (config.global.ipc == "standardIO")
@@ -259,8 +257,7 @@ namespace ctrace
                 const auto command = ctrace::resolveCppcheckCommand();
                 argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
                                    command.prefixArguments.end());
-                auto process =
-                    ProcessFactory::createProcess(command.executable, argsProcess);
+                auto process = ProcessFactory::createProcess(command.executable, argsProcess);
                 process->execute();
                 ctrace::Thread::Output::tool_out(process->logOutput);
             }

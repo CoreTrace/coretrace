@@ -54,11 +54,10 @@ namespace ctrace
 #ifdef _WIN32
         constexpr std::string_view fallback = "tscancode";
 #else
-        const std::string fallback = detail::repoLocalExecutable("./tscancode/src/tscancode/trunk/tscancode");
+        const std::string fallback =
+            detail::repoLocalExecutable("./tscancode/src/tscancode/trunk/tscancode");
 #endif
-        return {detail::envOrDefault("CORETRACE_TSCANCODE_BIN",
-                                     fallback),
-                {}};
+        return {detail::envOrDefault("CORETRACE_TSCANCODE_BIN", fallback), {}};
     }
 
     [[nodiscard]] inline ResolvedToolCommand resolveIkosCommand()
@@ -68,9 +67,7 @@ namespace ctrace
 #else
         const std::string fallback = detail::repoLocalExecutable("./ikos/src/ikos-build/bin/ikos");
 #endif
-        return {detail::envOrDefault("CORETRACE_IKOS_BIN",
-                                     fallback),
-                {}};
+        return {detail::envOrDefault("CORETRACE_IKOS_BIN", fallback), {}};
     }
 
     [[nodiscard]] inline ResolvedToolCommand resolveFlawfinderCommand()
@@ -82,8 +79,8 @@ namespace ctrace
         const std::string pythonExe = detail::envOrDefault("CORETRACE_PYTHON_BIN", "python3");
 #endif
 
-        ResolvedToolCommand command{detail::envOrDefault("CORETRACE_FLAWFINDER_LAUNCHER", pythonExe),
-                                    {}};
+        ResolvedToolCommand command{
+            detail::envOrDefault("CORETRACE_FLAWFINDER_LAUNCHER", pythonExe), {}};
 
         const std::string scriptPath = detail::envOrDefault(
             "CORETRACE_FLAWFINDER_SCRIPT", "./flawfinder/src/flawfinder-build/flawfinder.py");

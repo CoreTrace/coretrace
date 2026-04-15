@@ -118,8 +118,7 @@ class LocalSocketStrategy : public IpcStrategy
         {
             const std::string error = ctrace::ipc::lastSocketError();
             close();
-            throw ctrace::ipc::SocketError("Error connecting to socket '" + path_ +
-                                           "': " + error);
+            throw ctrace::ipc::SocketError("Error connecting to socket '" + path_ + "': " + error);
         }
     }
 

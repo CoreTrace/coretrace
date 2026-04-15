@@ -59,9 +59,8 @@ class WindowsProcess : public Process
         std::vector<char> mutableCommandLine(commandLine.begin(), commandLine.end());
         mutableCommandLine.push_back('\0');
 
-        const BOOL created =
-            CreateProcessA(nullptr, mutableCommandLine.data(), nullptr, nullptr, TRUE,
-                           CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+        const BOOL created = CreateProcessA(nullptr, mutableCommandLine.data(), nullptr, nullptr,
+                                            TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
 
         CloseHandle(stdoutWrite);
         if (!created)
@@ -102,8 +101,7 @@ class WindowsProcess : public Process
         logOutput.clear();
         char buffer[4096];
         DWORD bytesRead = 0;
-        while (ReadFile(m_stdoutRead, buffer, sizeof(buffer), &bytesRead, nullptr) &&
-               bytesRead > 0)
+        while (ReadFile(m_stdoutRead, buffer, sizeof(buffer), &bytesRead, nullptr) && bytesRead > 0)
         {
             logOutput.append(buffer, buffer + bytesRead);
         }
@@ -168,15 +166,15 @@ class WindowsProcess : public Process
     {
         const DWORD error = GetLastError();
         LPSTR messageBuffer = nullptr;
-        const DWORD size = FormatMessageA(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                FORMAT_MESSAGE_IGNORE_INSERTS,
-            nullptr, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            reinterpret_cast<LPSTR>(&messageBuffer), 0, nullptr);
+        const DWORD size =
+            FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                               FORMAT_MESSAGE_IGNORE_INSERTS,
+                           nullptr, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                           reinterpret_cast<LPSTR>(&messageBuffer), 0, nullptr);
 
-        std::string message =
-            (size > 0 && messageBuffer != nullptr) ? std::string(messageBuffer, size)
-                                                   : ("Windows error " + std::to_string(error));
+        std::string message = (size > 0 && messageBuffer != nullptr)
+                                  ? std::string(messageBuffer, size)
+                                  : ("Windows error " + std::to_string(error));
         if (messageBuffer != nullptr)
         {
             LocalFree(messageBuffer);
