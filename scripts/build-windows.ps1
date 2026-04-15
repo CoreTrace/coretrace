@@ -142,6 +142,8 @@ if (-not (Test-Path $clangClPath))
     throw "clang-cl.exe was not found in '$llvmBinDir'."
 }
 
+$clangExePath = Join-Path $llvmBinDir "clang.exe"
+
 $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere))
 {
@@ -183,6 +185,20 @@ if ((Test-Path $llvmExportsPath) -and (Test-Path $diaguidsCandidate))
         New-PatchedCMakePackageDir -SourceDir $installedLLVMDir -DestinationDir $patchedLLVMDir -OldValue $staleDiaPath -NewValue $replacementDiaPath -ImportPrefix $importPrefix
         New-PatchedCMakePackageDir -SourceDir $installedClangDir -DestinationDir $patchedClangDir -OldValue $staleDiaPath -NewValue $replacementDiaPath -ImportPrefix $importPrefix
 
+        # LLVMConfig.cmake computes LLVM_INSTALL_PREFIX relative to its own location,
+        # which resolves to __llvm_cmake_patched instead of C:\LLVM.
+        # Create junctions so paths under the patched root still resolve correctly.
+        $patchedIncludeDir = Join-Path $patchedRoot "include"
+        if (-not (Test-Path $patchedIncludeDir))
+        {
+            cmd /c mklink /J "$patchedIncludeDir" "$llvmRoot\include" | Out-Null
+        }
+        $patchedBinDir = Join-Path $patchedRoot "bin"
+        if (-not (Test-Path $patchedBinDir))
+        {
+            cmd /c mklink /J "$patchedBinDir" "$llvmBinDir" | Out-Null
+        }
+
         $resolvedLLVMDir = $patchedLLVMDir
         $resolvedClangDir = $patchedClangDir
     }
@@ -196,7 +212,9 @@ $cmakeArgs = @(
     "-DUSE_THREAD_SANITIZER=OFF",
     "-DUSE_ADDRESS_SANITIZER=OFF",
     "-DLLVM_DIR=$resolvedLLVMDir",
-    "-DClang_DIR=$resolvedClangDir"
+    "-DClang_DIR=$resolvedClangDir",
+    "-DCMAKE_PREFIX_PATH=$llvmRoot",
+    "-DCLANG_EXECUTABLE=$clangExePath"
 )
 
 if ($CompilerSourceDir -ne "")
@@ -245,12 +263,23 @@ if ($Generator -like "Visual Studio*")
 else
 {
     $devShell = Join-Path $vsPath "Common7\Tools\Launch-VsDevShell.ps1"
-    if (-not (Test-Path $devShell))
+
+    if (Test-Path $devShell)
     {
-        throw "Unable to find Launch-VsDevShell.ps1 at '$devShell'."
+        try
+        {
+            . $devShell -Arch amd64 -HostArch amd64 | Out-Null
+        }
+        catch
+        {
+            Write-Warning "Could not start Developer PowerShell using script path '$devShell'. Attempting to continue."
+        }
+    }
+    else
+    {
+        Write-Warning "Launch-VsDevShell.ps1 not found at '$devShell'. Attempting to continue."
     }
 
-    . $devShell -Arch amd64 -HostArch amd64 | Out-Null
     Invoke-NativeCommand cmake @cmakeArgs
 }
 
