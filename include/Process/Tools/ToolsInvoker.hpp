@@ -136,14 +136,18 @@ namespace ctrace
                 m_ipc = nullptr; // Use std::cout directely
                 coretrace::log(coretrace::Level::Debug, "Using standardIO for IPC.\n");
             }
-            else
+            else if (m_config.global.ipc == "socket")
             {
-                m_ipc = std::make_shared<UnixSocketStrategy>(m_config.global.ipcPath);
+                m_ipc = std::make_shared<LocalSocketStrategy>(m_config.global.ipcPath);
 
                 for (auto& [_, tool] : tools)
                 {
                     tool->setIpcStrategy(m_ipc);
                 }
+            }
+            else
+            {
+                m_ipc = nullptr;
             }
 
             if (m_policy == std::launch::async)

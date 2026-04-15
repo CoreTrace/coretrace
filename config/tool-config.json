@@ -25,7 +25,7 @@
   "runtime": {
     "async": false,
     "ipc": "standardIO",
-    "ipc_path": "/tmp/coretrace_ipc"
+    "ipc_path": ""
   },
   "server": {
     "host": "127.0.0.1",

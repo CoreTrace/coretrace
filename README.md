@@ -19,6 +19,22 @@ cmake ..                        \
 make -j4
 ```
 
+### WINDOWS
+
+CoreTrace can be built as a native `ctrace.exe` on Windows with [`scripts/build-windows.ps1`](scripts/build-windows.ps1).
+
+Example:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 `
+  -LLVMDir "C:\LLVM\lib\cmake\llvm" `
+  -CompilerSourceDir "C:\Users\shookapic\Documents\coretrace-compiler" `
+  -StackAnalyzerSourceDir "C:\Users\shookapic\Documents\coretrace-stack-analyzer" `
+  -LoggerSourceDir "C:\Users\shookapic\Documents\coretrace-log" `
+  -PackageZip
+```
+! Change **-LLVMDIR** according to your LLVM installation path !
+
 ### CODE STYLE (clang-format)
 
 - Version cible : `clang-format` 17 (utilisée dans la CI).
@@ -80,8 +96,8 @@ Options:
   --invoke <tools>         Invokes specific tools (comma-separated).
                            Available tools: flawfinder, ikos, cppcheck, tscancode, ctrace_stack_analyzer.
   --input <files>          Specifies the source files to analyse (comma-separated).
-  --ipc <method>           Specifies the IPC method to use (e.g., fifo, socket).
-  --ipc-path <path>        Specifies the IPC path (default: /tmp/coretrace_ipc).
+  --ipc <method>           Specifies the IPC method to use (e.g., socket).
+  --ipc-path <path>        Specifies the IPC path (platform-specific default).
   --serve-host <host>      HTTP server host when --ipc=serve.
   --serve-port <port>      HTTP server port when --ipc=serve.
   --shutdown-token <tok>   Token required for POST /shutdown (server mode).
@@ -154,7 +170,7 @@ curl -X POST http://127.0.0.1:8080/api \
       "report_file": "ctrace-report.txt",
       "output_file": "ctrace.out",
       "ipc": "serve",
-      "ipc_path": "/tmp/coretrace_ipc",
+      "ipc_path": "",
       "async": false,
       "verbose": true
     }
