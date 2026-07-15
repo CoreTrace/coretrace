@@ -1,0 +1,641 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""BTP-STACK-ANALYZER-F7 acceptance test.
+
+F7 DevOps/CI Async execution: --async enabled, complete results.
+
+This script compares the same CoreTrace workload in two modes:
+- sync: cppcheck then ctrace_stack_analyzer, sequentially, without --async.
+- async: cppcheck and ctrace_stack_analyzer concurrently, each through CoreTrace
+  with --async enabled.
+
+The process boundary is intentional: the stack analyzer captures process-wide file
+descriptors while running the in-process analyzer library, so process-level
+parallelism avoids cross-tool output capture interference.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import statistics
+import subprocess
+import sys
+import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
+
+
+TEST_ID = "BTP-STACK-ANALYZER-F7"
+F7_REQUIREMENT = "F7 DevOps/CI Async execution --async enabled, complete results."
+TOOLS = ("cppcheck", "ctrace_stack_analyzer")
+LIGHTWEIGHT_INPUTS = ("tests/EmptyForStatement.cc", "tests/null_pointer.c")
+SUMMARY_RE = re.compile(
+    r"\((cppcheck|ctrace_stack_analyzer)\) Diagnostics summary: "
+    r"info=(\d+), warning=(\d+), error=(\d+)"
+)
+CPPCHECK_RAW_RE = re.compile(
+    r"^[^:\n]+:\d+:\d+:\s+"
+    r"(error|warning|style|performance|portability|information|note):",
+    re.MULTILINE,
+)
+CPPCHECK_DIAGNOSTIC_RE = re.compile(
+    r"^(?P<file>.+?):(?P<line>\d+):(?P<column>\d+):\s+"
+    r"(?P<severity>error|warning|style|performance|portability|information|note):\s+"
+    r"(?P<message>.*?)(?:\s+\[(?P<rule>[A-Za-z0-9_.:-]+)\])?\s*$",
+    re.MULTILINE,
+)
+STACK_FILE_RE = re.compile(r"^File:\s+(?P<file>.+?)\s*$")
+STACK_LOCATION_RE = re.compile(r"^\s+at line (?P<line>\d+), column (?P<column>\d+)\s*$")
+STACK_DIAGNOSTIC_RE = re.compile(
+    r"^\s+\[!*(?P<severity>Error|Warning|Info)\]\s+(?P<message>.+?)\s*$"
+)
+
+
+@dataclass(frozen=True)
+class Counts:
+    info: int = 0
+    warning: int = 0
+    error: int = 0
+
+    def add(self, other: "Counts") -> "Counts":
+        return Counts(
+            info=self.info + other.info,
+            warning=self.warning + other.warning,
+            error=self.error + other.error,
+        )
+
+    def as_dict(self) -> Dict[str, int]:
+        return {"info": self.info, "warning": self.warning, "error": self.error}
+
+
+@dataclass(frozen=True, order=True)
+class DiagnosticFingerprint:
+    tool: str
+    severity: str
+    file: str
+    line: int
+    column: int
+    rule_message: str
+
+    def as_dict(self) -> Dict[str, object]:
+        return {
+            "tool": self.tool,
+            "severity": self.severity,
+            "file": self.file,
+            "line": self.line,
+            "column": self.column,
+            "rule_message": self.rule_message,
+        }
+
+
+@dataclass(frozen=True)
+class RunResult:
+    mode: str
+    tool: str
+    elapsed_s: float
+    returncode: int
+    output: str
+    summaries: Mapping[str, Counts]
+    cppcheck_raw: Mapping[str, int]
+    fingerprints: Tuple[DiagnosticFingerprint, ...]
+
+
+@dataclass(frozen=True)
+class IterationResult:
+    mode: str
+    elapsed_s: float
+    tool_results: Mapping[str, RunResult]
+
+    @property
+    def output(self) -> str:
+        return "\n".join(result.output for result in self.tool_results.values())
+
+    @property
+    def summaries(self) -> Dict[str, Counts]:
+        summaries: Dict[str, Counts] = {}
+        for result in self.tool_results.values():
+            for tool, counts in result.summaries.items():
+                summaries[tool] = summaries.get(tool, Counts()).add(counts)
+        return summaries
+
+    @property
+    def cppcheck_raw(self) -> Dict[str, int]:
+        counts = {
+            "information": 0,
+            "note": 0,
+            "warning": 0,
+            "error": 0,
+            "style": 0,
+            "performance": 0,
+            "portability": 0,
+        }
+        for result in self.tool_results.values():
+            for severity, value in result.cppcheck_raw.items():
+                counts[severity] += value
+        return counts
+
+    @property
+    def fingerprints(self) -> Tuple[DiagnosticFingerprint, ...]:
+        merged = []
+        for result in self.tool_results.values():
+            merged.extend(result.fingerprints)
+        return tuple(sorted(merged))
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def parse_args() -> argparse.Namespace:
+    root = repo_root()
+    default_ctrace = Path(os.environ.get("CTRACE_BIN", root / "build" / "ctrace"))
+
+    parser = argparse.ArgumentParser(
+        prog=TEST_ID,
+        description=F7_REQUIREMENT,
+    )
+    parser.add_argument("--ctrace-bin", type=Path, default=default_ctrace)
+    parser.add_argument("--iterations", type=int, default=5)
+    parser.add_argument("--warmups", type=int, default=1)
+    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument(
+        "--min-speedup-ratio",
+        type=float,
+        default=1.10,
+        help="Required sync_median / async_median ratio.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print a machine-readable result document.",
+    )
+    return parser.parse_args()
+
+
+def ensure_preconditions(root: Path, ctrace_bin: Path, iterations: int, warmups: int) -> None:
+    if iterations < 1:
+        raise AssertionError("--iterations must be >= 1")
+    if warmups < 0:
+        raise AssertionError("--warmups must be >= 0")
+    if not ctrace_bin.is_file():
+        raise AssertionError(f"CoreTrace binary not found: {ctrace_bin}")
+    if shutil.which("cppcheck") is None and not Path("/opt/homebrew/bin/cppcheck").is_file():
+        raise AssertionError("cppcheck is required for this acceptance test")
+
+    for rel_path in LIGHTWEIGHT_INPUTS:
+        path = root / rel_path
+        if not path.is_file():
+            raise AssertionError(f"Input file not found: {path}")
+        if path.stat().st_size > 4096:
+            raise AssertionError(f"Input file is not lightweight enough: {path}")
+
+
+def command_for(
+    ctrace_bin: Path,
+    root: Path,
+    tmpdir: Path,
+    tool: str,
+    async_enabled: bool,
+    run_index: int,
+) -> List[str]:
+    inputs = ",".join(str(root / rel_path) for rel_path in LIGHTWEIGHT_INPUTS)
+    mode = "async" if async_enabled else "sync"
+    report_path = tmpdir / f"{mode}-{tool}-{run_index}.txt"
+    output_path = tmpdir / f"{mode}-{tool}-{run_index}.out"
+
+    command = [
+        str(ctrace_bin),
+        "--verbose",
+        "--analysis-profile",
+        "fast",
+        "--smt",
+        "off",
+        "--report-file",
+        str(report_path),
+        "--output-file",
+        str(output_path),
+        "--invoke",
+        tool,
+        "--input",
+        inputs,
+    ]
+    if async_enabled:
+        command.insert(1, "--async")
+    return command
+
+
+def parse_summaries(output: str) -> Dict[str, Counts]:
+    summaries: Dict[str, Counts] = {}
+    for match in SUMMARY_RE.finditer(output):
+        tool = match.group(1)
+        counts = Counts(
+            info=int(match.group(2)),
+            warning=int(match.group(3)),
+            error=int(match.group(4)),
+        )
+        summaries[tool] = summaries.get(tool, Counts()).add(counts)
+    return summaries
+
+
+def normalize_file_path(path: str, root: Path) -> str:
+    candidate = Path(path.strip()).expanduser()
+    try:
+        if not candidate.is_absolute():
+            candidate = (root / candidate).resolve()
+        else:
+            candidate = candidate.resolve()
+        return candidate.relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        return candidate.as_posix()
+
+
+def normalize_rule_message(rule: str | None, message: str) -> str:
+    stripped_message = " ".join(message.strip().split())
+    if rule:
+        return f"{rule}:{stripped_message}"
+    return stripped_message
+
+
+def parse_cppcheck_fingerprints(output: str, root: Path) -> Tuple[DiagnosticFingerprint, ...]:
+    fingerprints = []
+    for match in CPPCHECK_DIAGNOSTIC_RE.finditer(output):
+        fingerprints.append(
+            DiagnosticFingerprint(
+                tool="cppcheck",
+                severity=match.group("severity").lower(),
+                file=normalize_file_path(match.group("file"), root),
+                line=int(match.group("line")),
+                column=int(match.group("column")),
+                rule_message=normalize_rule_message(match.group("rule"), match.group("message")),
+            )
+        )
+    return tuple(sorted(fingerprints))
+
+
+def parse_stack_analyzer_fingerprints(
+    output: str,
+    root: Path,
+) -> Tuple[DiagnosticFingerprint, ...]:
+    fingerprints = []
+    current_file = ""
+    pending_line = 0
+    pending_column = 0
+
+    for raw_line in output.splitlines():
+        if file_match := STACK_FILE_RE.match(raw_line):
+            current_file = normalize_file_path(file_match.group("file"), root)
+            pending_line = 0
+            pending_column = 0
+            continue
+
+        if location_match := STACK_LOCATION_RE.match(raw_line):
+            pending_line = int(location_match.group("line"))
+            pending_column = int(location_match.group("column"))
+            continue
+
+        if diagnostic_match := STACK_DIAGNOSTIC_RE.match(raw_line):
+            fingerprints.append(
+                DiagnosticFingerprint(
+                    tool="ctrace_stack_analyzer",
+                    severity=diagnostic_match.group("severity").lower(),
+                    file=current_file,
+                    line=pending_line,
+                    column=pending_column,
+                    rule_message=normalize_rule_message(None, diagnostic_match.group("message")),
+                )
+            )
+            pending_line = 0
+            pending_column = 0
+
+    return tuple(sorted(fingerprints))
+
+
+def parse_fingerprints(
+    tool: str,
+    output: str,
+    root: Path,
+) -> Tuple[DiagnosticFingerprint, ...]:
+    if tool == "cppcheck":
+        return parse_cppcheck_fingerprints(output, root)
+    if tool == "ctrace_stack_analyzer":
+        return parse_stack_analyzer_fingerprints(output, root)
+    return ()
+
+
+def parse_cppcheck_raw(output: str) -> Dict[str, int]:
+    counts = {
+        "information": 0,
+        "note": 0,
+        "warning": 0,
+        "error": 0,
+        "style": 0,
+        "performance": 0,
+        "portability": 0,
+    }
+    for match in CPPCHECK_RAW_RE.finditer(output):
+        counts[match.group(1)] += 1
+    return counts
+
+
+def run_once(
+    mode: str,
+    tool: str,
+    command: Sequence[str],
+    cwd: Path,
+    root: Path,
+    timeout: float,
+) -> RunResult:
+    started = time.perf_counter()
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+    elapsed = time.perf_counter() - started
+    output = completed.stdout + completed.stderr
+    return RunResult(
+        mode=mode,
+        tool=tool,
+        elapsed_s=elapsed,
+        returncode=completed.returncode,
+        output=output,
+        summaries=parse_summaries(output),
+        cppcheck_raw=parse_cppcheck_raw(output),
+        fingerprints=parse_fingerprints(tool, output, root),
+    )
+
+
+def run_series(
+    mode: str,
+    iteration_factory,
+    cwd: Path,
+    timeout: float,
+    warmups: int,
+    iterations: int,
+) -> List[IterationResult]:
+    for index in range(warmups):
+        result = iteration_factory(index, cwd, timeout)
+        assert_complete_run(result, require_async=(mode == "async"))
+
+    results = []
+    for index in range(iterations):
+        result = iteration_factory(index + warmups, cwd, timeout)
+        assert_complete_run(result, require_async=(mode == "async"))
+        results.append(result)
+    return results
+
+
+def run_sync_iteration(
+    ctrace_bin: Path,
+    root: Path,
+    tmpdir: Path,
+    run_index: int,
+    cwd: Path,
+    timeout: float,
+) -> IterationResult:
+    started = time.perf_counter()
+    tool_results = {}
+    for tool in TOOLS:
+        result = run_once(
+            "sync",
+            tool,
+            command_for(ctrace_bin, root, tmpdir, tool, False, run_index),
+            cwd,
+            root,
+            timeout,
+        )
+        tool_results[tool] = result
+    return IterationResult(
+        mode="sync",
+        elapsed_s=time.perf_counter() - started,
+        tool_results=tool_results,
+    )
+
+
+def run_async_iteration(
+    ctrace_bin: Path,
+    root: Path,
+    tmpdir: Path,
+    run_index: int,
+    cwd: Path,
+    timeout: float,
+) -> IterationResult:
+    started = time.perf_counter()
+
+    def execute(tool: str) -> RunResult:
+        return run_once(
+            "async",
+            tool,
+            command_for(ctrace_bin, root, tmpdir, tool, True, run_index),
+            cwd,
+            root,
+            timeout,
+        )
+
+    with ThreadPoolExecutor(max_workers=len(TOOLS)) as executor:
+        tool_results = dict(zip(TOOLS, executor.map(execute, TOOLS)))
+
+    return IterationResult(
+        mode="async",
+        elapsed_s=time.perf_counter() - started,
+        tool_results=tool_results,
+    )
+
+
+def assert_complete_run(result: IterationResult, require_async: bool) -> None:
+    for tool, tool_result in result.tool_results.items():
+        if tool_result.returncode != 0:
+            raise AssertionError(
+                f"{result.mode} {tool} run failed with exit code "
+                f"{tool_result.returncode}\n{tool_result.output}"
+            )
+        if require_async:
+            if "Asynchronous execution: enabled" not in tool_result.output:
+                raise AssertionError(
+                    f"async {tool} run did not report 'Asynchronous execution: enabled'"
+                )
+            if "ToolInvoker thread pool enabled" not in tool_result.output:
+                raise AssertionError(
+                    f"async {tool} run did not create the ToolInvoker thread pool"
+                )
+
+    missing = [tool for tool in TOOLS if tool not in result.summaries]
+    if missing:
+        raise AssertionError(
+            f"{result.mode} run did not complete all tools, missing: {', '.join(missing)}"
+        )
+
+    missing_fingerprints = [
+        tool
+        for tool in TOOLS
+        if not any(fingerprint.tool == tool for fingerprint in result.fingerprints)
+    ]
+    if missing_fingerprints:
+        raise AssertionError(
+            f"{result.mode} run did not return diagnostic fingerprints for: "
+            f"{', '.join(missing_fingerprints)}"
+        )
+
+
+def median_elapsed(results: Iterable[IterationResult]) -> float:
+    return statistics.median(result.elapsed_s for result in results)
+
+
+def summaries_as_dict(summaries: Mapping[str, Counts]) -> Dict[str, Dict[str, int]]:
+    return {tool: counts.as_dict() for tool, counts in sorted(summaries.items())}
+
+
+def fingerprints_as_list(
+    fingerprints: Iterable[DiagnosticFingerprint],
+) -> List[Dict[str, object]]:
+    return [fingerprint.as_dict() for fingerprint in sorted(fingerprints)]
+
+
+def assert_same_results(sync: IterationResult, async_result: IterationResult) -> None:
+    if sync.summaries != async_result.summaries:
+        raise AssertionError(
+            "CoreTrace diagnostics differ between sync and async runs:\n"
+            f"sync={summaries_as_dict(sync.summaries)}\n"
+            f"async={summaries_as_dict(async_result.summaries)}"
+        )
+    if sync.cppcheck_raw != async_result.cppcheck_raw:
+        raise AssertionError(
+            "cppcheck raw diagnostic counts differ between sync and async runs:\n"
+            f"sync={dict(sync.cppcheck_raw)}\n"
+            f"async={dict(async_result.cppcheck_raw)}"
+        )
+    if sync.fingerprints != async_result.fingerprints:
+        raise AssertionError(
+            "Diagnostic fingerprints differ between sync and async runs:\n"
+            f"sync={fingerprints_as_list(sync.fingerprints)}\n"
+            f"async={fingerprints_as_list(async_result.fingerprints)}"
+        )
+
+
+def assert_speedup(sync_median: float, async_median: float, min_ratio: float) -> float:
+    ratio = sync_median / async_median if async_median > 0 else float("inf")
+    if ratio < min_ratio:
+        raise AssertionError(
+            "Async execution did not prove a timing gain for cppcheck + "
+            "ctrace_stack_analyzer: "
+            f"sync_median={sync_median:.6f}s, "
+            f"async_median={async_median:.6f}s, "
+            f"speedup={ratio:.3f}x, required={min_ratio:.3f}x"
+        )
+    return ratio
+
+
+def build_result_document(
+    sync_results: Sequence[IterationResult],
+    async_results: Sequence[IterationResult],
+    speedup_ratio: float,
+) -> Dict[str, object]:
+    sync_reference = sync_results[-1]
+    async_reference = async_results[-1]
+    return {
+        "test_id": TEST_ID,
+        "requirement": F7_REQUIREMENT,
+        "tools": list(TOOLS),
+        "inputs": list(LIGHTWEIGHT_INPUTS),
+        "sync_median_s": median_elapsed(sync_results),
+        "async_median_s": median_elapsed(async_results),
+        "speedup_ratio": speedup_ratio,
+        "execution_model": {
+            "sync": "sequential CoreTrace tool invocations without --async",
+            "async": "parallel CoreTrace tool invocations with --async enabled",
+        },
+        "coretrace_diagnostics": {
+            "sync": summaries_as_dict(sync_reference.summaries),
+            "async": summaries_as_dict(async_reference.summaries),
+        },
+        "diagnostic_fingerprints": {
+            "sync": fingerprints_as_list(sync_reference.fingerprints),
+            "async": fingerprints_as_list(async_reference.fingerprints),
+        },
+        "cppcheck_raw_diagnostics": {
+            "sync": dict(sync_reference.cppcheck_raw),
+            "async": dict(async_reference.cppcheck_raw),
+        },
+    }
+
+
+def main() -> int:
+    args = parse_args()
+    root = repo_root()
+    ctrace_bin = args.ctrace_bin.resolve()
+    ensure_preconditions(root, ctrace_bin, args.iterations, args.warmups)
+
+    with tempfile.TemporaryDirectory(prefix=f"{TEST_ID}-") as tmp:
+        tmpdir = Path(tmp)
+        sync_results = run_series(
+            "sync",
+            lambda index, cwd, timeout: run_sync_iteration(
+                ctrace_bin, root, tmpdir, index, cwd, timeout
+            ),
+            root,
+            args.timeout,
+            args.warmups,
+            args.iterations,
+        )
+        async_results = run_series(
+            "async",
+            lambda index, cwd, timeout: run_async_iteration(
+                ctrace_bin, root, tmpdir, index, cwd, timeout
+            ),
+            root,
+            args.timeout,
+            args.warmups,
+            args.iterations,
+        )
+
+    for sync_result, async_result in zip(sync_results, async_results):
+        assert_same_results(sync_result, async_result)
+
+    speedup_ratio = assert_speedup(
+        median_elapsed(sync_results),
+        median_elapsed(async_results),
+        args.min_speedup_ratio,
+    )
+    document = build_result_document(sync_results, async_results, speedup_ratio)
+
+    if args.json:
+        print(json.dumps(document, indent=2, sort_keys=True))
+    else:
+        print(TEST_ID)
+        print(F7_REQUIREMENT)
+        print(f"tools: {', '.join(TOOLS)}")
+        print(f"inputs: {', '.join(LIGHTWEIGHT_INPUTS)}")
+        print(f"sync model: {document['execution_model']['sync']}")
+        print(f"async model: {document['execution_model']['async']}")
+        print(f"sync median: {document['sync_median_s']:.6f}s")
+        print(f"async median: {document['async_median_s']:.6f}s")
+        print(f"speedup: {speedup_ratio:.3f}x")
+        print(f"diagnostics: {json.dumps(document['coretrace_diagnostics'], sort_keys=True)}")
+        print(
+            "diagnostic fingerprints: "
+            f"{json.dumps(document['diagnostic_fingerprints'], sort_keys=True)}"
+        )
+        print(
+            "cppcheck raw diagnostics: "
+            f"{json.dumps(document['cppcheck_raw_diagnostics'], sort_keys=True)}"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except AssertionError as exc:
+        print(f"{TEST_ID}: FAIL: {exc}", file=sys.stderr)
+        raise SystemExit(1)
