@@ -78,6 +78,8 @@ class WindowsProcess : public Process
         // returns at once and only reaps the process.
         captureLogs();
         WaitForSingleObject(pi.hProcess, INFINITE);
+        DWORD status = 0;
+        m_exitCode = GetExitCodeProcess(pi.hProcess, &status) ? static_cast<int>(status) : -1;
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
     }

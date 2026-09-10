@@ -219,3 +219,15 @@ endif()
 # A deadlock has no natural end; the suite must not wait for one.
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
 set_tests_properties(ctrace_process_tests PROPERTIES TIMEOUT 60)
+
+add_executable(ctrace_tool_invocation_tests
+    tests/tool_invocation_tests.cpp
+)
+coretrace_force_msvc_runtime(ctrace_tool_invocation_tests)
+target_link_libraries(ctrace_tool_invocation_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+
+if (WIN32)
+    target_link_libraries(ctrace_tool_invocation_tests PRIVATE ws2_32)
+endif()
+
+add_test(NAME ctrace_tool_invocation_tests COMMAND ctrace_tool_invocation_tests)

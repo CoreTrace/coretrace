@@ -1012,33 +1012,42 @@ namespace ctrace
             parsedSummary.has_value())
         {
             m_lastDiagnosticsSummary = *parsedSummary;
+            m_lastDiagnosticsSummary.outcome = ToolOutcome::Counted;
         }
         else if (const auto parsedSummary =
                      parseDiagnosticsSummaryFromStructuredOutput(capturedStdout);
                  parsedSummary.has_value())
         {
             m_lastDiagnosticsSummary = *parsedSummary;
+            m_lastDiagnosticsSummary.outcome = ToolOutcome::Counted;
         }
         else if (const auto parsedSummary = parseDiagnosticsSummaryFromText(capturedStderr);
                  parsedSummary.has_value())
         {
             m_lastDiagnosticsSummary = *parsedSummary;
+            m_lastDiagnosticsSummary.outcome = ToolOutcome::Counted;
         }
         else if (const auto parsedSummary =
                      parseDiagnosticsSummaryFromStructuredOutput(capturedStderr);
                  parsedSummary.has_value())
         {
             m_lastDiagnosticsSummary = *parsedSummary;
+            m_lastDiagnosticsSummary.outcome = ToolOutcome::Counted;
         }
 
         if (!runResult.isOk())
         {
+            // The analyzer is built in: it started and could not finish. Saying
+            // it "could not be started" would send the reader looking for an
+            // installation that is already there.
+            m_lastDiagnosticsSummary.outcome = ToolOutcome::Failed;
             ctrace::Thread::Output::tool_err(runResult.error);
             return;
         }
 
         if (runResult.exitCode != 0)
         {
+            m_lastDiagnosticsSummary.outcome = ToolOutcome::Failed;
             ctrace::Thread::Output::tool_err("Stack analyzer exited with code " +
                                              std::to_string(runResult.exitCode));
             return;

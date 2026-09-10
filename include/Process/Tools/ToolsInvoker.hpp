@@ -416,9 +416,30 @@ namespace ctrace
         void recordDiagnosticsSummary(const std::string& tool_name, const IAnalysisTool& tool)
         {
             const auto summary = tool.lastDiagnosticsSummary();
-            coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
-                           "Diagnostics summary: info={}, warning={}, error={}\n", summary.info,
-                           summary.warning, summary.error);
+            switch (summary.outcome)
+            {
+            case ctrace::ToolOutcome::NotRun:
+                // Never report "error=0" for a tool that never started: that is
+                // a clean bill of health the run has not earned.
+                coretrace::log(coretrace::Level::Warn, coretrace::Module(tool_name),
+                               "Could not be started, so this file is unanalysed by it. "
+                               "Check that the tool is installed and reachable.\n");
+                break;
+            case ctrace::ToolOutcome::Failed:
+                coretrace::log(coretrace::Level::Warn, coretrace::Module(tool_name),
+                               "Failed, so this file is unanalysed by it. Its output above "
+                               "says why.\n");
+                break;
+            case ctrace::ToolOutcome::Ran:
+                coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
+                               "Completed; its findings are in the report.\n");
+                break;
+            case ctrace::ToolOutcome::Counted:
+                coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
+                               "Diagnostics summary: info={}, warning={}, error={}\n",
+                               summary.info, summary.warning, summary.error);
+                break;
+            }
 
             std::lock_guard<std::mutex> lock(m_diagnosticsSummaryMutex);
             auto& total = m_diagnosticsSummaryByTool[tool_name];

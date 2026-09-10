@@ -21,7 +21,17 @@ class Process
 
     std::string logOutput;
 
+    /// The child's exit status, once it has been waited for. A tool that
+    /// started and then failed says so here; without it a failing tool is
+    /// indistinguishable from one that found nothing.
+    [[nodiscard]] int exitCode() const
+    {
+        return m_exitCode;
+    }
+
   protected:
+    int m_exitCode = -1;
+
     virtual void prepare() = 0;
     virtual void run() = 0;
     virtual void cleanup() = 0;

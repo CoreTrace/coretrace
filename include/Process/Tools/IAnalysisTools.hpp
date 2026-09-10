@@ -14,11 +14,29 @@ class IpcStrategy;
 
 namespace ctrace
 {
+    /// What a tool did, so that "found nothing" and "never ran" can be told
+    /// apart. A security tool that failed to start and one that reported a
+    /// clean file are the same three zeroes otherwise, and the second reading
+    /// is the dangerous one.
+    enum class ToolOutcome
+    {
+        /// The tool could not be started at all.
+        NotRun,
+        /// The tool started and exited with a failure. It reported nothing,
+        /// and that silence is a fault, not a clean file.
+        Failed,
+        /// The tool ran; its findings are in the report, uncounted here.
+        Ran,
+        /// The tool ran and the counts below are its own.
+        Counted,
+    };
+
     struct DiagnosticSummary
     {
         std::size_t info = 0;
         std::size_t warning = 0;
         std::size_t error = 0;
+        ToolOutcome outcome = ToolOutcome::NotRun;
     };
 
     /**

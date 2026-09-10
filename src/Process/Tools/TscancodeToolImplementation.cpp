@@ -25,6 +25,7 @@ namespace ctrace
                                command.prefixArguments.end());
             auto process = ProcessFactory::createProcess(command.executable, argsProcess);
             process->execute();
+            markFinished(process->exitCode());
             ctrace::Thread::Output::tool_out(process->logOutput);
             ctrace::Thread::Output::cout("Finished tscancode on " + file);
 
@@ -40,6 +41,7 @@ namespace ctrace
         }
         catch (const std::exception& e)
         {
+            markNotRun();
             ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
             return;
         }

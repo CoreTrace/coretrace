@@ -66,8 +66,9 @@ class UnixProcess : public Process
         else
         {
             close(logFd);
-            int status;
+            int status = 0;
             waitpid(pid, &status, 0);
+            m_exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
             captureLogs();
         }
     }

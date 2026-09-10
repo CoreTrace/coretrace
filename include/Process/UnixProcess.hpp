@@ -84,8 +84,9 @@ class UnixProcessWithPosixSpawn : public Process
     {
         if (pid_ > 0)
         {
-            int status;
+            int status = 0;
             waitpid(pid_, &status, 0);
+            m_exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
             pid_ = 0;
         }
         captureLogs();

@@ -6,6 +6,7 @@
 
 // #include "IAnalysisTools.hpp"
 #include "AnalysisToolsBase.hpp"
+#include "CppCheckArguments.hpp"
 #include "App/ToolResolver.hpp"
 #include "ctrace_tools/languageType.hpp"
 #include "ctrace_tools/mangle.hpp"
@@ -140,10 +141,12 @@ namespace ctrace
                     ProcessFactory::createProcess(command.executable, argsProcess);
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 process->execute();
+                markFinished(process->exitCode());
                 ctrace::Thread::Output::tool_out(process->logOutput);
             }
             catch (const std::exception& e)
             {
+                markNotRun();
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 // return 1;
             }
@@ -201,6 +204,7 @@ namespace ctrace
                 auto process =
                     ProcessFactory::createProcess(command.executable, argsProcess);
                 process->execute();
+                markFinished(process->exitCode());
 
                 if (config.global.ipc == "standardIO")
                 {
@@ -213,6 +217,7 @@ namespace ctrace
             }
             catch (const std::exception& e)
             {
+                markNotRun();
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 return;
             }
@@ -247,14 +252,8 @@ namespace ctrace
 
             try
             {
-                std::vector<std::string> argsProcess;
-
-                if (has_sarif_format)
-                {
-                    argsProcess.push_back("--output-format=sarif");
-                }
-                // argsProcess.push_back("--enable=all");
-                argsProcess.push_back(src_file);
+                std::vector<std::string> argsProcess =
+                    ctrace::cppcheckArguments(has_sarif_format, src_file);
 
                 const auto command = ctrace::resolveCppcheckCommand();
                 argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
@@ -262,10 +261,12 @@ namespace ctrace
                 auto process =
                     ProcessFactory::createProcess(command.executable, argsProcess);
                 process->execute();
+                markFinished(process->exitCode());
                 ctrace::Thread::Output::tool_out(process->logOutput);
             }
             catch (const std::exception& e)
             {
+                markNotRun();
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
                 return;
             }
