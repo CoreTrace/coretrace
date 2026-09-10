@@ -70,12 +70,16 @@ class WindowsProcess : public Process
             throw std::runtime_error("Failed to create process: " + lastErrorMessage());
         }
 
+        m_stdoutRead = stdoutRead;
+        // Read first, wait second. A pipe holds a few kilobytes: a tool with
+        // more to say than that blocks in its own write, and a parent already
+        // inside WaitForSingleObject never comes back to drain it. Reading to
+        // end-of-file ends when the child closes its handle, so the wait below
+        // returns at once and only reaps the process.
+        captureLogs();
         WaitForSingleObject(pi.hProcess, INFINITE);
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
-
-        m_stdoutRead = stdoutRead;
-        captureLogs();
     }
 
     void cleanup() override

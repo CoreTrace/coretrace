@@ -205,3 +205,17 @@ if (WIN32)
 endif()
 
 add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)
+
+add_executable(ctrace_process_tests
+    tests/process_pipe_tests.cpp
+)
+coretrace_force_msvc_runtime(ctrace_process_tests)
+target_link_libraries(ctrace_process_tests PRIVATE coretrace::logger)
+
+if (WIN32)
+    target_link_libraries(ctrace_process_tests PRIVATE ws2_32)
+endif()
+
+# A deadlock has no natural end; the suite must not wait for one.
+add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
+set_tests_properties(ctrace_process_tests PROPERTIES TIMEOUT 60)
