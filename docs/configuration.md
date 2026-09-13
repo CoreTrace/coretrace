@@ -149,7 +149,7 @@ CLI: `--ipc`
 
 - `runtime.ipc_path`
 Type: `string`
-Default: platform-specific temp socket path when omitted or empty
+Default: `"/tmp/coretrace_ipc"`
 Allowed: socket path.
 Description: IPC socket path.
 Impact: used when IPC mode is socket.

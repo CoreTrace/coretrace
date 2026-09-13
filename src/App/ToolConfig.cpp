@@ -865,10 +865,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                if (!stringValue.empty())
-                {
-                    config.global.ipcPath = stringValue;
-                }
+                config.global.ipcPath = stringValue;
             }
 
             return true;

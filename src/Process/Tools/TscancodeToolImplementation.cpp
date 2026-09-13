@@ -20,10 +20,8 @@ namespace ctrace
             argsProcess.push_back("--enable=all");
             argsProcess.push_back(src_file);
 
-            const auto command = ctrace::resolveTscancodeCommand();
-            argsProcess.insert(argsProcess.begin(), command.prefixArguments.begin(),
-                               command.prefixArguments.end());
-            auto process = ProcessFactory::createProcess(command.executable, argsProcess);
+            auto process = ProcessFactory::createProcess(
+                "./tscancode/src/tscancode/trunk/tscancode", argsProcess);
             process->execute();
             ctrace::Thread::Output::tool_out(process->logOutput);
             ctrace::Thread::Output::cout("Finished tscancode on " + file);

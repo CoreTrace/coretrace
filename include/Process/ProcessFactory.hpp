@@ -4,16 +4,10 @@
 
 #include <memory>
 #include <iostream>
-#include <stdexcept>
 #include "Process.hpp"
-#include "ThreadProcess.hpp"
-
-#if defined(_WIN32)
-#include "WinProcess.hpp"
-#elif defined(__linux__) || defined(__APPLE__)
 #include "LinuxProcess.hpp"
 #include "UnixProcess.hpp"
-#endif
+#include "WinProcess.hpp"
 
 /**
  * @brief Factory class for creating platform-specific `Process` objects.
@@ -52,10 +46,6 @@ class ProcessFactory
         ctrace::Thread::Output::cout("Creating macOS process for command: " + command);
         // return std::make_unique<UnixProcessWithPosixSpawn>(command, args); // doesn't work with tscancode
         return std::make_unique<UnixProcess>(command, args);
-#else
-        static_cast<void>(command);
-        static_cast<void>(args);
-        throw std::runtime_error("Unsupported platform for process execution");
 #endif
     }
 };

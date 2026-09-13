@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <sstream>
 
 class Process
 {
