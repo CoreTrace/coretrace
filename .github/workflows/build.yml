@@ -85,3 +85,8 @@ jobs:
         run: |
           set -euo pipefail
           ./build/ctrace -h
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --output-on-failure
