@@ -7,16 +7,15 @@
 #include "ctrace_tools/strings.hpp"
 
 #include "CLI11.hpp"
-#include <coretrace/logger.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <cstdlib>
-#include <functional>
-#include <iostream>
-#include <optional>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ctrace
@@ -33,66 +32,111 @@ namespace ctrace
             "  ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder\n"
             "  ctrace --verbose --report-file=analysis.txt --sarif-format";
 
-        /// A rejected command-line value; carries the exact text for stderr.
-        struct ConfigError : std::runtime_error
+        /// How a command-line value becomes a JSON value of the config schema.
+        enum class Kind
         {
-            using std::runtime_error::runtime_error;
+            Flag,     ///< Presence means true.
+            Text,     ///< Kept as a string.
+            Unsigned, ///< Must parse as an unsigned integer.
+            List      ///< Comma-separated string, split into an array.
         };
 
+        /// One command-line option and where its value lands in the sectioned config
+        /// document (docs/configuration.md). The help text is generated from this table.
         struct OptionSpec
         {
-            const char* name;
+            const char* name;      ///< CLI11 spelling, e.g. "--verbose,-v".
             const char* valueName; ///< nullptr for flags.
             const char* description;
+            Kind kind;
+            const char* section; ///< nullptr for options the front end handles itself.
+            const char* key;
         };
 
-        // The option list is the CLI contract; `ctrace --help` is generated from it.
         constexpr OptionSpec kOptions[] = {
-            {"--verbose,-v", nullptr, "Enables detailed (verbose) output."},
-            {"--quiet,-q", nullptr, "Suppresses non-essential output."},
-            {"--sarif-format", nullptr, "Generates a report in SARIF format."},
+            {"--verbose,-v", nullptr, "Enables detailed (verbose) output.", Kind::Flag, "output",
+             "verbose"},
+            {"--quiet,-q", nullptr, "Suppresses non-essential output.", Kind::Flag, "output",
+             "quiet"},
+            {"--sarif-format", nullptr, "Generates a report in SARIF format.", Kind::Flag, "output",
+             "sarif_format"},
             {"--report-file", "PATH",
-             "Specifies the path to the report file (default: ctrace-report.txt)."},
+             "Specifies the path to the report file (default: ctrace-report.txt).", Kind::Text,
+             "output", "report_file"},
             {"--output-file", "PATH",
-             "Specifies the output file for the analysed binary (default: ctrace.out)."},
+             "Specifies the output file for the analysed binary (default: ctrace.out).", Kind::Text,
+             "output", "output_file"},
             {"--entry-points", "NAMES",
-             "Sets the entry points for analysis (default: main). Comma-separated list."},
-            {"--config", "PATH", "Loads settings from a JSON config file."},
+             "Sets the entry points for analysis (default: main). Comma-separated list.",
+             Kind::List, "files", "entry_points"},
+            {"--config", "PATH", "Loads settings from a JSON config file.", Kind::Text, nullptr,
+             nullptr},
             {"--compile-commands", "PATH",
-             "Path to compile_commands.json for tools that support it."},
+             "Path to compile_commands.json for tools that support it.", Kind::Text, "files",
+             "compile_commands"},
             {"--include-compdb-deps", nullptr,
              "Includes dependency entries (e.g. _deps) when auto-loading files from "
-             "compile_commands.json."},
-            {"--analysis-profile", "PROFILE", "Stack analyzer profile: fast|full."},
-            {"--smt", "on|off", "Enables/disables SMT refinement in stack analyzer."},
-            {"--smt-backend", "NAME", "Primary SMT backend (e.g. z3, interval)."},
-            {"--smt-secondary-backend", "NAME", "Secondary backend for multi-solver modes."},
-            {"--smt-mode", "MODE", "SMT mode: single|portfolio|cross-check|dual-consensus."},
-            {"--smt-timeout-ms", "N", "SMT timeout in milliseconds."},
-            {"--smt-budget-nodes", "N", "SMT node budget per query."},
-            {"--smt-rules", "LIST", "Comma-separated SMT-enabled rules."},
-            {"--resource-model", "PATH", "Path to the resource lifetime model for stack analyzer."},
-            {"--escape-model", "PATH", "Path to the stack escape model for stack analyzer."},
-            {"--buffer-model", "PATH", "Path to the buffer overflow model for stack analyzer."},
+             "compile_commands.json.",
+             Kind::Flag, "files", "include_compdb_deps"},
+            {"--analysis-profile", "PROFILE", "Stack analyzer profile: fast|full.", Kind::Text,
+             "stack_analyzer", "analysis_profile"},
+            {"--smt", "on|off", "Enables/disables SMT refinement in stack analyzer.", Kind::Text,
+             "stack_analyzer", "smt"},
+            {"--smt-backend", "NAME", "Primary SMT backend (e.g. z3, interval).", Kind::Text,
+             "stack_analyzer", "smt_backend"},
+            {"--smt-secondary-backend", "NAME", "Secondary backend for multi-solver modes.",
+             Kind::Text, "stack_analyzer", "smt_secondary_backend"},
+            {"--smt-mode", "MODE", "SMT mode: single|portfolio|cross-check|dual-consensus.",
+             Kind::Text, "stack_analyzer", "smt_mode"},
+            {"--smt-timeout-ms", "N", "SMT timeout in milliseconds.", Kind::Unsigned,
+             "stack_analyzer", "smt_timeout_ms"},
+            {"--smt-budget-nodes", "N", "SMT node budget per query.", Kind::Unsigned,
+             "stack_analyzer", "smt_budget_nodes"},
+            {"--smt-rules", "LIST", "Comma-separated SMT-enabled rules.", Kind::List,
+             "stack_analyzer", "smt_rules"},
+            {"--resource-model", "PATH", "Path to the resource lifetime model for stack analyzer.",
+             Kind::Text, "stack_analyzer", "resource_model"},
+            {"--escape-model", "PATH", "Path to the stack escape model for stack analyzer.",
+             Kind::Text, "stack_analyzer", "escape_model"},
+            {"--buffer-model", "PATH", "Path to the buffer overflow model for stack analyzer.",
+             Kind::Text, "stack_analyzer", "buffer_model"},
             {"--stack-limit", "BYTES",
-             "Stack limit forwarded to the stack analyzer (default: 8388608)."},
-            {"--timing", nullptr, "Enables stack analyzer timing output."},
-            {"--demangle", nullptr, "Displays demangled function names in supported tools."},
-            {"--static", nullptr, "Enables static analysis."},
-            {"--dyn", nullptr, "Enables dynamic analysis."},
+             "Stack limit forwarded to the stack analyzer (default: 8388608).", Kind::Unsigned,
+             "stack_analyzer", "stack_limit"},
+            {"--timing", nullptr, "Enables stack analyzer timing output.", Kind::Flag,
+             "stack_analyzer", "timing"},
+            {"--demangle", nullptr, "Displays demangled function names in supported tools.",
+             Kind::Flag, "output", "demangle"},
+            {"--static", nullptr, "Enables static analysis.", Kind::Flag, "analysis", "static"},
+            {"--dyn", nullptr, "Enables dynamic analysis.", Kind::Flag, "analysis", "dynamic"},
             {"--invoke", "TOOLS",
              "Invokes specific tools (comma-separated). Available tools: flawfinder, ikos, "
-             "cppcheck, tscancode, ctrace_stack_analyzer."},
-            {"--input", "FILES", "Specifies the source files to analyse (comma-separated)."},
-            {"--ipc", "METHOD", "Specifies the IPC method to use: standardIO|socket|serve."},
-            {"--ipc-path", "PATH", "Specifies the IPC path (default: /tmp/coretrace_ipc)."},
-            {"--serve-host", "HOST", "HTTP server host when --ipc=serve."},
-            {"--serve-port", "PORT", "HTTP server port when --ipc=serve."},
-            {"--shutdown-token", "TOKEN", "Token required for POST /shutdown (server mode)."},
+             "cppcheck, tscancode, ctrace_stack_analyzer.",
+             Kind::List, "analysis", "invoke"},
+            {"--input", "FILES", "Specifies the source files to analyse (comma-separated).",
+             Kind::List, "files", "input"},
+            {"--ipc", "METHOD", "Specifies the IPC method to use: standardIO|socket|serve.",
+             Kind::Text, "runtime", "ipc"},
+            {"--ipc-path", "PATH", "Specifies the IPC path (default: /tmp/coretrace_ipc).",
+             Kind::Text, "runtime", "ipc_path"},
+            {"--serve-host", "HOST", "HTTP server host when --ipc=serve.", Kind::Text, "server",
+             "host"},
+            {"--serve-port", "PORT", "HTTP server port when --ipc=serve.", Kind::Unsigned, "server",
+             "port"},
+            {"--shutdown-token", "TOKEN", "Token required for POST /shutdown (server mode).",
+             Kind::Text, "server", "shutdown_token"},
             {"--shutdown-timeout-ms", "MS",
-             "Graceful shutdown timeout in ms (0 = wait indefinitely)."},
-            {"--async", nullptr, "Enables asynchronous execution."},
+             "Graceful shutdown timeout in ms (0 = wait indefinitely).", Kind::Unsigned, "server",
+             "shutdown_timeout_ms"},
+            {"--async", nullptr, "Enables asynchronous execution.", Kind::Flag, "runtime", "async"},
         };
+
+        /// "--report-file,-r" -> "--report-file".
+        [[nodiscard]] std::string longName(const OptionSpec& spec)
+        {
+            const std::string name(spec.name);
+            return name.substr(0, name.find(','));
+        }
 
         void registerOptions(CLI::App& app)
         {
@@ -123,204 +167,95 @@ namespace ctrace
             return parsed->results().back();
         }
 
-        /**
-         * Applies the command-line values to the configuration, one handler per option.
-         * The config file has already been applied when this runs, so CLI values win
-         * (precedence documented in docs/configuration.md).
-         */
-        class ConfigProcessor
+        /// Builds the sectioned config document from the options that were given.
+        /// Returns false with `error` set when a value cannot be converted.
+        [[nodiscard]] bool documentFromOptions(const CLI::App& app, nlohmann::json& document,
+                                               std::string& error)
         {
-          public:
-            explicit ConfigProcessor(ProgramConfig& cfg) : config(cfg)
+            document = nlohmann::json::object();
+            for (const OptionSpec& spec : kOptions)
             {
-                commands["--verbose"] = [this](const std::string&)
-                { config.output.verbose = true; };
-                commands["--quiet"] = [this](const std::string&) { config.output.quiet = true; };
-                commands["--demangle"] = [this](const std::string&)
-                { config.output.demangle = true; };
-                commands["--sarif-format"] = [this](const std::string&)
-                { config.output.sarif_format = true; };
-                commands["--report-file"] = [this](const std::string& value)
-                { config.output.report_file = value; };
-                commands["--output-file"] = [this](const std::string& value)
-                { config.output.output_file = value; };
-                commands["--async"] = [this](const std::string&)
+                if (spec.section == nullptr)
                 {
-                    config.runtime.async = true;
-                    std::cout << "Asynchronous execution enabled." << std::endl;
-                };
-                commands["--invoke"] = [this](const std::string& value)
+                    continue;
+                }
+                const std::string option = longName(spec);
+                if (!wasGiven(app, option.c_str()))
                 {
-                    std::vector<std::string> parts;
-                    for (const auto part : ctrace_tools::strings::splitByComma(value))
-                    {
-                        parts.emplace_back(part);
-                    }
-                    std::string normalizeError;
-                    const auto normalized = normalizeAndValidateToolList(parts, normalizeError);
-                    if (!normalizeError.empty())
-                    {
-                        throw ConfigError(normalizeError + "\n");
-                    }
-                    config.analysis.invoke = normalized;
-                };
-                commands["--input"] = [this](const std::string& value) { config.addFile(value); };
-                commands["--static"] = [this](const std::string&)
-                { config.analysis.static_enabled = true; };
-                commands["--dyn"] = [this](const std::string&)
-                { config.analysis.dynamic_enabled = true; };
-                commands["--entry-points"] = [this](const std::string& value)
+                    continue;
+                }
+                const std::string value = valueOf(app, option.c_str());
+                nlohmann::json converted;
+                switch (spec.kind)
                 {
-                    config.files.entry_points.clear();
-                    for (const auto point : ctrace_tools::strings::splitByComma(value))
-                    {
-                        config.files.entry_points.emplace_back(point);
-                    }
-                };
-                commands["--config"] = [this](const std::string& value)
-                { config.config_file = value; };
-                commands["--compile-commands"] = [this](const std::string& value)
-                { config.files.compile_commands = value; };
-                commands["--include-compdb-deps"] = [this](const std::string&)
-                { config.files.include_compdb_deps = true; };
-                commands["--analysis-profile"] = [this](const std::string& value)
-                { config.stack_analyzer.analysis_profile = value; };
-                commands["--smt"] = [this](const std::string& value)
-                { config.stack_analyzer.smt = value; };
-                commands["--smt-backend"] = [this](const std::string& value)
-                { config.stack_analyzer.smt_backend = value; };
-                commands["--smt-secondary-backend"] = [this](const std::string& value)
-                { config.stack_analyzer.smt_secondary_backend = value; };
-                commands["--smt-mode"] = [this](const std::string& value)
-                { config.stack_analyzer.smt_mode = value; };
-                commands["--smt-timeout-ms"] = [this](const std::string& value)
+                case Kind::Flag:
+                    converted = true;
+                    break;
+                case Kind::Text:
+                    converted = value;
+                    break;
+                case Kind::Unsigned:
                 {
+                    const bool digitsOnly =
+                        !value.empty() &&
+                        std::all_of(value.begin(), value.end(),
+                                    [](unsigned char ch) { return std::isdigit(ch) != 0; });
                     try
                     {
-                        config.stack_analyzer.smt_timeout_ms =
-                            static_cast<uint32_t>(std::stoul(value));
-                    }
-                    catch (const std::exception& e)
-                    {
-                        throw ConfigError("Invalid smt timeout value: '" + value +
-                                          "'. Error: " + e.what() + "\n");
-                    }
-                };
-                commands["--smt-budget-nodes"] = [this](const std::string& value)
-                {
-                    try
-                    {
-                        config.stack_analyzer.smt_budget_nodes = std::stoull(value);
-                    }
-                    catch (const std::exception& e)
-                    {
-                        throw ConfigError("Invalid smt budget value: '" + value +
-                                          "'. Error: " + e.what() + "\n");
-                    }
-                };
-                commands["--smt-rules"] = [this](const std::string& value)
-                {
-                    config.stack_analyzer.smt_rules.clear();
-                    for (const auto rule : ctrace_tools::strings::splitByComma(value))
-                    {
-                        config.stack_analyzer.smt_rules.emplace_back(rule);
-                    }
-                };
-                commands["--resource-model"] = [this](const std::string& value)
-                { config.stack_analyzer.resource_model = value; };
-                commands["--escape-model"] = [this](const std::string& value)
-                { config.stack_analyzer.escape_model = value; };
-                commands["--buffer-model"] = [this](const std::string& value)
-                { config.stack_analyzer.buffer_model = value; };
-                commands["--timing"] = [this](const std::string&)
-                { config.stack_analyzer.timing = true; };
-                commands["--stack-limit"] = [this](const std::string& value)
-                {
-                    try
-                    {
-                        config.stack_analyzer.stack_limit = std::stoul(value);
-                        coretrace::log(coretrace::Level::Info, "Stack limit set to {} bytes",
-                                       config.stack_analyzer.stack_limit);
-                    }
-                    catch (const std::exception& e)
-                    {
-                        throw ConfigError("Invalid stack limit value: '" + value +
-                                          "'. Error: " + e.what() +
-                                          "\nPlease provide a valid unsigned integer.\n");
-                    }
-                };
-                commands["--ipc"] = [this](const std::string& value)
-                {
-                    const auto& ipc_list = ctrace_defs::IPC_TYPES;
-                    if (std::find(ipc_list.begin(), ipc_list.end(), value) == ipc_list.end())
-                    {
-                        std::string message =
-                            "Invalid IPC type: '" + value + "'\n" + "Available IPC types: [";
-                        for (const auto& ipc : ipc_list)
+                        if (!digitsOnly)
                         {
-                            message += ipc;
-                            if (ipc != ipc_list.back())
-                                message += ", ";
+                            throw std::out_of_range("not a number");
                         }
-                        message += "]\n";
-                        throw ConfigError(message);
+                        converted = static_cast<std::uint64_t>(std::stoull(value));
                     }
-                    config.runtime.ipc = value;
-                };
-                commands["--ipc-path"] = [this](const std::string& value)
-                { config.runtime.ipc_path = value; };
-                commands["--serve-host"] = [this](const std::string& value)
-                {
-                    config.server.host = value;
-                    coretrace::log(coretrace::Level::Debug, "Server host set to {}",
-                                   config.server.host);
-                };
-                commands["--serve-port"] = [this](const std::string& value)
-                {
-                    config.server.port = std::stoi(value);
-                    coretrace::log(coretrace::Level::Debug, "Server port set to {}",
-                                   config.server.port);
-                };
-                commands["--shutdown-token"] = [this](const std::string& value)
-                { config.server.shutdown_token = value; };
-                commands["--shutdown-timeout-ms"] = [this](const std::string& value)
-                {
-                    config.server.shutdown_timeout_ms = std::stoi(value);
-                    if (config.server.shutdown_timeout_ms < 0)
+                    catch (const std::exception&)
                     {
-                        config.server.shutdown_timeout_ms = 0;
+                        error = "Invalid value for " + option + ": '" + value +
+                                "' is not an unsigned integer.\n";
+                        return false;
                     }
-                };
+                    break;
+                }
+                case Kind::List:
+                {
+                    nlohmann::json items = nlohmann::json::array();
+                    for (const auto item : ctrace_tools::strings::splitByComma(value))
+                    {
+                        items.push_back(std::string(item));
+                    }
+                    converted = std::move(items);
+                    break;
+                }
+                }
+                document[spec.section][spec.key] = std::move(converted);
             }
+            return true;
+        }
 
-            /// Applies every option that was given; throws ConfigError on the first rejected value.
-            void apply(const CLI::App& app)
+        /// Loader diagnostics name the sectioned key; the user typed the option.
+        [[nodiscard]] std::string withOptionNames(std::string message)
+        {
+            std::vector<std::pair<std::string, std::string>> renames;
+            for (const OptionSpec& spec : kOptions)
             {
-                for (const auto& [option, command] : commands)
+                if (spec.section != nullptr)
                 {
-                    if (!wasGiven(app, option.c_str()))
-                    {
-                        continue;
-                    }
-                    try
-                    {
-                        command(valueOf(app, option.c_str()));
-                    }
-                    catch (const ConfigError&)
-                    {
-                        throw;
-                    }
-                    catch (const std::exception& e)
-                    {
-                        throw ConfigError("Invalid value for " + option + ": " + e.what() + "\n");
-                    }
+                    renames.emplace_back(std::string(spec.section) + "." + spec.key,
+                                         longName(spec));
                 }
             }
-
-          private:
-            ProgramConfig& config;
-            std::unordered_map<std::string, std::function<void(const std::string&)>> commands;
-        };
+            std::sort(renames.begin(), renames.end(),
+                      [](const auto& a, const auto& b) { return a.first.size() > b.first.size(); });
+            for (const auto& [path, option] : renames)
+            {
+                for (auto pos = message.find(path); pos != std::string::npos;
+                     pos = message.find(path, pos + option.size()))
+                {
+                    message.replace(pos, path.size(), option);
+                }
+            }
+            return message;
+        }
     } // namespace
 
     CT_NODISCARD ConfigResult buildConfig(int argc, char* argv[])
@@ -374,16 +309,28 @@ namespace ctrace
             }
         }
 
-        try
+        // Precedence: defaults < config file < command line. CLI values go through the same
+        // loader as the file, so validation and normalization are identical.
+        nlohmann::json document;
+        std::string loaderError;
+        if (!documentFromOptions(app, document, loaderError) ||
+            !applyToolConfigObject(config, document, {}, loaderError))
         {
-            ConfigProcessor processor(config);
-            processor.apply(app);
-        }
-        catch (const ConfigError& e)
-        {
-            result.error = e.what();
+            result.error = withOptionNames(loaderError);
+            if (result.error.empty() || result.error.back() != '\n')
+            {
+                result.error += '\n';
+            }
             result.exitCode = EXIT_FAILURE;
             return result;
+        }
+        if (wasGiven(app, "--config"))
+        {
+            config.config_file = valueOf(app, "--config");
+        }
+        if (wasGiven(app, "--async"))
+        {
+            result.output += "Asynchronous execution enabled.\n";
         }
 
         if (valueOf(app, "--ipc") != "serve" &&

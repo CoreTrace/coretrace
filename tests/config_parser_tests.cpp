@@ -232,7 +232,8 @@ namespace
         const auto result = buildFromArgs({"ctrace", "--ipc", "bogus"});
         assert(!result.config.has_value());
         assert(result.exitCode == 1);
-        assert(result.error.find("Invalid IPC type: 'bogus'") != std::string::npos);
+        assert(result.error ==
+               "Invalid value 'bogus' for '--ipc'. Allowed values: [standardIO, socket, serve]\n");
     }
 
     void testUnknownToolIsAnError()
@@ -240,7 +241,7 @@ namespace
         const auto result = buildFromArgs({"ctrace", "--invoke", "nope"});
         assert(!result.config.has_value());
         assert(result.exitCode == 1);
-        assert(result.error.find("Unknown tool 'nope'") != std::string::npos);
+        assert(result.error.rfind("--invoke: Unknown tool 'nope'. Allowed tools: [", 0) == 0);
     }
 
     void testInvalidSmtTimeoutIsAnError()
@@ -248,7 +249,46 @@ namespace
         const auto result = buildFromArgs({"ctrace", "--smt-timeout-ms", "abc"});
         assert(!result.config.has_value());
         assert(result.exitCode == 1);
-        assert(result.error.find("Invalid smt timeout value: 'abc'") != std::string::npos);
+        assert(result.error ==
+               "Invalid value for --smt-timeout-ms: 'abc' is not an unsigned integer.\n");
+    }
+
+    void testInvalidPortIsAnError()
+    {
+        const auto result = buildFromArgs({"ctrace", "--ipc", "serve", "--serve-port", "abc"});
+        assert(!result.config.has_value());
+        assert(result.exitCode == 1);
+        assert(result.error ==
+               "Invalid value for --serve-port: 'abc' is not an unsigned integer.\n");
+    }
+
+    // CLI values get the same validation and normalization as the config file.
+    void testCliValuesShareTheLoaderRules()
+    {
+        const auto smt = buildFromArgs({"ctrace", "--smt", "yes", "--input", "a.c"});
+        assert(smt.config.has_value());
+        assert(smt.config->stack_analyzer.smt == "on");
+
+        const auto profile = buildFromArgs({"ctrace", "--analysis-profile", "turbo"});
+        assert(!profile.config.has_value());
+        assert(profile.error ==
+               "Invalid value 'turbo' for '--analysis-profile'. Allowed values: [fast, full]\n");
+
+        const auto typed =
+            buildFromArgs({"ctrace", "--stack-limit", "4096", "--smt-budget-nodes", "7",
+                           "--entry-points", "a,b", "--invoke", "cppcheck,ctrace_stack_analyzer",
+                           "--static", "--async", "--ipc", "serve", "--serve-port", "8081"});
+        assert(typed.config.has_value());
+        const ctrace::ProgramConfig& cfg = *typed.config;
+        assert(cfg.stack_analyzer.stack_limit == 4096U);
+        assert(cfg.stack_analyzer.smt_budget_nodes == 7U);
+        assert((cfg.files.entry_points == std::vector<std::string>{"a", "b"}));
+        assert(
+            (cfg.analysis.invoke == std::vector<std::string>{"cppcheck", "ctrace_stack_analyzer"}));
+        assert(cfg.analysis.static_enabled);
+        assert(cfg.runtime.async);
+        assert(cfg.runtime.ipc == "serve");
+        assert(cfg.server.port == 8081);
     }
 
     void testMissingConfigFileIsAnError()
@@ -451,6 +491,8 @@ int main()
     testInvalidIpcIsAnError();
     testUnknownToolIsAnError();
     testInvalidSmtTimeoutIsAnError();
+    testInvalidPortIsAnError();
+    testCliValuesShareTheLoaderRules();
     testMissingConfigFileIsAnError();
     testUnknownOptionIsAnError();
     testHelpAndVersionAreReturnedNotPrinted();
