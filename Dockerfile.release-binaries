@@ -9,8 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
-    lsb-release \
-    software-properties-common \
     build-essential \
     cmake \
     ninja-build \
@@ -20,16 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     patchelf \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh \
-    && chmod +x /tmp/llvm.sh \
-    && /tmp/llvm.sh ${LLVM_VERSION} \
-    && rm -f /tmp/llvm.sh \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-      llvm-${LLVM_VERSION} \
-      llvm-${LLVM_VERSION}-dev \
-      clang-${LLVM_VERSION} \
-      libclang-${LLVM_VERSION}-dev \
+COPY scripts/ci/install-llvm-apt.sh /usr/local/bin/install-llvm-apt.sh
+RUN install-llvm-apt.sh ${LLVM_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /repo

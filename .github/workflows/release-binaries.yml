@@ -27,15 +27,19 @@ env:
 jobs:
   build-linux-binaries:
     name: Build Linux binary (${{ matrix.arch }})
-    runs-on: ubuntu-24.04
+    # Each architecture builds on a native runner: emulating arm64 through QEMU on an
+    # x86 host took about 25 minutes for the LLVM-linked analyzer, native takes a few.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: linux/amd64
             arch: amd64
+            runner: ubuntu-24.04
           - platform: linux/arm64
             arch: arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -53,9 +57,6 @@ jobs:
             version="sha-${short_sha}"
           fi
           echo "value=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
