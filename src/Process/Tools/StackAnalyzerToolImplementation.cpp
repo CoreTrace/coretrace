@@ -2,31 +2,18 @@
 #include "Process/Tools/AnalysisTools.hpp"
 #include "app/AnalyzerApp.hpp"
 
-#include <array>
-#include <cctype>
-#include <cstdio>
 #include <exception>
 #include <filesystem>
 #include <fstream>
-#include <optional>
-#include <regex>
 #include <string>
 #include <string_view>
 #include <utility>
 
-#include <nlohmann/json.hpp>
-
 #include <coretrace/logger.hpp>
-
-#if !defined(_WIN32)
-#include <fcntl.h>
-#include <unistd.h>
-#endif
 
 namespace
 {
     constexpr std::string_view kStackAnalyzerModule = "stack_analyzer";
-    using Json = nlohmann::json;
 
     struct AnalyzerArgBuildResult
     {
@@ -319,7 +306,9 @@ namespace
                                  "empty stack_analyzer.compile_args");
         }
 
-        appendFlagOption(args, report, "--timing", config.global.timing, "coretrace timing enabled",
+        appendFlagOption(args, report, "--timing", config.global.timing,
+                         "coretrace timing enabled; hotspot summary is not exposed by the "
+                         "analyzer library API yet (coretrace-stack-analyzer#93)",
                          "coretrace timing disabled");
         appendFlagOption(args, report, "--resource-summary-cache-memory-only",
                          config.global.stack_analyzer_resource_summary_cache_memory_only,
@@ -430,170 +419,6 @@ namespace
         return result;
     }
 
-    [[nodiscard]] std::optional<ctrace::DiagnosticSummary>
-    parseDiagnosticsSummaryFromText(std::string_view text)
-    {
-        static const std::regex kTotalSummaryPattern(
-            R"(Total diagnostics summary:\s*info=(\d+),\s*warning=(\d+),\s*error=(\d+))");
-        static const std::regex kSummaryPattern(
-            R"(Diagnostics summary:\s*info=(\d+),\s*warning=(\d+),\s*error=(\d+))");
-
-        std::string captured(text);
-        auto parseSummary = [](const std::smatch& match) -> std::optional<ctrace::DiagnosticSummary>
-        {
-            ctrace::DiagnosticSummary current{};
-            try
-            {
-                current.info = static_cast<std::size_t>(std::stoull(match[1].str()));
-                current.warning = static_cast<std::size_t>(std::stoull(match[2].str()));
-                current.error = static_cast<std::size_t>(std::stoull(match[3].str()));
-            }
-            catch (const std::exception&)
-            {
-                return std::nullopt;
-            }
-            return current;
-        };
-
-        std::optional<ctrace::DiagnosticSummary> totalSummary;
-        for (std::sregex_iterator it(captured.begin(), captured.end(), kTotalSummaryPattern), end;
-             it != end; ++it)
-        {
-            if (const auto parsed = parseSummary(*it); parsed.has_value())
-            {
-                totalSummary = parsed;
-            }
-        }
-        if (totalSummary.has_value())
-        {
-            return totalSummary;
-        }
-
-        std::optional<ctrace::DiagnosticSummary> summary;
-        for (std::sregex_iterator it(captured.begin(), captured.end(), kSummaryPattern), end;
-             it != end; ++it)
-        {
-            const auto parsed = parseSummary(*it);
-            if (!parsed.has_value())
-            {
-                continue;
-            }
-            if (!summary.has_value())
-            {
-                summary = *parsed;
-                continue;
-            }
-
-            summary->info += parsed->info;
-            summary->warning += parsed->warning;
-            summary->error += parsed->error;
-        }
-
-        return summary;
-    }
-
-    [[nodiscard]] std::string toLowerAscii(std::string_view input)
-    {
-        std::string lowered;
-        lowered.reserve(input.size());
-        for (const char ch : input)
-        {
-            lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-        }
-        return lowered;
-    }
-
-    void accumulateSeverity(ctrace::DiagnosticSummary& summary, std::string_view severity)
-    {
-        const std::string lowered = toLowerAscii(severity);
-        if (lowered == "error")
-        {
-            ++summary.error;
-            return;
-        }
-        if (lowered == "warning" || lowered == "warn")
-        {
-            ++summary.warning;
-            return;
-        }
-        if (lowered == "info" || lowered == "information" || lowered == "note")
-        {
-            ++summary.info;
-        }
-    }
-
-    [[nodiscard]] std::optional<ctrace::DiagnosticSummary>
-    parseDiagnosticsSummaryFromStructuredOutput(std::string_view text)
-    {
-        Json root = Json::parse(text, nullptr, false);
-        if (root.is_discarded() || !root.is_object())
-        {
-            return std::nullopt;
-        }
-
-        if (const auto diagnosticsIt = root.find("diagnostics");
-            diagnosticsIt != root.end() && diagnosticsIt->is_array())
-        {
-            ctrace::DiagnosticSummary summary{};
-            for (const auto& diagnostic : *diagnosticsIt)
-            {
-                if (!diagnostic.is_object())
-                {
-                    continue;
-                }
-                const auto severityIt = diagnostic.find("severity");
-                if (severityIt == diagnostic.end() || !severityIt->is_string())
-                {
-                    continue;
-                }
-                accumulateSeverity(summary, severityIt->get_ref<const std::string&>());
-            }
-            return summary;
-        }
-
-        if (const auto runsIt = root.find("runs"); runsIt != root.end() && runsIt->is_array())
-        {
-            ctrace::DiagnosticSummary summary{};
-            bool hasSarifResults = false;
-            for (const auto& run : *runsIt)
-            {
-                if (!run.is_object())
-                {
-                    continue;
-                }
-                const auto resultsIt = run.find("results");
-                if (resultsIt == run.end() || !resultsIt->is_array())
-                {
-                    continue;
-                }
-                for (const auto& result : *resultsIt)
-                {
-                    if (!result.is_object())
-                    {
-                        continue;
-                    }
-                    hasSarifResults = true;
-                    const auto levelIt = result.find("level");
-                    if (levelIt != result.end() && levelIt->is_string())
-                    {
-                        accumulateSeverity(summary, levelIt->get_ref<const std::string&>());
-                    }
-                    else
-                    {
-                        // SARIF defaults missing level to "warning".
-                        ++summary.warning;
-                    }
-                }
-            }
-            if (hasSarifResults)
-            {
-                return summary;
-            }
-        }
-
-        return std::nullopt;
-    }
-
     void captureToolOutputOnly(const std::string& stream, const std::string& message)
     {
         const auto* ctx = ctrace::Thread::Output::capture_context;
@@ -602,42 +427,6 @@ namespace
             return;
         }
         ctx->buffer->append(ctx->tool, stream, message);
-    }
-
-    void logMultiline(coretrace::Level level, std::string_view module, std::string_view message,
-                      std::string_view prefix = {})
-    {
-        std::size_t start = 0;
-        while (start <= message.size())
-        {
-            const auto end = message.find('\n', start);
-            std::string_view line = (end == std::string_view::npos)
-                                        ? message.substr(start)
-                                        : message.substr(start, end - start);
-
-            if (!line.empty() && line.back() == '\r')
-            {
-                line.remove_suffix(1);
-            }
-
-            if (!line.empty())
-            {
-                if (prefix.empty())
-                {
-                    coretrace::log(level, coretrace::Module(module), "{}\n", line);
-                }
-                else
-                {
-                    coretrace::log(level, coretrace::Module(module), "{}{}\n", prefix, line);
-                }
-            }
-
-            if (end == std::string_view::npos)
-            {
-                break;
-            }
-            start = end + 1;
-        }
     }
 
     [[nodiscard]] bool writeReportToFile(const std::string& reportPath, std::string_view content,
@@ -711,184 +500,6 @@ namespace
         }
     }
 
-#if !defined(_WIN32)
-    struct CapturedStreams
-    {
-        std::string stdoutText;
-        std::string stderrText;
-    };
-
-    [[nodiscard]] std::string readFdFully(int fd)
-    {
-        if (fd < 0)
-        {
-            return {};
-        }
-
-        if (lseek(fd, 0, SEEK_SET) == -1)
-        {
-            return {};
-        }
-
-        std::string content;
-        std::array<char, 4096> buffer{};
-        for (;;)
-        {
-            const auto bytes = read(fd, buffer.data(), buffer.size());
-            if (bytes <= 0)
-            {
-                break;
-            }
-            content.append(buffer.data(), static_cast<std::size_t>(bytes));
-        }
-        return content;
-    }
-
-    class ScopedFdCapture
-    {
-      public:
-        ScopedFdCapture()
-        {
-            enabled_ = initialize();
-        }
-
-        ~ScopedFdCapture()
-        {
-            if (!released_)
-            {
-                (void)release();
-            }
-        }
-
-        [[nodiscard]] bool enabled() const
-        {
-            return enabled_;
-        }
-
-        CapturedStreams release()
-        {
-            if (released_)
-            {
-                return {};
-            }
-
-            flushStreams();
-
-            CapturedStreams captured{
-                readFdFully(capturedStdoutFd_),
-                readFdFully(capturedStderrFd_),
-            };
-
-            restoreDescriptors();
-            closeTempFiles();
-            released_ = true;
-            return captured;
-        }
-
-      private:
-        static int createTempFile(char* templ)
-        {
-            const int fd = mkstemp(templ);
-            if (fd >= 0)
-            {
-                unlink(templ);
-            }
-            return fd;
-        }
-
-        static void flushStreams()
-        {
-            std::fflush(stdout);
-            std::fflush(stderr);
-            std::cout.flush();
-            std::cerr.flush();
-            llvm::outs().flush();
-            llvm::errs().flush();
-        }
-
-        bool initialize()
-        {
-            flushStreams();
-
-            originalStdoutFd_ = dup(STDOUT_FILENO);
-            originalStderrFd_ = dup(STDERR_FILENO);
-            if (originalStdoutFd_ < 0 || originalStderrFd_ < 0)
-            {
-                return false;
-            }
-
-            char stdoutTemplate[] = "/tmp/ctrace-stack-stdout-XXXXXX";
-            char stderrTemplate[] = "/tmp/ctrace-stack-stderr-XXXXXX";
-
-            capturedStdoutFd_ = createTempFile(stdoutTemplate);
-            capturedStderrFd_ = createTempFile(stderrTemplate);
-            if (capturedStdoutFd_ < 0 || capturedStderrFd_ < 0)
-            {
-                return false;
-            }
-
-            if (dup2(capturedStdoutFd_, STDOUT_FILENO) == -1)
-            {
-                return false;
-            }
-            if (dup2(capturedStderrFd_, STDERR_FILENO) == -1)
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        void restoreDescriptors()
-        {
-            if (!enabled_)
-            {
-                return;
-            }
-
-            if (originalStdoutFd_ >= 0)
-            {
-                (void)dup2(originalStdoutFd_, STDOUT_FILENO);
-            }
-            if (originalStderrFd_ >= 0)
-            {
-                (void)dup2(originalStderrFd_, STDERR_FILENO);
-            }
-
-            if (originalStdoutFd_ >= 0)
-            {
-                close(originalStdoutFd_);
-                originalStdoutFd_ = -1;
-            }
-            if (originalStderrFd_ >= 0)
-            {
-                close(originalStderrFd_);
-                originalStderrFd_ = -1;
-            }
-        }
-
-        void closeTempFiles()
-        {
-            if (capturedStdoutFd_ >= 0)
-            {
-                close(capturedStdoutFd_);
-                capturedStdoutFd_ = -1;
-            }
-            if (capturedStderrFd_ >= 0)
-            {
-                close(capturedStderrFd_);
-                capturedStderrFd_ = -1;
-            }
-        }
-
-        bool enabled_ = false;
-        bool released_ = false;
-        int originalStdoutFd_ = -1;
-        int originalStderrFd_ = -1;
-        int capturedStdoutFd_ = -1;
-        int capturedStderrFd_ = -1;
-    };
-#endif
 } // namespace
 
 namespace ctrace
@@ -973,81 +584,39 @@ namespace ctrace
             return;
         }
 
-#if !defined(_WIN32)
-        ScopedFdCapture processOutputCapture;
-#endif
-
-        const ctrace::stack::app::RunResult runResult =
-            ctrace::stack::app::runAnalyzerApp(std::move(parseResult.parsed));
-
-        std::string capturedStdout;
-        std::string capturedStderr;
-#if !defined(_WIN32)
-        if (processOutputCapture.enabled())
+        // The analyzer runs in-process and hands its results back as data: no descriptor
+        // capture, no text parsing. Its own status logs go through the shared logger.
+        const ctrace::stack::cli::OutputFormat outputFormat = parseResult.parsed.outputFormat;
+        const ctrace::stack::app::ReportResult analysis =
+            ctrace::stack::app::runAnalysis(std::move(parseResult.parsed));
+        if (!analysis.isOk())
         {
-            const auto captured = processOutputCapture.release();
-            if (!captured.stdoutText.empty())
-            {
-                capturedStdout = captured.stdoutText;
-                captureToolOutputOnly("stdout", captured.stdoutText);
-                if (config.global.ipc == "standardIO")
-                {
-                    ctrace::Thread::Output::tool_out(captured.stdoutText);
-                }
-                else if (config.global.ipc == "socket" && ipc)
-                {
-                    ipc->write(captured.stdoutText);
-                }
-            }
-            if (!captured.stderrText.empty())
-            {
-                capturedStderr = captured.stderrText;
-                captureToolOutputOnly("stderr", captured.stderrText);
-                logMultiline(coretrace::Level::Warn, kStackAnalyzerModule, captured.stderrText);
-            }
-        }
-#endif
-
-        if (const auto parsedSummary = parseDiagnosticsSummaryFromText(capturedStdout);
-            parsedSummary.has_value())
-        {
-            m_lastDiagnosticsSummary = *parsedSummary;
-        }
-        else if (const auto parsedSummary =
-                     parseDiagnosticsSummaryFromStructuredOutput(capturedStdout);
-                 parsedSummary.has_value())
-        {
-            m_lastDiagnosticsSummary = *parsedSummary;
-        }
-        else if (const auto parsedSummary = parseDiagnosticsSummaryFromText(capturedStderr);
-                 parsedSummary.has_value())
-        {
-            m_lastDiagnosticsSummary = *parsedSummary;
-        }
-        else if (const auto parsedSummary =
-                     parseDiagnosticsSummaryFromStructuredOutput(capturedStderr);
-                 parsedSummary.has_value())
-        {
-            m_lastDiagnosticsSummary = *parsedSummary;
-        }
-
-        if (!runResult.isOk())
-        {
-            ctrace::Thread::Output::tool_err(runResult.error);
+            ctrace::Thread::Output::tool_err(analysis.error);
             return;
         }
 
-        if (runResult.exitCode != 0)
+        const ctrace::stack::app::AnalysisReport& report = *analysis.report;
+        m_lastDiagnosticsSummary = {report.summary.info, report.summary.warning,
+                                    report.summary.error};
+
+        const std::string rendered = ctrace::stack::app::renderReport(report, outputFormat);
+        if (!rendered.empty())
         {
-            ctrace::Thread::Output::tool_err("Stack analyzer exited with code " +
-                                             std::to_string(runResult.exitCode));
-            return;
+            captureToolOutputOnly("stdout", rendered);
+            if (config.global.ipc == "standardIO")
+            {
+                ctrace::Thread::Output::tool_out(rendered);
+            }
+            else if (config.global.ipc == "socket" && ipc)
+            {
+                ipc->write(rendered);
+            }
         }
 
         if (!stableReportPath.empty())
         {
             std::string writeError;
-            if (!writeReportToFile(stableReportPath, capturedStdout, writeError))
+            if (!writeReportToFile(stableReportPath, rendered, writeError))
             {
                 coretrace::log(coretrace::Level::Warn, coretrace::Module(kStackAnalyzerModule),
                                "Unable to persist stack analyzer report to '{}': {}\n",
@@ -1057,7 +626,7 @@ namespace ctrace
             {
                 coretrace::log(coretrace::Level::Debug, coretrace::Module(kStackAnalyzerModule),
                                "Stack analyzer report persisted to '{}' ({} bytes)\n",
-                               stableReportPath, capturedStdout.size());
+                               stableReportPath, rendered.size());
             }
         }
     }
