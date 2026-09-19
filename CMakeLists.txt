@@ -166,6 +166,16 @@ set_tests_properties(ctrace_help_lists_quiet PROPERTIES PASS_REGULAR_EXPRESSION 
 add_test(NAME ctrace_help_lists_version COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSION "--version")
 
+add_executable(ctrace_tool_arguments_tests
+    tests/tool_arguments_tests.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+target_link_libraries(ctrace_tool_arguments_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+add_test(NAME ctrace_tool_arguments_tests COMMAND ctrace_tool_arguments_tests)
+
 add_executable(ctrace_files_tests tests/files_tests.cpp src/App/Files.cpp src/ctrace_tools/strings.cpp)
 target_link_libraries(ctrace_files_tests PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
