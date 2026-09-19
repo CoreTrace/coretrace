@@ -366,7 +366,13 @@ class ApiHandler
         ctrace::ToolInvoker invoker(
             config, pool_size, (config.runtime.async ? std::launch::async : std::launch::deferred),
             output_capture);
-        const auto sourceFiles = ctrace::resolveSourceFiles(config);
+        const ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
+        if (!resolution.ok())
+        {
+            err = {"InvalidInput", resolution.error};
+            return false;
+        }
+        const std::vector<std::string>& sourceFiles = resolution.files;
 
         if (config.output.verbose)
         {

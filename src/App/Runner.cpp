@@ -69,7 +69,13 @@ namespace ctrace
                            "Config file in use: none (CLI/runtime values only)\n");
         }
 
-        std::vector<std::string> sourceFiles = ctrace::resolveSourceFiles(config);
+        ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
+        if (!resolution.ok())
+        {
+            coretrace::log(coretrace::Level::Error, "{}\n", resolution.error);
+            return EXIT_FAILURE;
+        }
+        const std::vector<std::string>& sourceFiles = resolution.files;
         if (sourceFiles.empty())
         {
             coretrace::log(coretrace::Level::Error,

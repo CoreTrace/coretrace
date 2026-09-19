@@ -166,6 +166,10 @@ set_tests_properties(ctrace_help_lists_quiet PROPERTIES PASS_REGULAR_EXPRESSION 
 add_test(NAME ctrace_help_lists_version COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSION "--version")
 
+add_executable(ctrace_files_tests tests/files_tests.cpp src/App/Files.cpp src/ctrace_tools/strings.cpp)
+target_link_libraries(ctrace_files_tests PRIVATE nlohmann_json::nlohmann_json)
+add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
+
 add_executable(ctrace_tool_output_tests tests/tool_output_tests.cpp)
 add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 

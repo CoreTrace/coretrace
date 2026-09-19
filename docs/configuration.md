@@ -50,9 +50,12 @@ CLI: `--invoke`
 - `files.input`
 Type: `string|string[]`
 Default: `[]`
-Allowed: source files and/or JSON manifests.
+Allowed: source file paths, and/or `compile_commands.json` documents (Clang schema: an array
+of objects with a `file` field and an optional `directory`).
 Description: input source set.
-Impact: resolved and analyzed; relative paths are resolved from config file directory.
+Impact: resolved and analyzed; relative paths in the config file are resolved from its
+directory, and entries of a compile database are resolved from their own `directory`. Any
+other `.json` input is rejected with an explicit error.
 CLI: `--input`
 
 - `files.entry_points`
