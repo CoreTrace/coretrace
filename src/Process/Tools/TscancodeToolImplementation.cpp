@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
 
-#include <unordered_map>
+#include <fstream>
+#include <map>
+#include <regex>
+#include <sstream>
 #include <string_view>
+#include <unordered_map>
 
 namespace ctrace
 {
