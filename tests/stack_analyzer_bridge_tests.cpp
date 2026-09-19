@@ -85,9 +85,9 @@ int main(int argc, char** argv)
 
     report.expect(summary.info == 0 && summary.warning == 0 && summary.error == 1,
                   "double_free.c yields exactly one error-level diagnostic (got info=" +
-                      std::to_string(summary.info) + ", warning=" +
-                      std::to_string(summary.warning) + ", error=" +
-                      std::to_string(summary.error) + ")");
+                      std::to_string(summary.info) +
+                      ", warning=" + std::to_string(summary.warning) +
+                      ", error=" + std::to_string(summary.error) + ")");
 
     std::ifstream reportStream(reportPath);
     report.expect(reportStream.is_open(), "report file is persisted at output.report_file");
