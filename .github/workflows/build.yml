@@ -48,6 +48,7 @@ jobs:
             cppcheck \
             patchelf
           sudo ./scripts/ci/install-llvm-apt.sh 20
+          sudo apt-get install -y --no-install-recommends libpolly-20-dev
           echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
 

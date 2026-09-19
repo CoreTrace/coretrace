@@ -70,6 +70,9 @@ cmake -DBINARY="$PWD/staging/bin/ctrace" -P cmake/AuditLLVMDependencies.cmake
 
 The post-link audit fails on dynamic LLVM/Clang or unresolved dependencies. It
 prints remaining dependencies rather than certifying them as system libraries.
+Configuration rejects missing imported static archives. For the apt.llvm.org
+SDK, install `libpolly-20-dev` alongside `llvm-20-dev` and `libclang-20-dev`:
+its exported LLVM extensions reference Polly even when its archive is not installed.
 Only Linux and macOS are supported by this profile/audit. The normal build
 continues to use its previous linkage. CI builds and runs the existing tests
 with both profiles on Ubuntu 24.04 and macOS 14; those jobs are developer-SDK

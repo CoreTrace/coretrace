@@ -19,6 +19,17 @@ function(coretrace_replace_llvm_edges target)
     endif()
     set_property(GLOBAL APPEND PROPERTY CORETRACE_STATIC_LLVM_VISITED "${target}")
 
+    get_target_property(imported "${target}" IMPORTED)
+    get_target_property(kind "${target}" TYPE)
+    if(imported AND kind STREQUAL "STATIC_LIBRARY")
+        get_target_property(archive "${target}" LOCATION)
+        if(NOT EXISTS "${archive}")
+            message(FATAL_ERROR
+                "Incomplete static SDK: ${target} references missing archive '${archive}'. "
+                "Install the SDK's static development packages or build the private SDK.")
+        endif()
+    endif()
+
     foreach(property LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
         get_target_property(dependencies "${target}" "${property}")
         if(NOT dependencies)
