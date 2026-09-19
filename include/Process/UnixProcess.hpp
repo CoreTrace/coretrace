@@ -1,32 +1,36 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "Process.hpp"
+
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include <fcntl.h>
 #include <spawn.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdexcept>
-#include <sys/stat.h>
-#include "Process.hpp"
 
 extern char** environ;
 
-class UnixProcessWithPosixSpawn : public Process
+/// Unix backend built on posix_spawn: safe from a multithreaded parent and reports spawn
+/// failures as errors instead of a child that silently exits.
+class UnixProcess : public Process
 {
   public:
-    UnixProcessWithPosixSpawn(const std::string& command, std::vector<std::string> args)
-        : command_(command), pid_(0), log_fd_(-1), resolved_path_("")
+    UnixProcess(const std::string& command, std::vector<std::string> args)
+        : command_(command), additionalArgs_(std::move(args))
     {
-        additional_args_ = args;
     }
 
-    ~UnixProcessWithPosixSpawn() override
+    ~UnixProcess() override
     {
-        if (log_fd_ != -1)
-        {
-            close(log_fd_);
-        }
+        closeLog();
     }
 
   protected:
@@ -34,113 +38,125 @@ class UnixProcessWithPosixSpawn : public Process
     {
         resolveCommandPath();
         checkPermissions();
-        prepareArguments();
-        setupLogging();
+        m_arguments.clear();
+        m_arguments.push_back(command_);
+        m_arguments.insert(m_arguments.end(), additionalArgs_.begin(), additionalArgs_.end());
+        openLog();
     }
 
-    void run() override
+    ProcessResult run() override
     {
-        posix_spawn_file_actions_t file_actions;
-        posix_spawnattr_t attr;
-
-        if (posix_spawn_file_actions_init(&file_actions) != 0)
+        SpawnFileActions fileActions;
+        if (posix_spawn_file_actions_adddup2(&fileActions.actions, logFd_, STDOUT_FILENO) != 0 ||
+            posix_spawn_file_actions_adddup2(&fileActions.actions, logFd_, STDERR_FILENO) != 0)
         {
-            throw std::runtime_error("Failed to init file actions: " +
-                                     std::string(strerror(errno)));
-        }
-        if (posix_spawnattr_init(&attr) != 0)
-        {
-            throw std::runtime_error("Failed to init spawn attr: " + std::string(strerror(errno)));
+            throw std::runtime_error("Failed to redirect output of '" + command_ +
+                                     "': " + std::string(std::strerror(errno)));
         }
 
-        if (posix_spawn_file_actions_adddup2(&file_actions, log_fd_, STDOUT_FILENO) != 0 ||
-            posix_spawn_file_actions_adddup2(&file_actions, log_fd_, STDERR_FILENO) != 0)
-        {
-            throw std::runtime_error("Failed to setup file redirection: " +
-                                     std::string(strerror(errno)));
-        }
-
-        // Utiliser arguments (de la classe de base) au lieu de m_arguments
         std::vector<char*> argv;
+        argv.reserve(m_arguments.size() + 1);
         for (auto& arg : m_arguments)
         {
-            argv.push_back(const_cast<char*>(arg.c_str()));
+            argv.push_back(arg.data());
         }
         argv.push_back(nullptr);
 
-        int status =
-            posix_spawn(&pid_, resolved_path_.c_str(), &file_actions, &attr, argv.data(), environ);
-
-        if (status != 0)
+        pid_t pid = 0;
+        const int spawnError = posix_spawn(&pid, resolvedPath_.c_str(), &fileActions.actions,
+                                           nullptr, argv.data(), environ);
+        if (spawnError != 0)
         {
-            throw std::runtime_error("posix_spawn failed: " + std::string(strerror(status)));
+            throw std::runtime_error("Failed to start '" + command_ +
+                                     "': " + std::string(std::strerror(spawnError)));
         }
 
-        posix_spawn_file_actions_destroy(&file_actions);
-        posix_spawnattr_destroy(&attr);
+        int status = 0;
+        while (waitpid(pid, &status, 0) == -1)
+        {
+            if (errno != EINTR)
+            {
+                throw std::runtime_error("Failed to wait for '" + command_ +
+                                         "': " + std::string(std::strerror(errno)));
+            }
+        }
+
+        ProcessResult result;
+        if (WIFEXITED(status))
+        {
+            result.exitCode = WEXITSTATUS(status);
+        }
+        else if (WIFSIGNALED(status))
+        {
+            result.signal = WTERMSIG(status);
+        }
+        result.output = readLog();
+        return result;
     }
 
     void cleanup() override
     {
-        if (pid_ > 0)
-        {
-            int status;
-            waitpid(pid_, &status, 0);
-            pid_ = 0;
-        }
-        captureLogs();
-        if (log_fd_ != -1)
-        {
-            close(log_fd_);
-            log_fd_ = -1;
-        }
-    }
-
-    void prepareArguments() override
-    {
-        m_arguments.clear();
-
-        // Le premier argument doit être le nom de la commande
-        std::string cmd_name = resolved_path_.substr(resolved_path_.find_last_of("/\\") + 1);
-        m_arguments.push_back(cmd_name);
-
-        // Ajouter les arguments supplémentaires
-        m_arguments.insert(m_arguments.end(), additional_args_.begin(), additional_args_.end());
-    }
-
-    void captureLogs() override
-    {
-        if (log_fd_ == -1)
-        {
-            return;
-        }
-
-        lseek(log_fd_, 0, SEEK_SET);
-
-        std::string buffer;
-        char chunk[1024];
-        ssize_t bytes_read;
-
-        while ((bytes_read = read(log_fd_, chunk, sizeof(chunk) - 1)) > 0)
-        {
-            chunk[bytes_read] = '\0';
-            buffer += chunk;
-        }
-
-        logOutput = buffer;
+        closeLog();
     }
 
   private:
-    void setupLogging()
+    struct SpawnFileActions
     {
-        char temp_path[] = "/tmp/process_log_XXXXXX";
-        log_fd_ = mkstemp(temp_path);
-        if (log_fd_ == -1)
+        posix_spawn_file_actions_t actions{};
+
+        SpawnFileActions()
+        {
+            if (posix_spawn_file_actions_init(&actions) != 0)
+            {
+                throw std::runtime_error("Failed to init spawn file actions: " +
+                                         std::string(std::strerror(errno)));
+            }
+        }
+
+        ~SpawnFileActions()
+        {
+            posix_spawn_file_actions_destroy(&actions);
+        }
+
+        SpawnFileActions(const SpawnFileActions&) = delete;
+        SpawnFileActions& operator=(const SpawnFileActions&) = delete;
+    };
+
+    void openLog()
+    {
+        char logTemplate[] = "/tmp/ctrace_process_log_XXXXXX";
+        logFd_ = mkstemp(logTemplate);
+        if (logFd_ == -1)
         {
             throw std::runtime_error("Failed to create temp log file: " +
-                                     std::string(strerror(errno)));
+                                     std::string(std::strerror(errno)));
         }
-        unlink(temp_path);
+        unlink(logTemplate);
+    }
+
+    void closeLog()
+    {
+        if (logFd_ != -1)
+        {
+            close(logFd_);
+            logFd_ = -1;
+        }
+    }
+
+    std::string readLog()
+    {
+        std::string content;
+        if (logFd_ == -1 || lseek(logFd_, 0, SEEK_SET) == -1)
+        {
+            return content;
+        }
+        char chunk[4096];
+        ssize_t bytesRead = 0;
+        while ((bytesRead = read(logFd_, chunk, sizeof(chunk))) > 0)
+        {
+            content.append(chunk, static_cast<std::size_t>(bytesRead));
+        }
+        return content;
     }
 
     void resolveCommandPath()
@@ -149,41 +165,39 @@ class UnixProcessWithPosixSpawn : public Process
         {
             if (access(command_.c_str(), F_OK) == 0)
             {
-                resolved_path_ = command_;
+                resolvedPath_ = command_;
                 return;
             }
             throw std::runtime_error("Command not found: " + command_);
         }
 
-        char* path_env = getenv("PATH");
-        if (!path_env)
+        const char* pathEnv = std::getenv("PATH");
+        if (pathEnv == nullptr)
         {
-            throw std::runtime_error("PATH environment variable not set");
+            throw std::runtime_error("Command not found in PATH (PATH is not set): " + command_);
         }
 
-        std::string path(path_env);
+        std::string path(pathEnv);
         std::string::size_type start = 0;
-        std::string::size_type end;
-
-        while ((end = path.find(':', start)) != std::string::npos)
+        while (start <= path.size())
         {
-            std::string dir = path.substr(start, end - start);
-            std::string full_path = dir + "/" + command_;
-
-            if (access(full_path.c_str(), F_OK) == 0)
+            const auto end = path.find(':', start);
+            const std::string dir =
+                path.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            if (!dir.empty())
             {
-                resolved_path_ = full_path;
-                return;
+                const std::string candidate = dir + "/" + command_;
+                if (access(candidate.c_str(), X_OK) == 0)
+                {
+                    resolvedPath_ = candidate;
+                    return;
+                }
+            }
+            if (end == std::string::npos)
+            {
+                break;
             }
             start = end + 1;
-        }
-
-        std::string last_dir = path.substr(start);
-        std::string last_path = last_dir + "/" + command_;
-        if (access(last_path.c_str(), F_OK) == 0)
-        {
-            resolved_path_ = last_path;
-            return;
         }
 
         throw std::runtime_error("Command not found in PATH: " + command_);
@@ -191,28 +205,26 @@ class UnixProcessWithPosixSpawn : public Process
 
     void checkPermissions()
     {
-        if (access(resolved_path_.c_str(), X_OK) != 0)
+        if (access(resolvedPath_.c_str(), X_OK) != 0)
         {
-            throw std::runtime_error("Command not executable: " + resolved_path_ + ": " +
-                                     std::string(strerror(errno)));
+            throw std::runtime_error("Command not executable: " + resolvedPath_ + ": " +
+                                     std::string(std::strerror(errno)));
         }
 
-        struct stat st;
-        if (stat(resolved_path_.c_str(), &st) != 0)
+        struct stat st{};
+        if (stat(resolvedPath_.c_str(), &st) != 0)
         {
-            throw std::runtime_error("Cannot stat command: " + resolved_path_ + ": " +
-                                     std::string(strerror(errno)));
+            throw std::runtime_error("Cannot stat command: " + resolvedPath_ + ": " +
+                                     std::string(std::strerror(errno)));
         }
-
         if (!S_ISREG(st.st_mode))
         {
-            throw std::runtime_error("Command is not a regular file: " + resolved_path_);
+            throw std::runtime_error("Command is not a regular file: " + resolvedPath_);
         }
     }
 
     std::string command_;
-    std::string resolved_path_;
-    pid_t pid_;
-    int log_fd_;
-    std::vector<std::string> additional_args_; // Remplacer m_arguments par additional_args_
+    std::string resolvedPath_;
+    std::vector<std::string> additionalArgs_;
+    int logFd_ = -1;
 };

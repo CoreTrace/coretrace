@@ -183,6 +183,9 @@ target_link_libraries(ctrace_config_tests PRIVATE nlohmann_json::nlohmann_json c
 
 add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)
 
+add_executable(ctrace_process_tests tests/process_tests.cpp)
+add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
+
 # Compatibility gate with the pinned coretrace-stack-analyzer library (see ROADMAP.md K10).
 add_executable(ctrace_stack_analyzer_bridge_tests
     tests/stack_analyzer_bridge_tests.cpp

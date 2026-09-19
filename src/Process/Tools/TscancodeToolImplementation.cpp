@@ -22,19 +22,19 @@ namespace ctrace
 
             auto process = ProcessFactory::createProcess(
                 "./tscancode/src/tscancode/trunk/tscancode", argsProcess);
-            process->execute();
-            ctrace::Thread::Output::tool_out(process->logOutput);
+            const ProcessResult run = process->execute();
+            ctrace::Thread::Output::tool_out(run.output);
             ctrace::Thread::Output::cout("Finished tscancode on " + file);
+            if (!run.succeeded())
+            {
+                ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+            }
 
             if (has_sarif_format)
             {
                 ctrace::Thread::Output::tool_out(
-                    sarifFormat(process->logOutput, "ccoretrace-sarif-tscancode.json").dump());
+                    sarifFormat(run.output, "ccoretrace-sarif-tscancode.json").dump());
             }
-            // if (has_json_format)
-            // {
-            //     ctrace::Thread::Output::cout(jsonFormat(process->logOutput, "coretrace-json-tscancode.json").dump());
-            // }
         }
         catch (const std::exception& e)
         {

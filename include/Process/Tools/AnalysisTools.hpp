@@ -135,13 +135,16 @@ namespace ctrace
                 auto process = ProcessFactory::createProcess(
                     "./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
-                process->execute();
-                ctrace::Thread::Output::tool_out(process->logOutput);
+                const ProcessResult run = process->execute();
+                ctrace::Thread::Output::tool_out(run.output);
+                if (!run.succeeded())
+                {
+                    ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+                }
             }
             catch (const std::exception& e)
             {
                 ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
-                // return 1;
             }
         }
         std::string name() const override
@@ -194,15 +197,19 @@ namespace ctrace
                 argsProcess.push_back(src_file);
                 auto process = ProcessFactory::createProcess(
                     "python3", argsProcess); // or "cmd.exe" for Windows
-                process->execute();
+                const ProcessResult run = process->execute();
 
                 if (config.global.ipc == "standardIO")
                 {
-                    ctrace::Thread::Output::tool_out(process->logOutput);
+                    ctrace::Thread::Output::tool_out(run.output);
                 }
                 else
                 {
-                    ipc->write(process->logOutput);
+                    ipc->write(run.output);
+                }
+                if (!run.succeeded())
+                {
+                    ctrace::Thread::Output::tool_err(run.describeFailure(name()));
                 }
             }
             catch (const std::exception& e)
@@ -252,8 +259,12 @@ namespace ctrace
 
                 auto process = ProcessFactory::createProcess(
                     "/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
-                process->execute();
-                ctrace::Thread::Output::tool_out(process->logOutput);
+                const ProcessResult run = process->execute();
+                ctrace::Thread::Output::tool_out(run.output);
+                if (!run.succeeded())
+                {
+                    ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+                }
             }
             catch (const std::exception& e)
             {
