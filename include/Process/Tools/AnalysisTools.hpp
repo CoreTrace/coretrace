@@ -9,7 +9,9 @@
 #include "ctrace_tools/languageType.hpp"
 #include "ctrace_tools/mangle.hpp"
 #include "../ProcessFactory.hpp"
-#include "../ThreadProcess.hpp"
+#include "ToolOutput.hpp"
+
+#include <coretrace/logger.hpp>
 #include <nlohmann/json.hpp>
 
 #include "StackUsageAnalyzer.hpp"
@@ -86,9 +88,10 @@ namespace ctrace
     class IkosToolImplementation : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override
         {
-            ctrace::Thread::Output::cout("Running IKOS on " + file);
+            coretrace::log(coretrace::Level::Info, "Running IKOS on {}\n", file);
             std::string src_file = file;
             std::string entry_points =
                 ctrace_tools::strings::joinByComma(config.files.entry_points);
@@ -111,21 +114,20 @@ namespace ctrace
 
                 if (lang == ctrace_defs::LanguageType::C)
                 {
-                    // std::cout << "C file detected\n";
-                    ctrace::Thread::Output::cout("C file detected");
+                    coretrace::log(coretrace::Level::Debug, "C file detected\n");
                     EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
-                    ctrace::Thread::Output::cout("Entry point: " +
-                                                 std::string(entryPoint.getEntryPointNameCMode()));
+                    coretrace::log(coretrace::Level::Debug, "Entry point: {}\n",
+                                   entryPoint.getEntryPointNameCMode());
                     std::string arg = "--entry-points=";
                     arg += entryPoint.getEntryPointNameCMode();
                     argsProcess.push_back(arg);
                 }
                 else if (lang == ctrace_defs::LanguageType::CPP)
                 {
-                    ctrace::Thread::Output::cout("C++ file detected");
+                    coretrace::log(coretrace::Level::Debug, "C++ file detected\n");
                     EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
-                    ctrace::Thread::Output::cout("Entry point: " +
-                                                 std::string(entryPoint.getEntryPointNameCCMode()));
+                    coretrace::log(coretrace::Level::Debug, "Entry point: {}\n",
+                                   entryPoint.getEntryPointNameCCMode());
                     std::string arg = "--entry-points=";
                     arg += entryPoint.getEntryPointNameCCMode();
                     argsProcess.push_back(arg);
@@ -137,15 +139,15 @@ namespace ctrace
                     "./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 const ProcessResult run = process->execute();
-                ctrace::Thread::Output::tool_out(run.output);
+                output.result(run.output);
                 if (!run.succeeded())
                 {
-                    ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+                    output.error(run.describeFailure(name()));
                 }
             }
             catch (const std::exception& e)
             {
-                ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
+                output.error("Error: " + std::string(e.what()));
             }
         }
         std::string name() const override
@@ -157,13 +159,14 @@ namespace ctrace
     class StackAnalyzerToolImplementation : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override;
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override;
         [[nodiscard]] bool supportsBatchExecution() const override
         {
             return true;
         }
         void executeBatch(const std::vector<std::string>& files,
-                          ctrace::ProgramConfig config) const override;
+                          const ctrace::ProgramConfig& config, ToolOutput& output) const override;
         [[nodiscard]] DiagnosticSummary lastDiagnosticsSummary() const override;
         std::string name() const override;
 
@@ -174,9 +177,10 @@ namespace ctrace
     class FlawfinderToolImplementation : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override
         {
-            ctrace::Thread::Output::cout("Running flawfinder on " + file);
+            coretrace::log(coretrace::Level::Info, "Running flawfinder on {}\n", file);
 
             bool has_sarif_format = config.output.sarif_format;
             std::string src_file = file;
@@ -203,7 +207,7 @@ namespace ctrace
 
                 if (config.runtime.ipc == "standardIO")
                 {
-                    ctrace::Thread::Output::tool_out(run.output);
+                    output.result(run.output);
                 }
                 else
                 {
@@ -211,12 +215,12 @@ namespace ctrace
                 }
                 if (!run.succeeded())
                 {
-                    ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+                    output.error(run.describeFailure(name()));
                 }
             }
             catch (const std::exception& e)
             {
-                ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
+                output.error("Error: " + std::string(e.what()));
                 return;
             }
         }
@@ -229,21 +233,22 @@ namespace ctrace
     class TscancodeToolImplementation : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ProgramConfig config) const override;
+        void execute(const std::string& file, const ProgramConfig& config,
+                     ToolOutput& output) const override;
         std::string name() const override;
 
       protected:
         std::string_view severityToLevel(const std::string& severity) const;
         json sarifFormat(const std::string& buffer, const std::string& outputFile) const;
-        json jsonFormat(const std::string& buffer, const std::string& outputFile) const;
     };
 
     class CppCheckToolImplementation : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override
         {
-            ctrace::Thread::Output::cout("Running ikos on " + file);
+            coretrace::log(coretrace::Level::Info, "Running ikos on {}\n", file);
             bool has_sarif_format = config.output.sarif_format;
             std::string src_file = file;
             std::string entry_points =
@@ -263,15 +268,15 @@ namespace ctrace
                 auto process = ProcessFactory::createProcess(
                     "/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
                 const ProcessResult run = process->execute();
-                ctrace::Thread::Output::tool_out(run.output);
+                output.result(run.output);
                 if (!run.succeeded())
                 {
-                    ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+                    output.error(run.describeFailure(name()));
                 }
             }
             catch (const std::exception& e)
             {
-                ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
+                output.error("Error: " + std::string(e.what()));
                 return;
             }
         }
@@ -285,9 +290,10 @@ namespace ctrace
     class DynTool1 : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override
         {
-            ctrace::Thread::Output::cout("Running dyn_tools_1 on " + file);
+            coretrace::log(coretrace::Level::Info, "Running dyn_tools_1 on {}\n", file);
         }
         std::string name() const override
         {
@@ -298,9 +304,10 @@ namespace ctrace
     class DynTool2 : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override
         {
-            ctrace::Thread::Output::cout("Running dyn_tools_2 on " + file);
+            coretrace::log(coretrace::Level::Info, "Running dyn_tools_2 on {}\n", file);
         }
         std::string name() const override
         {
@@ -311,9 +318,10 @@ namespace ctrace
     class DynTool3 : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, ctrace::ProgramConfig config) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override
         {
-            ctrace::Thread::Output::cout("Running dyn_tools_3 on " + file);
+            coretrace::log(coretrace::Level::Info, "Running dyn_tools_3 on {}\n", file);
         }
         std::string name() const override
         {

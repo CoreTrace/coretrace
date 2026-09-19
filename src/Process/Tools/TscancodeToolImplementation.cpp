@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
 
+#include <coretrace/logger.hpp>
+
 #include <fstream>
 #include <map>
 #include <regex>
@@ -11,9 +13,10 @@
 namespace ctrace
 {
 
-    void TscancodeToolImplementation::execute(const std::string& file, ProgramConfig config) const
+    void TscancodeToolImplementation::execute(const std::string& file, const ProgramConfig& config,
+                                              ToolOutput& output) const
     {
-        ctrace::Thread::Output::cout("\033[32mRunning tscancode on " + file + "\033[0m");
+        coretrace::log(coretrace::Level::Info, "Running tscancode on {}\n", file);
 
         bool has_sarif_format = config.output.sarif_format;
         std::string src_file = file;
@@ -27,22 +30,21 @@ namespace ctrace
             auto process = ProcessFactory::createProcess(
                 "./tscancode/src/tscancode/trunk/tscancode", argsProcess);
             const ProcessResult run = process->execute();
-            ctrace::Thread::Output::tool_out(run.output);
-            ctrace::Thread::Output::cout("Finished tscancode on " + file);
+            output.result(run.output);
+            coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", file);
             if (!run.succeeded())
             {
-                ctrace::Thread::Output::tool_err(run.describeFailure(name()));
+                output.error(run.describeFailure(name()));
             }
 
             if (has_sarif_format)
             {
-                ctrace::Thread::Output::tool_out(
-                    sarifFormat(run.output, "ccoretrace-sarif-tscancode.json").dump());
+                output.result(sarifFormat(run.output, "ccoretrace-sarif-tscancode.json").dump());
             }
         }
         catch (const std::exception& e)
         {
-            ctrace::Thread::Output::tool_err("Error: " + std::string(e.what()));
+            output.error("Error: " + std::string(e.what()));
             return;
         }
     }
@@ -64,23 +66,6 @@ namespace ctrace
             return it->second;
         }
         return "none";
-    }
-
-    /*
-    START TEST
-*/
-
-    /*
-    END TEST
-*/
-
-    json TscancodeToolImplementation::jsonFormat(const std::string& buffer,
-                                                 const std::string& outputFile) const
-    {
-        json j;
-        std::cout << buffer << std::endl;
-        std::cout << outputFile << std::endl;
-        return j;
     }
 
     json TscancodeToolImplementation::sarifFormat(const std::string& buffer,

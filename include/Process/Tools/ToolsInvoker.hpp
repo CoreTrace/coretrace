@@ -112,7 +112,7 @@ namespace ctrace
     {
       public:
         ToolInvoker(ctrace::ProgramConfig config, std::size_t nbThreadPool, std::launch policy,
-                    std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> output_capture = nullptr)
+                    std::shared_ptr<ctrace::CaptureBuffer> output_capture = nullptr)
             : m_config(std::move(config)), m_nbThreadPool(nbThreadPool == 0 ? 1 : nbThreadPool),
               m_policy(policy), m_output_capture(output_capture)
         {
@@ -133,7 +133,7 @@ namespace ctrace
 
             if (m_config.runtime.ipc == "standardIO")
             {
-                m_ipc = nullptr; // Use std::cout directely
+                m_ipc = nullptr; // Results go to the ToolOutput sink.
                 coretrace::log(coretrace::Level::Debug, "Using standardIO for IPC.\n");
             }
             else
@@ -213,26 +213,24 @@ namespace ctrace
 
         void executeTool(const std::string& tool_name, const std::string& file)
         {
-            ctrace::Thread::Output::CaptureContext ctx{m_output_capture, tool_name, true};
-            ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
-
             auto tool_it = tools.find(tool_name);
             if (tool_it == tools.end())
             {
-                ctrace::Thread::Output::cerr("\033[31mUnknown tool: " + tool_name + "\033[0m");
+                coretrace::log(coretrace::Level::Error, "Unknown tool: {}\n", tool_name);
                 return;
             }
 
+            ToolOutput output(m_output_capture, tool_name, /*mirrorToConsole=*/true);
             auto lock_it = toolLocks.find(tool_name);
             if (lock_it != toolLocks.end() && lock_it->second)
             {
                 std::lock_guard<std::mutex> lock(*lock_it->second);
-                tool_it->second->execute(file, m_config);
+                tool_it->second->execute(file, m_config, output);
                 recordDiagnosticsSummary(tool_name, *tool_it->second);
                 return;
             }
 
-            tool_it->second->execute(file, m_config);
+            tool_it->second->execute(file, m_config, output);
             recordDiagnosticsSummary(tool_name, *tool_it->second);
         }
 
@@ -243,26 +241,24 @@ namespace ctrace
                 return;
             }
 
-            ctrace::Thread::Output::CaptureContext ctx{m_output_capture, tool_name, true};
-            ctrace::Thread::Output::ScopedCapture capture(m_output_capture ? &ctx : nullptr);
-
             auto tool_it = tools.find(tool_name);
             if (tool_it == tools.end())
             {
-                ctrace::Thread::Output::cerr("\033[31mUnknown tool: " + tool_name + "\033[0m");
+                coretrace::log(coretrace::Level::Error, "Unknown tool: {}\n", tool_name);
                 return;
             }
 
+            ToolOutput output(m_output_capture, tool_name, /*mirrorToConsole=*/true);
             auto lock_it = toolLocks.find(tool_name);
             if (lock_it != toolLocks.end() && lock_it->second)
             {
                 std::lock_guard<std::mutex> lock(*lock_it->second);
-                tool_it->second->executeBatch(files, m_config);
+                tool_it->second->executeBatch(files, m_config, output);
                 recordDiagnosticsSummary(tool_name, *tool_it->second);
                 return;
             }
 
-            tool_it->second->executeBatch(files, m_config);
+            tool_it->second->executeBatch(files, m_config, output);
             recordDiagnosticsSummary(tool_name, *tool_it->second);
         }
 
@@ -334,7 +330,7 @@ namespace ctrace
 
             for (const auto& tool_name : unknownTools)
             {
-                ctrace::Thread::Output::cerr("\033[31mUnknown tool: " + tool_name + "\033[0m");
+                coretrace::log(coretrace::Level::Error, "Unknown tool: {}\n", tool_name);
             }
 
             for (const auto& file : files)
@@ -390,7 +386,7 @@ namespace ctrace
         std::size_t m_nbThreadPool;
         std::launch m_policy;
         std::shared_ptr<IpcStrategy> m_ipc;
-        std::shared_ptr<ctrace::Thread::Output::CaptureBuffer> m_output_capture;
+        std::shared_ptr<ctrace::CaptureBuffer> m_output_capture;
         std::unique_ptr<ThreadPool> m_threadPool;
         mutable std::mutex m_diagnosticsSummaryMutex;
         std::unordered_map<std::string, DiagnosticSummary> m_diagnosticsSummaryByTool;

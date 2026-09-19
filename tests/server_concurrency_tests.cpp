@@ -84,7 +84,7 @@ namespace
             return false;
         }
 
-        bool foundReport = false;
+        int reportEntries = 0;
         for (const json& entry : outputs["ctrace_stack_analyzer"])
         {
             if (entry.value("stream", "") != "stdout" || !entry["message"].is_object())
@@ -92,9 +92,14 @@ namespace
                 continue;
             }
             const json& summary = entry["message"].value("diagnosticsSummary", json::object());
-            foundReport = summary.value("error", -1) == 1;
+            if (summary.value("error", -1) == 1)
+            {
+                ++reportEntries;
+            }
         }
-        report.expect(foundReport, label + ": stdout entry is the analyzer JSON report");
+        report.expect(reportEntries == 1,
+                      label + ": the analyzer JSON report is recorded exactly once (got " +
+                          std::to_string(reportEntries) + ")");
         return true;
     }
     /// The console logger receives free text (request dumps, tool errors). It must reach

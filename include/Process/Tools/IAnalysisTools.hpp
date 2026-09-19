@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Config/config.hpp"
+#include "Process/Tools/ToolOutput.hpp"
 
 class IpcStrategy;
 
@@ -47,7 +48,8 @@ namespace ctrace
              * @param file The path to the file to analyze.
              * @param config The program configuration to use during the analysis.
              */
-        virtual void execute(const std::string& file, ctrace::ProgramConfig config) const = 0;
+        virtual void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                             ToolOutput& output) const = 0;
 
         /**
              * @brief Indicates whether the tool can process multiple inputs in one run.
@@ -69,11 +71,11 @@ namespace ctrace
              * @param config The program configuration to use during the analysis.
              */
         virtual void executeBatch(const std::vector<std::string>& files,
-                                  ctrace::ProgramConfig config) const
+                                  const ctrace::ProgramConfig& config, ToolOutput& output) const
         {
             for (const auto& file : files)
             {
-                execute(file, config);
+                execute(file, config, output);
             }
         }
 

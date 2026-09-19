@@ -5,7 +5,6 @@
 #include <regex>
 
 #include "../ProcessFactory.hpp"
-#include "../ThreadProcess.hpp"
 
 #include <unistd.h>
 #include <sys/types.h>

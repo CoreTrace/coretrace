@@ -362,7 +362,7 @@ class ApiHandler
             threads = 255;
         }
         const uint8_t pool_size = static_cast<uint8_t>(threads);
-        auto output_capture = std::make_shared<ctrace::Thread::Output::CaptureBuffer>();
+        auto output_capture = std::make_shared<ctrace::CaptureBuffer>();
         ctrace::ToolInvoker invoker(
             config, pool_size, (config.runtime.async ? std::launch::async : std::launch::deferred),
             output_capture);
