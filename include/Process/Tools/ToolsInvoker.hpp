@@ -282,42 +282,6 @@ namespace ctrace
                 return;
             }
 
-            const auto containsExclusiveCaptureTool =
-                std::any_of(tool_names.begin(), tool_names.end(), [](const std::string& tool_name)
-                            { return requiresExclusiveProcessCapture(tool_name); });
-
-            if (containsExclusiveCaptureTool)
-            {
-                std::vector<std::future<void>> parallelResults;
-                parallelResults.reserve(tool_names.size());
-
-                for (const auto& tool_name : tool_names)
-                {
-                    if (requiresExclusiveProcessCapture(tool_name))
-                    {
-                        continue;
-                    }
-
-                    parallelResults.push_back(m_threadPool->enqueue(
-                        [this, tool_name, file] { executeTool(tool_name, file); }));
-                }
-
-                for (auto& result : parallelResults)
-                {
-                    result.get();
-                }
-
-                for (const auto& tool_name : tool_names)
-                {
-                    if (!requiresExclusiveProcessCapture(tool_name))
-                    {
-                        continue;
-                    }
-                    executeTool(tool_name, file);
-                }
-                return;
-            }
-
             std::vector<std::future<void>> results;
             results.reserve(tool_names.size());
 
@@ -402,11 +366,6 @@ namespace ctrace
             }
 
             return deduped;
-        }
-
-        static bool requiresExclusiveProcessCapture(const std::string& tool_name)
-        {
-            return tool_name == "ctrace_stack_analyzer";
         }
 
         void recordDiagnosticsSummary(const std::string& tool_name, const IAnalysisTool& tool)

@@ -9,9 +9,8 @@ This script compares the same CoreTrace workload in two modes:
 - async: cppcheck and ctrace_stack_analyzer concurrently, each through CoreTrace
   with --async enabled.
 
-The process boundary is intentional: the stack analyzer captures process-wide file
-descriptors while running the in-process analyzer library, so process-level
-parallelism avoids cross-tool output capture interference.
+Each tool runs through its own CoreTrace process so the two modes stay comparable
+regardless of how the invoker schedules tools internally.
 """
 
 from __future__ import annotations

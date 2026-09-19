@@ -182,3 +182,29 @@ add_executable(ctrace_config_tests
 target_link_libraries(ctrace_config_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
 
 add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)
+
+# Compatibility gate with the pinned coretrace-stack-analyzer library (see ROADMAP.md K10).
+add_executable(ctrace_stack_analyzer_bridge_tests
+    tests/stack_analyzer_bridge_tests.cpp
+    src/Process/Tools/StackAnalyzerToolImplementation.cpp
+    src/App/ToolConfig.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+
+target_link_libraries(ctrace_stack_analyzer_bridge_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib)
+
+add_test(NAME ctrace_stack_analyzer_bridge_tests
+    COMMAND ctrace_stack_analyzer_bridge_tests ${CMAKE_SOURCE_DIR})
+
+# End-to-end: the CLI drives the analyzer with the canonical config and reports a summary.
+add_test(NAME ctrace_stack_analyzer_cli_smoke
+    COMMAND ctrace
+        --config ${CMAKE_SOURCE_DIR}/config/tool-config.json
+        --input ${CMAKE_SOURCE_DIR}/tests/double_free.c
+        --report-file ${CMAKE_BINARY_DIR}/ctrace-smoke-report.json)
+set_tests_properties(ctrace_stack_analyzer_cli_smoke PROPERTIES
+    PASS_REGULAR_EXPRESSION
+        "\\(ctrace_stack_analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
