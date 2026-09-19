@@ -131,14 +131,14 @@ namespace ctrace
             static_tools = {"cppcheck", "flawfinder", "tscancode", "ikos", "ctrace_stack_analyzer"};
             dynamic_tools = {"dyn_tools_1", "dyn_tools_2", "dyn_tools_3"};
 
-            if (m_config.global.ipc == "standardIO")
+            if (m_config.runtime.ipc == "standardIO")
             {
                 m_ipc = nullptr; // Use std::cout directely
                 coretrace::log(coretrace::Level::Debug, "Using standardIO for IPC.\n");
             }
             else
             {
-                m_ipc = std::make_shared<UnixSocketStrategy>(m_config.global.ipcPath);
+                m_ipc = std::make_shared<UnixSocketStrategy>(m_config.runtime.ipc_path);
 
                 for (auto& [_, tool] : tools)
                 {

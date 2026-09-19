@@ -92,28 +92,27 @@ namespace
         const bool ok = ctrace::applyToolConfigFile(cfg, path.string(), err);
         assert(ok);
         assert(err.empty());
-        assert(cfg.global.hasStaticAnalysis);
-        assert(!cfg.global.hasDynamicAnalysis);
-        assert(cfg.global.hasInvokedSpecificTools);
-        assert(cfg.global.specificTools.size() == 1);
-        assert(cfg.global.specificTools.front() == "ctrace_stack_analyzer");
-        assert(cfg.global.hasSarifFormat);
-        assert(cfg.global.report_file == "cfg-report.txt");
-        assert(cfg.global.output_file == "cfg-output.txt");
-        assert(cfg.global.quiet);
-        assert(cfg.global.demangle);
-        assert(cfg.global.entry_points == "main,helper");
-        assert(cfg.global.include_compdb_deps);
-        assert(cfg.global.stack_analyzer_mode == "ir");
-        assert(cfg.global.stack_analyzer_output_format == "json");
-        assert(cfg.global.timing);
-        assert(cfg.global.analysis_profile == "full");
-        assert(cfg.global.smt == "on");
-        assert(cfg.global.smt_timeout_ms == 80U);
-        assert(cfg.global.smt_budget_nodes == 1024U);
-        assert(cfg.global.stack_limit == 4096U);
-        assert(cfg.global.stack_analyzer_extra_args.size() == 2);
-        assert(!cfg.files.empty());
+        assert(cfg.analysis.static_enabled);
+        assert(!cfg.analysis.dynamic_enabled);
+        assert(cfg.analysis.invoke.size() == 1);
+        assert(cfg.analysis.invoke.front() == "ctrace_stack_analyzer");
+        assert(cfg.output.sarif_format);
+        assert(cfg.output.report_file == "cfg-report.txt");
+        assert(cfg.output.output_file == "cfg-output.txt");
+        assert(cfg.output.quiet);
+        assert(cfg.output.demangle);
+        assert((cfg.files.entry_points == std::vector<std::string>{"main", "helper"}));
+        assert(cfg.files.include_compdb_deps);
+        assert(cfg.stack_analyzer.mode == "ir");
+        assert(cfg.stack_analyzer.output_format == "json");
+        assert(cfg.stack_analyzer.timing);
+        assert(cfg.stack_analyzer.analysis_profile == "full");
+        assert(cfg.stack_analyzer.smt == "on");
+        assert(cfg.stack_analyzer.smt_timeout_ms == 80U);
+        assert(cfg.stack_analyzer.smt_budget_nodes == 1024U);
+        assert(cfg.stack_analyzer.stack_limit == 4096U);
+        assert(cfg.stack_analyzer.extra_args.size() == 2);
+        assert(!cfg.files.input.empty());
     }
 
     void testRejectsUnknownRootKey()
@@ -172,10 +171,10 @@ namespace
         const bool ok = ctrace::applyToolConfigFile(cfg, path.string(), err);
         assert(ok);
         assert(err.empty());
-        assert(cfg.global.analysis_profile == "full");
-        assert(cfg.global.smt_timeout_ms == 90U);
-        assert(cfg.global.entry_points == "main");
-        assert(cfg.global.hasInvokedSpecificTools);
+        assert(cfg.stack_analyzer.analysis_profile == "full");
+        assert(cfg.stack_analyzer.smt_timeout_ms == 90U);
+        assert((cfg.files.entry_points == std::vector<std::string>{"main"}));
+        assert(!cfg.analysis.invoke.empty());
     }
 
     void testCliOverridesConfig()
@@ -210,9 +209,9 @@ namespace
             ctrace::buildConfig(static_cast<int>(argv.size()), argv.data());
         assert(result.config.has_value());
         const ctrace::ProgramConfig& cfg = *result.config;
-        assert(cfg.global.verbose);
-        assert(cfg.global.report_file == "from-cli.txt");
-        assert(cfg.global.output_file == "from-cli.out");
+        assert(cfg.output.verbose);
+        assert(cfg.output.report_file == "from-cli.txt");
+        assert(cfg.output.output_file == "from-cli.out");
     }
 
     ctrace::ConfigResult buildFromArgs(std::vector<std::string> args)

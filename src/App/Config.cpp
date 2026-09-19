@@ -134,19 +134,19 @@ namespace ctrace
             explicit ConfigProcessor(ProgramConfig& cfg) : config(cfg)
             {
                 commands["--verbose"] = [this](const std::string&)
-                { config.global.verbose = true; };
-                commands["--quiet"] = [this](const std::string&) { config.global.quiet = true; };
+                { config.output.verbose = true; };
+                commands["--quiet"] = [this](const std::string&) { config.output.quiet = true; };
                 commands["--demangle"] = [this](const std::string&)
-                { config.global.demangle = true; };
+                { config.output.demangle = true; };
                 commands["--sarif-format"] = [this](const std::string&)
-                { config.global.hasSarifFormat = true; };
+                { config.output.sarif_format = true; };
                 commands["--report-file"] = [this](const std::string& value)
-                { config.global.report_file = value; };
+                { config.output.report_file = value; };
                 commands["--output-file"] = [this](const std::string& value)
-                { config.global.output_file = value; };
+                { config.output.output_file = value; };
                 commands["--async"] = [this](const std::string&)
                 {
-                    config.global.hasAsync = std::launch::async;
+                    config.runtime.async = true;
                     std::cout << "Asynchronous execution enabled." << std::endl;
                 };
                 commands["--invoke"] = [this](const std::string& value)
@@ -162,36 +162,43 @@ namespace ctrace
                     {
                         throw ConfigError(normalizeError + "\n");
                     }
-                    config.global.specificTools = normalized;
-                    config.global.hasInvokedSpecificTools = !normalized.empty();
+                    config.analysis.invoke = normalized;
                 };
                 commands["--input"] = [this](const std::string& value) { config.addFile(value); };
                 commands["--static"] = [this](const std::string&)
-                { config.global.hasStaticAnalysis = true; };
+                { config.analysis.static_enabled = true; };
                 commands["--dyn"] = [this](const std::string&)
-                { config.global.hasDynamicAnalysis = true; };
+                { config.analysis.dynamic_enabled = true; };
                 commands["--entry-points"] = [this](const std::string& value)
-                { config.global.entry_points = value; };
+                {
+                    config.files.entry_points.clear();
+                    for (const auto point : ctrace_tools::strings::splitByComma(value))
+                    {
+                        config.files.entry_points.emplace_back(point);
+                    }
+                };
                 commands["--config"] = [this](const std::string& value)
-                { config.global.config_file = value; };
+                { config.config_file = value; };
                 commands["--compile-commands"] = [this](const std::string& value)
-                { config.global.compile_commands = value; };
+                { config.files.compile_commands = value; };
                 commands["--include-compdb-deps"] = [this](const std::string&)
-                { config.global.include_compdb_deps = true; };
+                { config.files.include_compdb_deps = true; };
                 commands["--analysis-profile"] = [this](const std::string& value)
-                { config.global.analysis_profile = value; };
-                commands["--smt"] = [this](const std::string& value) { config.global.smt = value; };
+                { config.stack_analyzer.analysis_profile = value; };
+                commands["--smt"] = [this](const std::string& value)
+                { config.stack_analyzer.smt = value; };
                 commands["--smt-backend"] = [this](const std::string& value)
-                { config.global.smt_backend = value; };
+                { config.stack_analyzer.smt_backend = value; };
                 commands["--smt-secondary-backend"] = [this](const std::string& value)
-                { config.global.smt_secondary_backend = value; };
+                { config.stack_analyzer.smt_secondary_backend = value; };
                 commands["--smt-mode"] = [this](const std::string& value)
-                { config.global.smt_mode = value; };
+                { config.stack_analyzer.smt_mode = value; };
                 commands["--smt-timeout-ms"] = [this](const std::string& value)
                 {
                     try
                     {
-                        config.global.smt_timeout_ms = static_cast<uint32_t>(std::stoul(value));
+                        config.stack_analyzer.smt_timeout_ms =
+                            static_cast<uint32_t>(std::stoul(value));
                     }
                     catch (const std::exception& e)
                     {
@@ -203,7 +210,7 @@ namespace ctrace
                 {
                     try
                     {
-                        config.global.smt_budget_nodes = std::stoull(value);
+                        config.stack_analyzer.smt_budget_nodes = std::stoull(value);
                     }
                     catch (const std::exception& e)
                     {
@@ -213,26 +220,27 @@ namespace ctrace
                 };
                 commands["--smt-rules"] = [this](const std::string& value)
                 {
-                    config.global.smt_rules.clear();
+                    config.stack_analyzer.smt_rules.clear();
                     for (const auto rule : ctrace_tools::strings::splitByComma(value))
                     {
-                        config.global.smt_rules.emplace_back(rule);
+                        config.stack_analyzer.smt_rules.emplace_back(rule);
                     }
                 };
                 commands["--resource-model"] = [this](const std::string& value)
-                { config.global.resource_model = value; };
+                { config.stack_analyzer.resource_model = value; };
                 commands["--escape-model"] = [this](const std::string& value)
-                { config.global.escape_model = value; };
+                { config.stack_analyzer.escape_model = value; };
                 commands["--buffer-model"] = [this](const std::string& value)
-                { config.global.buffer_model = value; };
-                commands["--timing"] = [this](const std::string&) { config.global.timing = true; };
+                { config.stack_analyzer.buffer_model = value; };
+                commands["--timing"] = [this](const std::string&)
+                { config.stack_analyzer.timing = true; };
                 commands["--stack-limit"] = [this](const std::string& value)
                 {
                     try
                     {
-                        config.global.stack_limit = std::stoul(value);
+                        config.stack_analyzer.stack_limit = std::stoul(value);
                         coretrace::log(coretrace::Level::Info, "Stack limit set to {} bytes",
-                                       config.global.stack_limit);
+                                       config.stack_analyzer.stack_limit);
                     }
                     catch (const std::exception& e)
                     {
@@ -257,30 +265,30 @@ namespace ctrace
                         message += "]\n";
                         throw ConfigError(message);
                     }
-                    config.global.ipc = value;
+                    config.runtime.ipc = value;
                 };
                 commands["--ipc-path"] = [this](const std::string& value)
-                { config.global.ipcPath = value; };
+                { config.runtime.ipc_path = value; };
                 commands["--serve-host"] = [this](const std::string& value)
                 {
-                    config.global.serverHost = value;
+                    config.server.host = value;
                     coretrace::log(coretrace::Level::Debug, "Server host set to {}",
-                                   config.global.serverHost);
+                                   config.server.host);
                 };
                 commands["--serve-port"] = [this](const std::string& value)
                 {
-                    config.global.serverPort = std::stoi(value);
+                    config.server.port = std::stoi(value);
                     coretrace::log(coretrace::Level::Debug, "Server port set to {}",
-                                   config.global.serverPort);
+                                   config.server.port);
                 };
                 commands["--shutdown-token"] = [this](const std::string& value)
-                { config.global.shutdownToken = value; };
+                { config.server.shutdown_token = value; };
                 commands["--shutdown-timeout-ms"] = [this](const std::string& value)
                 {
-                    config.global.shutdownTimeoutMs = std::stoi(value);
-                    if (config.global.shutdownTimeoutMs < 0)
+                    config.server.shutdown_timeout_ms = std::stoi(value);
+                    if (config.server.shutdown_timeout_ms < 0)
                     {
-                        config.global.shutdownTimeoutMs = 0;
+                        config.server.shutdown_timeout_ms = 0;
                     }
                 };
             }

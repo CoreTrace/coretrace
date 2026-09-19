@@ -21,12 +21,12 @@ namespace ctrace
     CT_NODISCARD int run_server(const ProgramConfig& config)
     {
         configure_server_logging();
-        coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n",
-                       config.global.serverHost, std::to_string(config.global.serverPort));
+        coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n", config.server.host,
+                       std::to_string(config.server.port));
         ConsoleLogger logger;
         ApiHandler apiHandler(logger);
-        HttpServer server(apiHandler, logger, config.global);
-        server.run(config.global.serverHost, config.global.serverPort);
+        HttpServer server(apiHandler, logger, config.server);
+        server.run(config.server.host, config.server.port);
         return EXIT_SUCCESS;
     }
 
@@ -34,9 +34,10 @@ namespace ctrace
     {
         const auto availableThreads = std::thread::hardware_concurrency();
         const auto poolSize = (availableThreads == 0) ? 1U : availableThreads;
-        ctrace::ToolInvoker invoker(config, poolSize, config.global.hasAsync);
+        ctrace::ToolInvoker invoker(
+            config, poolSize, (config.runtime.async ? std::launch::async : std::launch::deferred));
 
-        if (config.global.hasAsync == std::launch::async)
+        if (config.runtime.async)
         {
             coretrace::set_thread_safe(true);
             coretrace::log(coretrace::Level::Debug, "Asynchronous execution enabled.\n");
@@ -44,23 +45,23 @@ namespace ctrace
 
         coretrace::log(coretrace::Level::Debug, "Verbose mode enabled.\n");
         coretrace::log(coretrace::Level::Debug, "Asynchronous execution: {}\n",
-                       (config.global.hasAsync == std::launch::async ? "enabled" : "disabled"));
+                       (config.runtime.async ? "enabled" : "disabled"));
         coretrace::log(coretrace::Level::Debug, "Verbose mode: {}\n",
-                       (config.global.verbose ? "enabled" : "disabled"));
+                       (config.output.verbose ? "enabled" : "disabled"));
         coretrace::log(coretrace::Level::Debug, "Static analysis: {}\n",
-                       (config.global.hasStaticAnalysis ? "enabled" : "disabled"));
+                       (config.analysis.static_enabled ? "enabled" : "disabled"));
         coretrace::log(coretrace::Level::Debug, "Dynamic analysis: {}\n",
-                       (config.global.hasDynamicAnalysis ? "enabled" : "disabled"));
+                       (config.analysis.dynamic_enabled ? "enabled" : "disabled"));
         coretrace::log(coretrace::Level::Debug, "SARIF format: {}\n",
-                       (config.global.hasSarifFormat ? "enabled" : "disabled"));
-        coretrace::log(coretrace::Level::Debug, "Report file: {}\n", config.global.report_file);
-        coretrace::log(coretrace::Level::Debug, "Entry points: {}\n", config.global.entry_points);
+                       (config.output.sarif_format ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "Report file: {}\n", config.output.report_file);
+        coretrace::log(coretrace::Level::Debug, "Entry points: {}\n",
+                       ctrace_tools::strings::joinByComma(config.files.entry_points));
         coretrace::log(coretrace::Level::Debug, "Include compile_commands deps: {}\n",
-                       (config.global.include_compdb_deps ? "enabled" : "disabled"));
-        if (!config.global.config_file.empty())
+                       (config.files.include_compdb_deps ? "enabled" : "disabled"));
+        if (!config.config_file.empty())
         {
-            coretrace::log(coretrace::Level::Debug, "Config file in use: {}\n",
-                           config.global.config_file);
+            coretrace::log(coretrace::Level::Debug, "Config file in use: {}\n", config.config_file);
         }
         else
         {
@@ -81,23 +82,23 @@ namespace ctrace
             coretrace::log(coretrace::Level::Debug, "Processing file: {}\n", file);
         }
 
-        if (config.global.hasStaticAnalysis)
+        if (config.analysis.static_enabled)
         {
             coretrace::log(coretrace::Level::Info, "Running static analysis on {} file(s)\n",
                            sourceFiles.size());
             invoker.runStaticTools(sourceFiles);
         }
-        if (config.global.hasDynamicAnalysis)
+        if (config.analysis.dynamic_enabled)
         {
             coretrace::log(coretrace::Level::Info, "Running dynamic analysis on {} file(s)\n",
                            sourceFiles.size());
             invoker.runDynamicTools(sourceFiles);
         }
-        if (config.global.hasInvokedSpecificTools)
+        if (!config.analysis.invoke.empty())
         {
             coretrace::log(coretrace::Level::Info, "Running specific tools on {} file(s)\n",
                            sourceFiles.size());
-            invoker.runSpecificTools(config.global.specificTools, sourceFiles);
+            invoker.runSpecificTools(config.analysis.invoke, sourceFiles);
         }
         return 0;
     }
