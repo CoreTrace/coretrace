@@ -11,9 +11,21 @@
 
 #include <coretrace/logger.hpp>
 
+#include <mutex>
+
 namespace
 {
     constexpr std::string_view kStackAnalyzerModule = "stack_analyzer";
+
+    // The analyzer runs in-process and its thread-safety across concurrent runs is not
+    // documented (on-disk summary caches, LLVM global state). Server mode handles requests on
+    // a thread pool, so runs are serialized process-wide until the analyzer proves otherwise.
+    // Per-tool locks in ToolInvoker only cover one invoker, not concurrent requests.
+    std::mutex& analyzerRunMutex()
+    {
+        static std::mutex mutex;
+        return mutex;
+    }
 
     struct AnalyzerArgBuildResult
     {
@@ -587,8 +599,11 @@ namespace ctrace
         // The analyzer runs in-process and hands its results back as data: no descriptor
         // capture, no text parsing. Its own status logs go through the shared logger.
         const ctrace::stack::cli::OutputFormat outputFormat = parseResult.parsed.outputFormat;
-        const ctrace::stack::app::ReportResult analysis =
-            ctrace::stack::app::runAnalysis(std::move(parseResult.parsed));
+        ctrace::stack::app::ReportResult analysis;
+        {
+            const std::lock_guard<std::mutex> serializedRun(analyzerRunMutex());
+            analysis = ctrace::stack::app::runAnalysis(std::move(parseResult.parsed));
+        }
         if (!analysis.isOk())
         {
             ctrace::Thread::Output::tool_err(analysis.error);

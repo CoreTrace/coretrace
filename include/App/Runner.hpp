@@ -7,6 +7,10 @@
 
 namespace ctrace
 {
+    /// Logging setup shared by the HTTP server and its tests: requests are handled on a
+    /// thread pool, so the logger must be thread-safe and timestamps help correlate lines.
+    void configure_server_logging();
+
     CT_NODISCARD int run_server(const ProgramConfig& config);
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config);
 } // namespace ctrace

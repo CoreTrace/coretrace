@@ -20,7 +20,6 @@ int main(int argc, char* argv[])
 
     if (config.global.ipc == "serve")
     {
-        coretrace::set_timestamps(true);
         return ctrace::run_server(config);
     }
     return ctrace::run_cli_analysis(config);
