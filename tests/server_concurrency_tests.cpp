@@ -150,6 +150,77 @@ namespace
                           captured.find('\n', first) < second,
                       "console logger: each message ends its own line");
     }
+    /// The HTTP parameters of run_analysis (flat keys of protocol coretrace-1.0) must land in
+    /// the same configuration, with the same validation, as the config file.
+    void testParamsToConfig(TestReport& report)
+    {
+        ApiHandler::ParseError err;
+
+        // Value forms: comma-separated strings and arrays are both lists; ipc aliases.
+        {
+            ctrace::ProgramConfig config;
+            const json params = {{"input", "a.c,b.c"},
+                                 {"entry_points", json::array({"main", "helper"})},
+                                 {"invoke", "cppcheck,ctrace_stack_analyzer"},
+                                 {"smt_rules", "recursion,oob-read"},
+                                 {"static_analysis", true},
+                                 {"smt_timeout_ms", 80U},
+                                 {"stack_analyzer_mode", "abi"},
+                                 {"ipc", "server"},
+                                 {"not_a_known_param", 42}};
+            const bool ok = ApiHandler::build_config_from_params(params, config, err);
+            report.expect(ok, "params: valid request is accepted (" + err.message + ")");
+            report.expect((config.files.input == std::vector<std::string>{"a.c", "b.c"}),
+                          "params: input splits comma-separated strings");
+            report.expect((config.files.entry_points == std::vector<std::string>{"main", "helper"}),
+                          "params: entry_points array is kept");
+            report.expect((config.analysis.invoke ==
+                           std::vector<std::string>{"cppcheck", "ctrace_stack_analyzer"}),
+                          "params: invoke splits comma-separated strings");
+            report.expect((config.stack_analyzer.smt_rules ==
+                           std::vector<std::string>{"recursion", "oob-read"}),
+                          "params: smt_rules splits comma-separated strings");
+            report.expect(config.analysis.static_enabled &&
+                              config.stack_analyzer.smt_timeout_ms == 80 &&
+                              config.stack_analyzer.mode == "abi",
+                          "params: scalars land in their sections");
+            report.expect(config.runtime.ipc == "standardIO",
+                          "params: ipc 'server' means the request runs in-process");
+        }
+
+        // Type errors keep the flat parameter name in the message.
+        {
+            ctrace::ProgramConfig config;
+            const bool ok =
+                ApiHandler::build_config_from_params(json{{"verbose", "yes"}}, config, err);
+            report.expect(!ok && err.code == "InvalidParams" &&
+                              err.message == "Expected boolean for 'verbose'.",
+                          "params: type error names the parameter (got '" + err.message + "')");
+        }
+        {
+            ctrace::ProgramConfig config;
+            const bool ok = ApiHandler::build_config_from_params(
+                json{{"smt_timeout_ms", 5000000000ULL}}, config, err);
+            report.expect(!ok && err.message == "smt_timeout_ms is too large.",
+                          "params: smt_timeout_ms range error keeps its text");
+        }
+        {
+            ctrace::ProgramConfig config;
+            const bool ok = ApiHandler::build_config_from_params(json::array(), config, err);
+            report.expect(!ok && err.message == "Params must be a JSON object.",
+                          "params: non-object params are rejected");
+        }
+
+        // Same validation as the config file: an unknown tool is rejected up front.
+        {
+            ctrace::ProgramConfig config;
+            const bool ok =
+                ApiHandler::build_config_from_params(json{{"invoke", "nope"}}, config, err);
+            report.expect(!ok && err.code == "InvalidParams" &&
+                              err.message.find("Unknown tool 'nope'") != std::string::npos,
+                          "params: unknown tool in invoke is rejected like in the config file");
+        }
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -172,6 +243,7 @@ int main(int argc, char** argv)
 
     TestReport report;
     testConsoleLoggerWritesMessagesVerbatim(report);
+    testParamsToConfig(report);
 
     ConsoleLogger logger;
     ApiHandler handler(logger);
