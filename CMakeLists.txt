@@ -26,6 +26,18 @@ set_property(CACHE PARSER_TYPE PROPERTY STRINGS "Getopt" "CLI11")
 option(USE_THREAD_SANITIZER "Activer ThreadSanitizer" OFF)
 option(USE_ADDRESS_SANITIZER "Activer AddressSanitizer (Memory)" OFF)
 
+option(CORETRACE_STATIC_LLVM "Link LLVM and Clang archives for the standalone IR milestone" OFF)
+if(CORETRACE_STATIC_LLVM)
+    include(${CMAKE_SOURCE_DIR}/cmake/StaticLLVM.cmake)
+    enable_language(C) # SDK dependency probes may compile C sources.
+    # Import at the parent scope so the adapter can inspect the complete SDK graph.
+    find_package(LLVM REQUIRED CONFIG)
+    if(NOT LLVM_VERSION_MAJOR EQUAL 20)
+        message(FATAL_ERROR "CORETRACE_STATIC_LLVM currently requires LLVM 20")
+    endif()
+    find_package(Clang REQUIRED CONFIG)
+endif()
+
 set(COMMON_SOURCES
     src/ArgumentParser/BaseArgumentParser.cpp
     src/ArgumentParser/ArgumentManager.cpp
@@ -81,6 +93,16 @@ target_link_libraries(ctrace PRIVATE coretrace::logger)
 
 include(${CMAKE_SOURCE_DIR}/cmake/stackUsageAnalyzer.cmake)
 target_link_libraries(ctrace PRIVATE coretrace::stack_usage_analyzer_lib)
+if(CORETRACE_STATIC_LLVM)
+    coretrace_link_static_llvm(stack_usage_analyzer_lib)
+    set_property(TARGET ctrace APPEND PROPERTY LINK_DEPENDS
+        ${CMAKE_SOURCE_DIR}/cmake/AuditLLVMDependencies.cmake)
+    add_custom_command(TARGET ctrace POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -DBINARY=$<TARGET_FILE:ctrace>
+            -P ${CMAKE_SOURCE_DIR}/cmake/AuditLLVMDependencies.cmake
+        COMMENT "Checking that ctrace has no dynamic LLVM/Clang dependency"
+        VERBATIM)
+endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/httpLib.cmake)
 target_link_libraries(ctrace PRIVATE httplib::httplib)
@@ -125,7 +147,11 @@ add_custom_target(format-check
 # ============
 include(GNUInstallDirs)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CORETRACE_STATIC_LLVM)
+    install(TARGETS ctrace
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        COMPONENT standalone-ir)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set_target_properties(ctrace PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib"
     )
