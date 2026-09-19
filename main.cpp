@@ -4,9 +4,24 @@
 
 #include <coretrace/logger.hpp>
 
+#include <iostream>
+
 int main(int argc, char* argv[])
 {
-    ctrace::ProgramConfig config = ctrace::buildConfig(argc, argv);
+    const ctrace::ConfigResult loaded = ctrace::buildConfig(argc, argv);
+    if (!loaded.output.empty())
+    {
+        std::cout << loaded.output;
+    }
+    if (!loaded.error.empty())
+    {
+        std::cerr << loaded.error;
+    }
+    if (!loaded.config.has_value())
+    {
+        return loaded.exitCode;
+    }
+    const ctrace::ProgramConfig& config = *loaded.config;
 
     // std::cout << ctrace::Color::GREEN << "CoreTrace - Comprehensive Tracing and Analysis Tool"
     //           << ctrace::Color::RESET << std::endl;

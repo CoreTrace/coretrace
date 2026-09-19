@@ -206,11 +206,85 @@ namespace
             argv.push_back(arg.data());
         }
 
-        const ctrace::ProgramConfig cfg =
+        const ctrace::ConfigResult result =
             ctrace::buildConfig(static_cast<int>(argv.size()), argv.data());
+        assert(result.config.has_value());
+        const ctrace::ProgramConfig& cfg = *result.config;
         assert(cfg.global.verbose);
         assert(cfg.global.report_file == "from-cli.txt");
         assert(cfg.global.output_file == "from-cli.out");
+    }
+
+    ctrace::ConfigResult buildFromArgs(std::vector<std::string> args)
+    {
+        std::vector<char*> argv;
+        argv.reserve(args.size());
+        for (auto& arg : args)
+        {
+            argv.push_back(arg.data());
+        }
+        return ctrace::buildConfig(static_cast<int>(argv.size()), argv.data());
+    }
+
+    // Invalid values must come back as a result, never as a process exit, so that main is the
+    // only place that terminates the program.
+    void testInvalidIpcIsAnError()
+    {
+        const auto result = buildFromArgs({"ctrace", "--ipc", "bogus"});
+        assert(!result.config.has_value());
+        assert(result.exitCode == 1);
+        assert(result.error.find("Invalid IPC type: 'bogus'") != std::string::npos);
+    }
+
+    void testUnknownToolIsAnError()
+    {
+        const auto result = buildFromArgs({"ctrace", "--invoke", "nope"});
+        assert(!result.config.has_value());
+        assert(result.exitCode == 1);
+        assert(result.error.find("Unknown tool 'nope'") != std::string::npos);
+    }
+
+    void testInvalidSmtTimeoutIsAnError()
+    {
+        const auto result = buildFromArgs({"ctrace", "--smt-timeout-ms", "abc"});
+        assert(!result.config.has_value());
+        assert(result.exitCode == 1);
+        assert(result.error.find("Invalid smt timeout value: 'abc'") != std::string::npos);
+    }
+
+    void testMissingConfigFileIsAnError()
+    {
+        const auto result = buildFromArgs({"ctrace", "--config", "/nonexistent/ctrace.json"});
+        assert(!result.config.has_value());
+        assert(result.exitCode == 1);
+        assert(result.error.find("failed to load config '/nonexistent/ctrace.json'") !=
+               std::string::npos);
+    }
+
+    void testUnknownOptionIsAnError()
+    {
+        const auto result = buildFromArgs({"ctrace", "--nope"});
+        assert(!result.config.has_value());
+        assert(result.exitCode == 1);
+        assert(result.error.find("--nope") != std::string::npos);
+    }
+
+    void testHelpAndVersionAreReturnedNotPrinted()
+    {
+        const auto help = buildFromArgs({"ctrace", "--help"});
+        assert(!help.config.has_value());
+        assert(help.exitCode == 0);
+        assert(help.output.find("--stack-limit") != std::string::npos);
+
+        const auto version = buildFromArgs({"ctrace", "--version"});
+        assert(!version.config.has_value());
+        assert(version.exitCode == 0);
+        assert(version.output.rfind("ctrace ", 0) == 0);
+
+        const auto noArgs = buildFromArgs({"ctrace"});
+        assert(!noArgs.config.has_value());
+        assert(noArgs.exitCode == 0);
+        assert(noArgs.output.find("--help") != std::string::npos);
     }
 } // namespace
 
@@ -221,6 +295,12 @@ int main()
     testRejectsInvalidStackAnalyzerMode();
     testLegacyConfigCompatibility();
     testCliOverridesConfig();
+    testInvalidIpcIsAnError();
+    testUnknownToolIsAnError();
+    testInvalidSmtTimeoutIsAnError();
+    testMissingConfigFileIsAnError();
+    testUnknownOptionIsAnError();
+    testHelpAndVersionAreReturnedNotPrinted();
     std::cout << "config_parser_tests: all checks passed" << std::endl;
     return 0;
 }

@@ -5,9 +5,22 @@
 #include "Config/config.hpp"
 #include "attributes.hpp"
 
+#include <optional>
+#include <string>
+
 namespace ctrace
 {
-    CT_NODISCARD ProgramConfig buildConfig(int argc, char* argv[]);
-}
+    /// Outcome of command-line and config-file processing. buildConfig never terminates the
+    /// process: help, version and every validation error come back here, and main decides.
+    struct ConfigResult
+    {
+        std::optional<ProgramConfig> config; ///< Present when the program should run.
+        std::string output;                  ///< Text for stdout (help, version, notices).
+        std::string error;                   ///< Text for stderr.
+        int exitCode = 0;                    ///< Process exit code when `config` is absent.
+    };
+
+    CT_NODISCARD ConfigResult buildConfig(int argc, char* argv[]);
+} // namespace ctrace
 
 #endif // APP_CONFIG_HPP

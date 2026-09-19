@@ -13,6 +13,8 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -30,6 +32,12 @@ namespace ctrace
             "Examples:\n"
             "  ctrace --input main.cpp,util.cpp --static --invoke=cppcheck,flawfinder\n"
             "  ctrace --verbose --report-file=analysis.txt --sarif-format";
+
+        /// A rejected command-line value; carries the exact text for stderr.
+        struct ConfigError : std::runtime_error
+        {
+            using std::runtime_error::runtime_error;
+        };
 
         struct OptionSpec
         {
@@ -152,8 +160,7 @@ namespace ctrace
                     const auto normalized = normalizeAndValidateToolList(parts, normalizeError);
                     if (!normalizeError.empty())
                     {
-                        std::cerr << normalizeError << std::endl;
-                        std::exit(EXIT_FAILURE);
+                        throw ConfigError(normalizeError + "\n");
                     }
                     config.global.specificTools = normalized;
                     config.global.hasInvokedSpecificTools = !normalized.empty();
@@ -188,10 +195,8 @@ namespace ctrace
                     }
                     catch (const std::exception& e)
                     {
-                        coretrace::log(coretrace::Level::Error,
-                                       "Invalid smt timeout value: '{}'. Error: {}\n", value,
-                                       e.what());
-                        std::exit(EXIT_FAILURE);
+                        throw ConfigError("Invalid smt timeout value: '" + value +
+                                          "'. Error: " + e.what() + "\n");
                     }
                 };
                 commands["--smt-budget-nodes"] = [this](const std::string& value)
@@ -202,10 +207,8 @@ namespace ctrace
                     }
                     catch (const std::exception& e)
                     {
-                        coretrace::log(coretrace::Level::Error,
-                                       "Invalid smt budget value: '{}'. Error: {}\n", value,
-                                       e.what());
-                        std::exit(EXIT_FAILURE);
+                        throw ConfigError("Invalid smt budget value: '" + value +
+                                          "'. Error: " + e.what() + "\n");
                     }
                 };
                 commands["--smt-rules"] = [this](const std::string& value)
@@ -233,12 +236,9 @@ namespace ctrace
                     }
                     catch (const std::exception& e)
                     {
-                        coretrace::log(coretrace::Level::Error,
-                                       "Invalid stack limit value: '{}'. Error: {}\n", value,
-                                       e.what());
-                        coretrace::log(coretrace::Level::Error,
-                                       "Please provide a valid unsigned integer.\n");
-                        std::exit(EXIT_FAILURE);
+                        throw ConfigError("Invalid stack limit value: '" + value +
+                                          "'. Error: " + e.what() +
+                                          "\nPlease provide a valid unsigned integer.\n");
                     }
                 };
                 commands["--ipc"] = [this](const std::string& value)
@@ -246,16 +246,16 @@ namespace ctrace
                     const auto& ipc_list = ctrace_defs::IPC_TYPES;
                     if (std::find(ipc_list.begin(), ipc_list.end(), value) == ipc_list.end())
                     {
-                        std::cerr << "Invalid IPC type: '" << value << "'\n"
-                                  << "Available IPC types: [";
+                        std::string message =
+                            "Invalid IPC type: '" + value + "'\n" + "Available IPC types: [";
                         for (const auto& ipc : ipc_list)
                         {
-                            std::cerr << ipc;
+                            message += ipc;
                             if (ipc != ipc_list.back())
-                                std::cerr << ", ";
+                                message += ", ";
                         }
-                        std::cerr << "]" << std::endl;
-                        std::exit(EXIT_FAILURE);
+                        message += "]\n";
+                        throw ConfigError(message);
                     }
                     config.global.ipc = value;
                 };
@@ -285,13 +285,26 @@ namespace ctrace
                 };
             }
 
+            /// Applies every option that was given; throws ConfigError on the first rejected value.
             void apply(const CLI::App& app)
             {
                 for (const auto& [option, command] : commands)
                 {
-                    if (wasGiven(app, option.c_str()))
+                    if (!wasGiven(app, option.c_str()))
+                    {
+                        continue;
+                    }
+                    try
                     {
                         command(valueOf(app, option.c_str()));
+                    }
+                    catch (const ConfigError&)
+                    {
+                        throw;
+                    }
+                    catch (const std::exception& e)
+                    {
+                        throw ConfigError("Invalid value for " + option + ": " + e.what() + "\n");
                     }
                 }
             }
@@ -302,7 +315,7 @@ namespace ctrace
         };
     } // namespace
 
-    CT_NODISCARD ProgramConfig buildConfig(int argc, char* argv[])
+    CT_NODISCARD ConfigResult buildConfig(int argc, char* argv[])
     {
         CLI::App app{kDescription, "ctrace"};
         app.footer(kFooter);
@@ -311,21 +324,32 @@ namespace ctrace
         app.get_formatter()->column_width(30);
         registerOptions(app);
 
+        ConfigResult result;
         if (argc <= 1)
         {
-            std::cout << app.help();
-            std::exit(0);
+            result.output = app.help();
+            return result;
         }
 
         try
         {
             app.parse(argc, argv);
         }
+        catch (const CLI::CallForHelp&)
+        {
+            result.output = app.help();
+            return result;
+        }
+        catch (const CLI::CallForVersion&)
+        {
+            result.output = app.version() + "\n";
+            return result;
+        }
         catch (const CLI::ParseError& e)
         {
-            // Prints help/version on stdout, or the error and a --help hint on stderr.
-            const int code = app.exit(e);
-            std::exit(code == 0 ? 0 : EXIT_FAILURE);
+            result.error = CLI::FailureMessage::simple(&app, e);
+            result.exitCode = EXIT_FAILURE;
+            return result;
         }
 
         ProgramConfig config;
@@ -335,24 +359,35 @@ namespace ctrace
             std::string toolConfigError;
             if (!applyToolConfigFile(config, configPath, toolConfigError))
             {
-                std::cerr << "Error: failed to load config '" << configPath
-                          << "': " << toolConfigError << std::endl;
-                std::exit(EXIT_FAILURE);
+                result.error =
+                    "Error: failed to load config '" + configPath + "': " + toolConfigError + "\n";
+                result.exitCode = EXIT_FAILURE;
+                return result;
             }
         }
 
-        ConfigProcessor processor(config);
-        processor.apply(app);
+        try
+        {
+            ConfigProcessor processor(config);
+            processor.apply(app);
+        }
+        catch (const ConfigError& e)
+        {
+            result.error = e.what();
+            result.exitCode = EXIT_FAILURE;
+            return result;
+        }
 
         if (valueOf(app, "--ipc") != "serve" &&
             (wasGiven(app, "--serve-host") || wasGiven(app, "--serve-port")))
         {
-            std::cout << "[INFO] UNCONSISTENT SERVER OPTIONS: --serve-host or --serve-port needed "
-                         "--ipc=serve."
-                      << std::endl;
-            std::exit(1);
+            result.output = "[INFO] UNCONSISTENT SERVER OPTIONS: --serve-host or --serve-port "
+                            "needed --ipc=serve.\n";
+            result.exitCode = 1;
+            return result;
         }
 
-        return config;
+        result.config = std::move(config);
+        return result;
     }
 } // namespace ctrace
