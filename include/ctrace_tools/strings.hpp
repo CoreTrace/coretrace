@@ -2,6 +2,7 @@
 #ifndef STRINGS_HPP
 #define STRINGS_HPP
 
+#include <string>
 #include <string_view>
 #include <vector>
 #include <iostream>
@@ -28,6 +29,9 @@ namespace ctrace_tools
      *       does not throw exceptions.
      */
         [[nodiscard]] std::vector<std::string_view> splitByComma(std::string_view input) noexcept;
+
+        /// Joins items with "," and no spaces; the inverse of splitByComma for simple tokens.
+        [[nodiscard]] std::string joinByComma(const std::vector<std::string>& items);
     } // namespace strings
 
 } // namespace ctrace_tools

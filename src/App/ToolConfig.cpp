@@ -346,16 +346,7 @@ namespace ctrace
         [[nodiscard]] bool parseEntryPoints(const std::vector<std::string>& points,
                                             ProgramConfig& config)
         {
-            std::string joined;
-            for (std::size_t i = 0; i < points.size(); ++i)
-            {
-                if (i > 0)
-                {
-                    joined.push_back(',');
-                }
-                joined += points[i];
-            }
-            config.global.entry_points = joined;
+            config.files.entry_points = points;
             return true;
         }
 
@@ -365,7 +356,7 @@ namespace ctrace
         {
             if (replace)
             {
-                config.files.clear();
+                config.files.input.clear();
             }
 
             for (const auto& entry : entries)
@@ -375,7 +366,7 @@ namespace ctrace
                     continue;
                 }
                 const auto resolved = resolvePathFromBase(configDir, entry);
-                config.files.emplace_back(resolved.string());
+                config.files.input.emplace_back(resolved.string());
             }
         }
 
@@ -584,8 +575,7 @@ namespace ctrace
                 return false;
             }
 
-            config.global.specificTools = normalized;
-            config.global.hasInvokedSpecificTools = !normalized.empty();
+            config.analysis.invoke = normalized;
             return true;
         }
 
@@ -645,7 +635,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.hasStaticAnalysis = boolValue;
+                config.analysis.static_enabled = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"dynamic", "dynamic_analysis"}, boolValue,
@@ -655,7 +645,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.hasDynamicAnalysis = boolValue;
+                config.analysis.dynamic_enabled = boolValue;
             }
 
             if (const auto it = section.find("invoke"); it != section.end() && !it->is_null())
@@ -715,7 +705,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.compile_commands =
+                config.files.compile_commands =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -728,7 +718,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.include_compdb_deps = boolValue;
+                config.files.include_compdb_deps = boolValue;
             }
 
             return true;
@@ -760,7 +750,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.hasSarifFormat = boolValue;
+                config.output.sarif_format = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"verbose"}, boolValue, errorMessage,
@@ -770,7 +760,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.verbose = boolValue;
+                config.output.verbose = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"quiet"}, boolValue, errorMessage, "output.quiet",
@@ -780,7 +770,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.quiet = boolValue;
+                config.output.quiet = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"demangle"}, boolValue, errorMessage,
@@ -790,7 +780,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.demangle = boolValue;
+                config.output.demangle = boolValue;
             }
 
             std::string stringValue;
@@ -801,7 +791,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.report_file = stringValue;
+                config.output.report_file = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"output_file"}, stringValue, errorMessage,
@@ -811,7 +801,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.output_file = stringValue;
+                config.output.output_file = stringValue;
             }
 
             return true;
@@ -840,7 +830,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.hasAsync = boolValue ? std::launch::async : std::launch::deferred;
+                config.runtime.async = boolValue;
             }
 
             std::string stringValue;
@@ -855,7 +845,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.ipc = stringValue;
+                config.runtime.ipc = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"ipc_path"}, stringValue, errorMessage,
@@ -865,7 +855,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.ipcPath = stringValue;
+                config.runtime.ipc_path = stringValue;
             }
 
             return true;
@@ -895,7 +885,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.serverHost = stringValue;
+                config.server.host = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"shutdown_token"}, stringValue, errorMessage,
@@ -905,7 +895,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.shutdownToken = stringValue;
+                config.server.shutdown_token = stringValue;
             }
 
             uint64_t uintValue = 0;
@@ -922,7 +912,7 @@ namespace ctrace
                     errorMessage = "server.port must be between 0 and 65535.";
                     return false;
                 }
-                config.global.serverPort = static_cast<int>(uintValue);
+                config.server.port = static_cast<int>(uintValue);
             }
 
             if (!readOptionalUint64Any(section, {"shutdown_timeout_ms"}, uintValue, errorMessage,
@@ -937,7 +927,7 @@ namespace ctrace
                     errorMessage = "server.shutdown_timeout_ms is too large.";
                     return false;
                 }
-                config.global.shutdownTimeoutMs = static_cast<int>(uintValue);
+                config.server.shutdown_timeout_ms = static_cast<int>(uintValue);
             }
 
             return true;
@@ -1070,7 +1060,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.stack_analyzer_mode = stringValue;
+                config.stack_analyzer.mode = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"output_format", "output-format", "format"},
@@ -1086,7 +1076,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.stack_analyzer_output_format = stringValue;
+                config.stack_analyzer.output_format = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"config"}, stringValue, errorMessage,
@@ -1096,7 +1086,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_config =
+                config.stack_analyzer.config =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1110,7 +1100,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_print_effective_config = boolValue;
+                config.stack_analyzer.print_effective_config = boolValue;
             }
 
             std::vector<std::string> listValue;
@@ -1121,7 +1111,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_extra_args = listValue;
+                config.stack_analyzer.extra_args = listValue;
             }
 
             if (!readOptionalStringAny(section, {"compile_commands", "compile-commands", "compdb"},
@@ -1132,7 +1122,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.compile_commands =
+                config.files.compile_commands =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1145,7 +1135,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_compile_args = listValue;
+                config.stack_analyzer.compile_args = listValue;
             }
 
             if (!readOptionalStringListAny(
@@ -1156,7 +1146,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_include_dirs = listValue;
+                config.stack_analyzer.include_dirs = listValue;
             }
 
             if (!readOptionalStringListAny(section, {"defines", "define"}, listValue, errorMessage,
@@ -1166,7 +1156,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_defines = listValue;
+                config.stack_analyzer.defines = listValue;
             }
 
             if (!readOptionalStringAny(section, {"resource_model", "resource-model"}, stringValue,
@@ -1177,7 +1167,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.resource_model =
+                config.stack_analyzer.resource_model =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1190,7 +1180,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.escape_model =
+                config.stack_analyzer.escape_model =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1203,7 +1193,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.buffer_model =
+                config.stack_analyzer.buffer_model =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1215,7 +1205,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.demangle = boolValue;
+                config.output.demangle = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"verbose"}, boolValue, errorMessage,
@@ -1225,7 +1215,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.verbose = boolValue;
+                config.output.verbose = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"timing"}, boolValue, errorMessage,
@@ -1235,7 +1225,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.timing = boolValue;
+                config.stack_analyzer.timing = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"include_compdb_deps", "include-compdb-deps"},
@@ -1246,7 +1236,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.include_compdb_deps = boolValue;
+                config.files.include_compdb_deps = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"compdb_fast", "compdb-fast"}, boolValue,
@@ -1257,7 +1247,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_compdb_fast = boolValue;
+                config.stack_analyzer.compdb_fast = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"quiet"}, boolValue, errorMessage,
@@ -1267,7 +1257,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.quiet = boolValue;
+                config.output.quiet = boolValue;
             }
 
             uint64_t uintValue = 0;
@@ -1279,7 +1269,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_limit = uintValue;
+                config.stack_analyzer.stack_limit = uintValue;
             }
 
             if (!readOptionalScalarAsStringAny(section, {"jobs"}, stringValue, errorMessage,
@@ -1293,7 +1283,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.stack_analyzer_jobs = trimCopy(stringValue);
+                config.stack_analyzer.jobs = trimCopy(stringValue);
             }
 
             if (!readOptionalStringAny(section, {"analysis-profile", "analysis_profile"},
@@ -1309,7 +1299,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.analysis_profile = stringValue;
+                config.stack_analyzer.analysis_profile = stringValue;
             }
 
             bool smtBool = false;
@@ -1320,7 +1310,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.smt = smtBool ? "on" : "off";
+                config.stack_analyzer.smt = smtBool ? "on" : "off";
             }
 
             if (!readOptionalStringAny(section, {"smt-backend", "smt_backend"}, stringValue,
@@ -1331,7 +1321,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.smt_backend = stringValue;
+                config.stack_analyzer.smt_backend = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"smt-secondary-backend", "smt_secondary_backend"},
@@ -1342,7 +1332,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.smt_secondary_backend = stringValue;
+                config.stack_analyzer.smt_secondary_backend = stringValue;
             }
 
             if (!readOptionalStringAny(section, {"smt-mode", "smt_mode"}, stringValue, errorMessage,
@@ -1357,7 +1347,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.smt_mode = stringValue;
+                config.stack_analyzer.smt_mode = stringValue;
             }
 
             if (!readOptionalUint64Any(section, {"smt-timeout-ms", "smt_timeout_ms"}, uintValue,
@@ -1373,7 +1363,7 @@ namespace ctrace
                     errorMessage = std::string(location) + ".smt_timeout_ms is too large.";
                     return false;
                 }
-                config.global.smt_timeout_ms = static_cast<uint32_t>(uintValue);
+                config.stack_analyzer.smt_timeout_ms = static_cast<uint32_t>(uintValue);
             }
 
             if (!readOptionalUint64Any(section, {"smt-budget-nodes", "smt_budget_nodes"}, uintValue,
@@ -1384,7 +1374,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.smt_budget_nodes = uintValue;
+                config.stack_analyzer.smt_budget_nodes = uintValue;
             }
 
             if (!readOptionalStringListAny(section, {"smt-rules", "smt_rules"}, listValue,
@@ -1395,7 +1385,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.smt_rules = listValue;
+                config.stack_analyzer.smt_rules = listValue;
             }
 
             if (!readOptionalStringListAny(section,
@@ -1408,7 +1398,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_only_functions = listValue;
+                config.stack_analyzer.only_functions = listValue;
             }
 
             if (!readOptionalStringListAny(
@@ -1419,7 +1409,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_only_files = listValue;
+                config.stack_analyzer.only_files = listValue;
             }
 
             if (!readOptionalStringListAny(
@@ -1430,7 +1420,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_only_dirs = listValue;
+                config.stack_analyzer.only_dirs = listValue;
             }
 
             if (!readOptionalStringListAny(
@@ -1441,7 +1431,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_exclude_dirs = listValue;
+                config.stack_analyzer.exclude_dirs = listValue;
             }
 
             if (!readOptionalStringListAny(section, {"entry_points"}, listValue, errorMessage,
@@ -1452,7 +1442,7 @@ namespace ctrace
             if (hasValue)
             {
                 (void)parseEntryPoints(listValue, config);
-                config.global.stack_analyzer_only_functions = listValue;
+                config.stack_analyzer.only_functions = listValue;
             }
 
             if (!readOptionalBoolAny(section, {"resource_cross_tu", "resource-cross-tu"}, boolValue,
@@ -1463,7 +1453,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_resource_cross_tu = boolValue;
+                config.stack_analyzer.resource_cross_tu = boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"no_resource_cross_tu", "no-resource-cross-tu"},
@@ -1474,7 +1464,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_resource_cross_tu = !boolValue;
+                config.stack_analyzer.resource_cross_tu = !boolValue;
             }
 
             if (!readOptionalBoolAny(section, {"uninitialized_cross_tu", "uninitialized-cross-tu"},
@@ -1485,7 +1475,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_uninitialized_cross_tu = boolValue;
+                config.stack_analyzer.uninitialized_cross_tu = boolValue;
             }
 
             if (!readOptionalBoolAny(
@@ -1496,7 +1486,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_uninitialized_cross_tu = !boolValue;
+                config.stack_analyzer.uninitialized_cross_tu = !boolValue;
             }
 
             if (!readOptionalStringAny(
@@ -1508,7 +1498,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_resource_summary_cache_dir =
+                config.stack_analyzer.resource_summary_cache_dir =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1523,7 +1513,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_resource_summary_cache_memory_only = boolValue;
+                config.stack_analyzer.resource_summary_cache_memory_only = boolValue;
             }
 
             if (!readOptionalStringAny(section, {"compile_ir_cache_dir", "compile-ir-cache-dir"},
@@ -1534,7 +1524,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_compile_ir_cache_dir =
+                config.stack_analyzer.compile_ir_cache_dir =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1552,7 +1542,7 @@ namespace ctrace
                 {
                     return false;
                 }
-                config.global.stack_analyzer_compile_ir_format = stringValue;
+                config.stack_analyzer.compile_ir_format = stringValue;
             }
 
             if (!readOptionalBoolAny(section, {"include_stl", "include-stl", "stl"}, boolValue,
@@ -1563,7 +1553,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_include_stl = boolValue;
+                config.stack_analyzer.include_stl = boolValue;
             }
 
             if (!readOptionalStringAny(section, {"base_dir", "base-dir"}, stringValue, errorMessage,
@@ -1573,7 +1563,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_base_dir =
+                config.stack_analyzer.base_dir =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1586,7 +1576,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_dump_filter = boolValue;
+                config.stack_analyzer.dump_filter = boolValue;
             }
 
             if (!readOptionalStringAny(section, {"dump_ir", "dump-ir"}, stringValue, errorMessage,
@@ -1596,7 +1586,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_dump_ir =
+                config.stack_analyzer.dump_ir =
                     stringValue.empty() ? std::string()
                                         : resolvePathFromBase(configDir, stringValue).string();
             }
@@ -1609,7 +1599,7 @@ namespace ctrace
             }
             if (hasValue)
             {
-                config.global.stack_analyzer_warnings_only = boolValue;
+                config.stack_analyzer.warnings_only = boolValue;
             }
 
             return true;
@@ -1820,7 +1810,7 @@ namespace ctrace
         }
 
         const std::filesystem::path configDir = std::filesystem::absolute(path).parent_path();
-        config.global.config_file = path.lexically_normal().string();
+        config.config_file = path.lexically_normal().string();
 
         if (const auto* analyzerSection = findStackAnalyzerSection(root, errorMessage);
             analyzerSection != nullptr)

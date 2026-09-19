@@ -4,7 +4,7 @@
 
 ## Precedence Rules
 
-1. Built-in defaults (`GlobalConfig`)
+1. Built-in defaults (`ProgramConfig` in `include/Config/config.hpp`, one struct per section below)
 2. Configuration file (`--config`)
 3. CLI options (last override)
 

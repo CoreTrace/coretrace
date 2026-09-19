@@ -297,7 +297,7 @@ class ApiHandler
         {
             return false;
         }
-        config.global.hasAsync = async_enabled ? std::launch::async : std::launch::deferred;
+        config.runtime.async = async_enabled;
         return true;
     }
 
@@ -328,11 +328,11 @@ class ApiHandler
         }
         if (ipc_value == "serve")
         {
-            config.global.ipc = "standardIO";
+            config.runtime.ipc = "standardIO";
             return true;
         }
 
-        config.global.ipc = ipc_value;
+        config.runtime.ipc = ipc_value;
         return true;
     }
 
@@ -347,14 +347,14 @@ class ApiHandler
 
         if (!apply_bool_fields(params, err,
                                {
-                                   {"verbose", &config.global.verbose},
-                                   {"quiet", &config.global.quiet},
-                                   {"demangle", &config.global.demangle},
-                                   {"sarif_format", &config.global.hasSarifFormat},
-                                   {"static_analysis", &config.global.hasStaticAnalysis},
-                                   {"dynamic_analysis", &config.global.hasDynamicAnalysis},
-                                   {"include_compdb_deps", &config.global.include_compdb_deps},
-                                   {"timing", &config.global.timing},
+                                   {"verbose", &config.output.verbose},
+                                   {"quiet", &config.output.quiet},
+                                   {"demangle", &config.output.demangle},
+                                   {"sarif_format", &config.output.sarif_format},
+                                   {"static_analysis", &config.analysis.static_enabled},
+                                   {"dynamic_analysis", &config.analysis.dynamic_enabled},
+                                   {"include_compdb_deps", &config.files.include_compdb_deps},
+                                   {"timing", &config.stack_analyzer.timing},
                                }))
         {
             return false;
@@ -376,33 +376,33 @@ class ApiHandler
                 err = {"InvalidParams", "Failed to load config: " + toolConfigError};
                 return false;
             }
-            config.global.config_file = configPath;
+            config.config_file = configPath;
         }
         if (!apply_string_fields(
                 params, err,
                 {
-                    {"report_file", &config.global.report_file},
-                    {"output_file", &config.global.output_file},
-                    {"config", &config.global.config_file},
-                    {"compile_commands", &config.global.compile_commands},
-                    {"analysis_profile", &config.global.analysis_profile},
-                    {"smt", &config.global.smt},
-                    {"smt_backend", &config.global.smt_backend},
-                    {"smt_secondary_backend", &config.global.smt_secondary_backend},
-                    {"smt_mode", &config.global.smt_mode},
-                    {"resource_model", &config.global.resource_model},
-                    {"escape_model", &config.global.escape_model},
-                    {"buffer_model", &config.global.buffer_model},
-                    {"stack_analyzer_mode", &config.global.stack_analyzer_mode},
-                    {"stack_analyzer_output_format", &config.global.stack_analyzer_output_format},
-                    {"ipc_path", &config.global.ipcPath},
+                    {"report_file", &config.output.report_file},
+                    {"output_file", &config.output.output_file},
+                    {"config", &config.config_file},
+                    {"compile_commands", &config.files.compile_commands},
+                    {"analysis_profile", &config.stack_analyzer.analysis_profile},
+                    {"smt", &config.stack_analyzer.smt},
+                    {"smt_backend", &config.stack_analyzer.smt_backend},
+                    {"smt_secondary_backend", &config.stack_analyzer.smt_secondary_backend},
+                    {"smt_mode", &config.stack_analyzer.smt_mode},
+                    {"resource_model", &config.stack_analyzer.resource_model},
+                    {"escape_model", &config.stack_analyzer.escape_model},
+                    {"buffer_model", &config.stack_analyzer.buffer_model},
+                    {"stack_analyzer_mode", &config.stack_analyzer.mode},
+                    {"stack_analyzer_output_format", &config.stack_analyzer.output_format},
+                    {"ipc_path", &config.runtime.ipc_path},
                 }))
         {
             return false;
         }
-        uint64_t smt_timeout = config.global.smt_timeout_ms;
-        uint64_t smt_budget = config.global.smt_budget_nodes;
-        uint64_t stack_limit = config.global.stack_limit;
+        uint64_t smt_timeout = config.stack_analyzer.smt_timeout_ms;
+        uint64_t smt_budget = config.stack_analyzer.smt_budget_nodes;
+        uint64_t stack_limit = config.stack_analyzer.stack_limit;
         if (!apply_uint64_fields(params, err,
                                  {
                                      {"smt_timeout_ms", &smt_timeout},
@@ -417,32 +417,28 @@ class ApiHandler
             err = {"InvalidParams", "smt_timeout_ms is too large."};
             return false;
         }
-        config.global.smt_timeout_ms = static_cast<uint32_t>(smt_timeout);
-        config.global.smt_budget_nodes = smt_budget;
-        config.global.stack_limit = stack_limit;
+        config.stack_analyzer.smt_timeout_ms = static_cast<uint32_t>(smt_timeout);
+        config.stack_analyzer.smt_budget_nodes = smt_budget;
+        config.stack_analyzer.stack_limit = stack_limit;
         if (!apply_list_param(params, "entry_points", err,
                               [&](const std::vector<std::string>& values)
-                              { config.global.entry_points = join_with_comma(values); }))
+                              { config.files.entry_points = values; }))
         {
             return false;
         }
-        if (!apply_list_param(params, "invoke", err,
-                              [&](const std::vector<std::string>& values)
-                              {
-                                  config.global.hasInvokedSpecificTools = true;
-                                  config.global.specificTools = values;
-                              }))
+        if (!apply_list_param(params, "invoke", err, [&](const std::vector<std::string>& values)
+                              { config.analysis.invoke = values; }))
         {
             return false;
         }
         if (!apply_list_param(params, "smt_rules", err, [&](const std::vector<std::string>& values)
-                              { config.global.smt_rules = values; }))
+                              { config.stack_analyzer.smt_rules = values; }))
         {
             return false;
         }
         if (!apply_list_param(params, "stack_analyzer_extra_args", err,
                               [&](const std::vector<std::string>& values)
-                              { config.global.stack_analyzer_extra_args = values; }))
+                              { config.stack_analyzer.extra_args = values; }))
         {
             return false;
         }
@@ -471,8 +467,8 @@ class ApiHandler
     static bool run_analysis(const ctrace::ProgramConfig& config, ILogger& logger, json& result,
                              ParseError& err)
     {
-        if (!config.global.hasStaticAnalysis && !config.global.hasDynamicAnalysis &&
-            !config.global.hasInvokedSpecificTools)
+        if (!config.analysis.static_enabled && !config.analysis.dynamic_enabled &&
+            config.analysis.invoke.empty())
         {
             err = {"NoAnalysisSelected",
                    "Enable static_analysis, dynamic_analysis, or invoke tools."};
@@ -490,14 +486,16 @@ class ApiHandler
         }
         const uint8_t pool_size = static_cast<uint8_t>(threads);
         auto output_capture = std::make_shared<ctrace::Thread::Output::CaptureBuffer>();
-        ctrace::ToolInvoker invoker(config, pool_size, config.global.hasAsync, output_capture);
+        ctrace::ToolInvoker invoker(
+            config, pool_size, (config.runtime.async ? std::launch::async : std::launch::deferred),
+            output_capture);
         const auto sourceFiles = ctrace::resolveSourceFiles(config);
 
-        if (config.global.verbose)
+        if (config.output.verbose)
         {
-            if (!config.global.config_file.empty())
+            if (!config.config_file.empty())
             {
-                logger.info("Config file in use: " + config.global.config_file);
+                logger.info("Config file in use: " + config.config_file);
             }
             else
             {
@@ -518,17 +516,17 @@ class ApiHandler
         const size_t processed = validSourceFiles.size();
         if (processed > 0)
         {
-            if (config.global.hasStaticAnalysis)
+            if (config.analysis.static_enabled)
             {
                 invoker.runStaticTools(validSourceFiles);
             }
-            if (config.global.hasDynamicAnalysis)
+            if (config.analysis.dynamic_enabled)
             {
                 invoker.runDynamicTools(validSourceFiles);
             }
-            if (config.global.hasInvokedSpecificTools)
+            if (!config.analysis.invoke.empty())
             {
-                invoker.runSpecificTools(config.global.specificTools, validSourceFiles);
+                invoker.runSpecificTools(config.analysis.invoke, validSourceFiles);
             }
         }
 
@@ -542,29 +540,29 @@ class ApiHandler
         logger.info("Analysis completed for " + std::to_string(processed) + " file(s).");
 
         result["files"] = processed;
-        result["static_analysis"] = config.global.hasStaticAnalysis;
-        result["dynamic_analysis"] = config.global.hasDynamicAnalysis;
-        result["invoked_tools"] = config.global.specificTools;
-        result["sarif_format"] = config.global.hasSarifFormat;
-        result["report_file"] = config.global.report_file;
-        result["config"] = config.global.config_file;
-        result["include_compdb_deps"] = config.global.include_compdb_deps;
-        result["resource_model"] = config.global.resource_model;
-        result["escape_model"] = config.global.escape_model;
-        result["buffer_model"] = config.global.buffer_model;
-        result["analysis_profile"] = config.global.analysis_profile;
-        result["smt"] = config.global.smt;
-        result["smt_backend"] = config.global.smt_backend;
-        result["smt_secondary_backend"] = config.global.smt_secondary_backend;
-        result["smt_mode"] = config.global.smt_mode;
-        result["smt_timeout_ms"] = config.global.smt_timeout_ms;
-        result["smt_budget_nodes"] = config.global.smt_budget_nodes;
-        result["smt_rules"] = config.global.smt_rules;
-        result["timing"] = config.global.timing;
-        result["stack_limit"] = config.global.stack_limit;
-        result["stack_analyzer_mode"] = config.global.stack_analyzer_mode;
-        result["stack_analyzer_output_format"] = config.global.stack_analyzer_output_format;
-        result["stack_analyzer_extra_args"] = config.global.stack_analyzer_extra_args;
+        result["static_analysis"] = config.analysis.static_enabled;
+        result["dynamic_analysis"] = config.analysis.dynamic_enabled;
+        result["invoked_tools"] = config.analysis.invoke;
+        result["sarif_format"] = config.output.sarif_format;
+        result["report_file"] = config.output.report_file;
+        result["config"] = config.config_file;
+        result["include_compdb_deps"] = config.files.include_compdb_deps;
+        result["resource_model"] = config.stack_analyzer.resource_model;
+        result["escape_model"] = config.stack_analyzer.escape_model;
+        result["buffer_model"] = config.stack_analyzer.buffer_model;
+        result["analysis_profile"] = config.stack_analyzer.analysis_profile;
+        result["smt"] = config.stack_analyzer.smt;
+        result["smt_backend"] = config.stack_analyzer.smt_backend;
+        result["smt_secondary_backend"] = config.stack_analyzer.smt_secondary_backend;
+        result["smt_mode"] = config.stack_analyzer.smt_mode;
+        result["smt_timeout_ms"] = config.stack_analyzer.smt_timeout_ms;
+        result["smt_budget_nodes"] = config.stack_analyzer.smt_budget_nodes;
+        result["smt_rules"] = config.stack_analyzer.smt_rules;
+        result["timing"] = config.stack_analyzer.timing;
+        result["stack_limit"] = config.stack_analyzer.stack_limit;
+        result["stack_analyzer_mode"] = config.stack_analyzer.mode;
+        result["stack_analyzer_output_format"] = config.stack_analyzer.output_format;
+        result["stack_analyzer_extra_args"] = config.stack_analyzer.extra_args;
         const auto diagnosticsSummaryTotal = invoker.diagnosticsSummaryTotal();
         result["diagnostics_summary_total"] = {{"info", diagnosticsSummaryTotal.info},
                                                {"warning", diagnosticsSummaryTotal.warning},
@@ -643,9 +641,9 @@ class ApiHandler
 class HttpServer
 {
   public:
-    HttpServer(ApiHandler& apiHandler, ILogger& logger, const ctrace::GlobalConfig& config)
-        : apiHandler_(apiHandler), logger_(logger), shutdown_token_(config.shutdownToken),
-          shutdown_timeout_(std::chrono::milliseconds(config.shutdownTimeoutMs))
+    HttpServer(ApiHandler& apiHandler, ILogger& logger, const ctrace::ServerConfig& config)
+        : apiHandler_(apiHandler), logger_(logger), shutdown_token_(config.shutdown_token),
+          shutdown_timeout_(std::chrono::milliseconds(config.shutdown_timeout_ms))
     {
     }
 

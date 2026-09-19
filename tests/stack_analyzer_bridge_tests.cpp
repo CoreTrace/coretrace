@@ -76,7 +76,7 @@ int main(int argc, char** argv)
     }
 
     const std::filesystem::path reportPath = makeReportPath();
-    config.global.report_file = reportPath.string();
+    config.output.report_file = reportPath.string();
     const std::string input = (repoRoot / "tests/double_free.c").string();
 
     ctrace::StackAnalyzerToolImplementation tool;

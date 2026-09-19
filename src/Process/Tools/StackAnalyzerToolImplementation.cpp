@@ -112,13 +112,13 @@ namespace
         report.reserve(96);
 
         const std::string analyzerMode =
-            config.global.stack_analyzer_mode.empty() ? "ir" : config.global.stack_analyzer_mode;
+            config.stack_analyzer.mode.empty() ? "ir" : config.stack_analyzer.mode;
         args.emplace_back("--mode=" + analyzerMode);
         appendBridgeDecision(report, "--mode", true, "value='" + analyzerMode + "'");
-        if (!config.global.config_file.empty())
+        if (!config.config_file.empty())
         {
             appendBridgeDecision(report, "config source", true,
-                                 "path='" + config.global.config_file +
+                                 "path='" + config.config_file +
                                      "' loaded by coretrace and mapped to analyzer options");
         }
         else
@@ -127,54 +127,55 @@ namespace
                                  "no --config provided to coretrace");
         }
 
-        appendValueOption(args, report, "--config", config.global.stack_analyzer_config,
+        appendValueOption(args, report, "--config", config.stack_analyzer.config,
                           "empty stack_analyzer.config; analyzer internal config disabled");
         appendFlagOption(args, report, "--print-effective-config",
-                         config.global.stack_analyzer_print_effective_config,
+                         config.stack_analyzer.print_effective_config,
                          "stack_analyzer.print_effective_config enabled",
                          "stack_analyzer.print_effective_config disabled");
 
-        if (!config.global.stack_analyzer_output_format.empty())
+        if (!config.stack_analyzer.output_format.empty())
         {
-            args.emplace_back("--format=" + config.global.stack_analyzer_output_format);
+            args.emplace_back("--format=" + config.stack_analyzer.output_format);
             appendBridgeDecision(report, "--format", true,
-                                 "value='" + config.global.stack_analyzer_output_format + "'");
+                                 "value='" + config.stack_analyzer.output_format + "'");
         }
         else
         {
-            appendFlagOption(args, report, "--format=json", config.global.hasSarifFormat,
+            appendFlagOption(args, report, "--format=json", config.output.sarif_format,
                              "derived from coretrace --sarif-format",
                              "empty stack_analyzer.output_format and sarif disabled");
         }
-        appendFlagOption(args, report, "--verbose", config.global.verbose,
+        appendFlagOption(args, report, "--verbose", config.output.verbose,
                          "coretrace --verbose enabled", "coretrace --verbose disabled");
-        appendFlagOption(args, report, "--demangle", config.global.demangle,
+        appendFlagOption(args, report, "--demangle", config.output.demangle,
                          "coretrace --demangle enabled", "coretrace --demangle disabled");
-        appendFlagOption(args, report, "--quiet", config.global.quiet, "coretrace --quiet enabled",
+        appendFlagOption(args, report, "--quiet", config.output.quiet, "coretrace --quiet enabled",
                          "coretrace --quiet disabled");
-        appendFlagOption(args, report, "--include-compdb-deps", config.global.include_compdb_deps,
+        appendFlagOption(args, report, "--include-compdb-deps", config.files.include_compdb_deps,
                          "coretrace --include-compdb-deps enabled",
                          "coretrace --include-compdb-deps disabled");
-        appendFlagOption(args, report, "--compdb-fast", config.global.stack_analyzer_compdb_fast,
+        appendFlagOption(args, report, "--compdb-fast", config.stack_analyzer.compdb_fast,
                          "stack_analyzer.compdb_fast enabled",
                          "stack_analyzer.compdb_fast disabled");
-        appendFlagOption(args, report, "--STL", config.global.stack_analyzer_include_stl,
+        appendFlagOption(args, report, "--STL", config.stack_analyzer.include_stl,
                          "stack_analyzer.include_stl enabled",
                          "stack_analyzer.include_stl disabled");
-        appendFlagOption(
-            args, report, "--warnings-only", config.global.stack_analyzer_warnings_only,
-            "stack_analyzer.warnings_only enabled", "stack_analyzer.warnings_only disabled");
-        appendFlagOption(args, report, "--dump-filter", config.global.stack_analyzer_dump_filter,
+        appendFlagOption(args, report, "--warnings-only", config.stack_analyzer.warnings_only,
+                         "stack_analyzer.warnings_only enabled",
+                         "stack_analyzer.warnings_only disabled");
+        appendFlagOption(args, report, "--dump-filter", config.stack_analyzer.dump_filter,
                          "stack_analyzer.dump_filter enabled",
                          "stack_analyzer.dump_filter disabled");
 
-        appendValueOption(args, report, "--analysis-profile", config.global.analysis_profile,
+        appendValueOption(args, report, "--analysis-profile",
+                          config.stack_analyzer.analysis_profile,
                           "empty in coretrace config; analyzer default kept");
-        appendValueOption(args, report, "--compile-commands", config.global.compile_commands,
+        appendValueOption(args, report, "--compile-commands", config.files.compile_commands,
                           "empty in coretrace config; analyzer auto-discovery kept");
-        if (!config.global.stack_analyzer_jobs.empty())
+        if (!config.stack_analyzer.jobs.empty())
         {
-            appendValueOption(args, report, "--jobs", config.global.stack_analyzer_jobs,
+            appendValueOption(args, report, "--jobs", config.stack_analyzer.jobs,
                               "empty stack_analyzer.jobs");
         }
         else
@@ -184,37 +185,37 @@ namespace
         }
 
         appendValueOption(args, report, "--resource-summary-cache-dir",
-                          config.global.stack_analyzer_resource_summary_cache_dir,
+                          config.stack_analyzer.resource_summary_cache_dir,
                           "empty stack_analyzer.resource_summary_cache_dir");
         appendValueOption(args, report, "--compile-ir-cache-dir",
-                          config.global.stack_analyzer_compile_ir_cache_dir,
+                          config.stack_analyzer.compile_ir_cache_dir,
                           "empty stack_analyzer.compile_ir_cache_dir");
         appendValueOption(args, report, "--compile-ir-format",
-                          config.global.stack_analyzer_compile_ir_format,
+                          config.stack_analyzer.compile_ir_format,
                           "empty stack_analyzer.compile_ir_format");
-        appendValueOption(args, report, "--dump-ir", config.global.stack_analyzer_dump_ir,
+        appendValueOption(args, report, "--dump-ir", config.stack_analyzer.dump_ir,
                           "empty stack_analyzer.dump_ir");
-        appendValueOption(args, report, "--base-dir", config.global.stack_analyzer_base_dir,
+        appendValueOption(args, report, "--base-dir", config.stack_analyzer.base_dir,
                           "empty stack_analyzer.base_dir");
-        appendValueOption(args, report, "--resource-model", config.global.resource_model,
+        appendValueOption(args, report, "--resource-model", config.stack_analyzer.resource_model,
                           "empty in coretrace config; analyzer default model");
-        appendValueOption(args, report, "--escape-model", config.global.escape_model,
+        appendValueOption(args, report, "--escape-model", config.stack_analyzer.escape_model,
                           "empty in coretrace config; analyzer default model");
-        appendValueOption(args, report, "--buffer-model", config.global.buffer_model,
+        appendValueOption(args, report, "--buffer-model", config.stack_analyzer.buffer_model,
                           "empty in coretrace config; analyzer default model");
-        appendValueOption(args, report, "--smt", config.global.smt,
+        appendValueOption(args, report, "--smt", config.stack_analyzer.smt,
                           "empty in coretrace config; analyzer default SMT");
-        appendValueOption(args, report, "--smt-backend", config.global.smt_backend,
+        appendValueOption(args, report, "--smt-backend", config.stack_analyzer.smt_backend,
                           "empty in coretrace config; analyzer default backend");
         appendValueOption(args, report, "--smt-secondary-backend",
-                          config.global.smt_secondary_backend,
+                          config.stack_analyzer.smt_secondary_backend,
                           "empty in coretrace config; analyzer default secondary backend");
-        appendValueOption(args, report, "--smt-mode", config.global.smt_mode,
+        appendValueOption(args, report, "--smt-mode", config.stack_analyzer.smt_mode,
                           "empty in coretrace config; analyzer default mode");
 
-        if (!config.global.stack_analyzer_only_files.empty())
+        if (!config.stack_analyzer.only_files.empty())
         {
-            for (const auto& filter : config.global.stack_analyzer_only_files)
+            for (const auto& filter : config.stack_analyzer.only_files)
             {
                 appendValueOption(args, report, "--only-file", filter,
                                   "empty value in stack_analyzer.only_files");
@@ -225,9 +226,9 @@ namespace
             appendBridgeDecision(report, "--only-file", false, "empty stack_analyzer.only_files");
         }
 
-        if (!config.global.stack_analyzer_only_dirs.empty())
+        if (!config.stack_analyzer.only_dirs.empty())
         {
-            for (const auto& filter : config.global.stack_analyzer_only_dirs)
+            for (const auto& filter : config.stack_analyzer.only_dirs)
             {
                 appendValueOption(args, report, "--only-dir", filter,
                                   "empty value in stack_analyzer.only_dirs");
@@ -238,9 +239,9 @@ namespace
             appendBridgeDecision(report, "--only-dir", false, "empty stack_analyzer.only_dirs");
         }
 
-        if (!config.global.stack_analyzer_exclude_dirs.empty())
+        if (!config.stack_analyzer.exclude_dirs.empty())
         {
-            for (const auto& filter : config.global.stack_analyzer_exclude_dirs)
+            for (const auto& filter : config.stack_analyzer.exclude_dirs)
             {
                 appendValueOption(args, report, "--exclude-dir", filter,
                                   "empty value in stack_analyzer.exclude_dirs");
@@ -252,23 +253,23 @@ namespace
                                  "empty stack_analyzer.exclude_dirs");
         }
 
-        if (!config.global.stack_analyzer_only_functions.empty())
+        if (!config.stack_analyzer.only_functions.empty())
         {
             args.emplace_back("--only-func");
-            args.emplace_back(joinCsv(config.global.stack_analyzer_only_functions));
+            args.emplace_back(joinCsv(config.stack_analyzer.only_functions));
             appendBridgeDecision(report, "--only-func", true,
-                                 "value='" + joinCsv(config.global.stack_analyzer_only_functions) +
-                                     "'");
+                                 "value='" + joinCsv(config.stack_analyzer.only_functions) + "'");
         }
         else
         {
-            appendValueOption(args, report, "--only-function", config.global.entry_points,
+            appendValueOption(args, report, "--only-function",
+                              ctrace_tools::strings::joinByComma(config.files.entry_points),
                               "empty in coretrace config; no entry-point filter");
         }
 
-        if (!config.global.stack_analyzer_include_dirs.empty())
+        if (!config.stack_analyzer.include_dirs.empty())
         {
-            for (const auto& includeDir : config.global.stack_analyzer_include_dirs)
+            for (const auto& includeDir : config.stack_analyzer.include_dirs)
             {
                 if (includeDir.empty())
                 {
@@ -285,9 +286,9 @@ namespace
             appendBridgeDecision(report, "-I", false, "empty stack_analyzer.include_dirs");
         }
 
-        if (!config.global.stack_analyzer_defines.empty())
+        if (!config.stack_analyzer.defines.empty())
         {
-            for (const auto& macroDef : config.global.stack_analyzer_defines)
+            for (const auto& macroDef : config.stack_analyzer.defines)
             {
                 if (macroDef.empty())
                 {
@@ -304,9 +305,9 @@ namespace
             appendBridgeDecision(report, "-D", false, "empty stack_analyzer.defines");
         }
 
-        if (!config.global.stack_analyzer_compile_args.empty())
+        if (!config.stack_analyzer.compile_args.empty())
         {
-            for (const auto& compileArg : config.global.stack_analyzer_compile_args)
+            for (const auto& compileArg : config.stack_analyzer.compile_args)
             {
                 appendValueOption(args, report, "--compile-arg", compileArg,
                                   "empty value in stack_analyzer.compile_args");
@@ -318,17 +319,17 @@ namespace
                                  "empty stack_analyzer.compile_args");
         }
 
-        appendFlagOption(args, report, "--timing", config.global.timing,
+        appendFlagOption(args, report, "--timing", config.stack_analyzer.timing,
                          "coretrace timing enabled; hotspot summary is not exposed by the "
                          "analyzer library API yet (coretrace-stack-analyzer#93)",
                          "coretrace timing disabled");
         appendFlagOption(args, report, "--resource-summary-cache-memory-only",
-                         config.global.stack_analyzer_resource_summary_cache_memory_only,
+                         config.stack_analyzer.resource_summary_cache_memory_only,
                          "stack_analyzer.resource_summary_cache_memory_only enabled",
                          "stack_analyzer.resource_summary_cache_memory_only disabled");
-        if (config.global.stack_analyzer_resource_cross_tu.has_value())
+        if (config.stack_analyzer.resource_cross_tu.has_value())
         {
-            const bool enabled = *config.global.stack_analyzer_resource_cross_tu;
+            const bool enabled = *config.stack_analyzer.resource_cross_tu;
             args.emplace_back(enabled ? "--resource-cross-tu" : "--no-resource-cross-tu");
             appendBridgeDecision(report, "resource_cross_tu", true,
                                  enabled ? "enabled" : "disabled");
@@ -339,9 +340,9 @@ namespace
                                  "not set; analyzer default kept");
         }
 
-        if (config.global.stack_analyzer_uninitialized_cross_tu.has_value())
+        if (config.stack_analyzer.uninitialized_cross_tu.has_value())
         {
-            const bool enabled = *config.global.stack_analyzer_uninitialized_cross_tu;
+            const bool enabled = *config.stack_analyzer.uninitialized_cross_tu;
             args.emplace_back(enabled ? "--uninitialized-cross-tu" : "--no-uninitialized-cross-tu");
             appendBridgeDecision(report, "uninitialized_cross_tu", true,
                                  enabled ? "enabled" : "disabled");
@@ -351,48 +352,51 @@ namespace
             appendBridgeDecision(report, "uninitialized_cross_tu", false,
                                  "not set; analyzer default kept");
         }
-        if (config.global.stack_limit > 0)
+        if (config.stack_analyzer.stack_limit > 0)
         {
             args.emplace_back("--stack-limit");
-            args.emplace_back(std::to_string(config.global.stack_limit));
+            args.emplace_back(std::to_string(config.stack_analyzer.stack_limit));
             appendBridgeDecision(report, "--stack-limit", true,
-                                 "value='" + std::to_string(config.global.stack_limit) + "'");
+                                 "value='" + std::to_string(config.stack_analyzer.stack_limit) +
+                                     "'");
         }
         else
         {
             appendBridgeDecision(report, "--stack-limit", false,
                                  "value is 0; analyzer default kept");
         }
-        if (config.global.smt_timeout_ms > 0)
+        if (config.stack_analyzer.smt_timeout_ms > 0)
         {
             args.emplace_back("--smt-timeout-ms");
-            args.emplace_back(std::to_string(config.global.smt_timeout_ms));
+            args.emplace_back(std::to_string(config.stack_analyzer.smt_timeout_ms));
             appendBridgeDecision(report, "--smt-timeout-ms", true,
-                                 "value='" + std::to_string(config.global.smt_timeout_ms) + "'");
+                                 "value='" + std::to_string(config.stack_analyzer.smt_timeout_ms) +
+                                     "'");
         }
         else
         {
             appendBridgeDecision(report, "--smt-timeout-ms", false,
                                  "value is 0; analyzer default kept");
         }
-        if (config.global.smt_budget_nodes > 0)
+        if (config.stack_analyzer.smt_budget_nodes > 0)
         {
             args.emplace_back("--smt-budget-nodes");
-            args.emplace_back(std::to_string(config.global.smt_budget_nodes));
+            args.emplace_back(std::to_string(config.stack_analyzer.smt_budget_nodes));
             appendBridgeDecision(report, "--smt-budget-nodes", true,
-                                 "value='" + std::to_string(config.global.smt_budget_nodes) + "'");
+                                 "value='" +
+                                     std::to_string(config.stack_analyzer.smt_budget_nodes) + "'");
         }
         else
         {
             appendBridgeDecision(report, "--smt-budget-nodes", false,
                                  "value is 0; analyzer default kept");
         }
-        if (!config.global.smt_rules.empty())
+        if (!config.stack_analyzer.smt_rules.empty())
         {
             args.emplace_back("--smt-rules");
-            args.emplace_back(joinCsv(config.global.smt_rules));
+            args.emplace_back(joinCsv(config.stack_analyzer.smt_rules));
             appendBridgeDecision(report, "--smt-rules", true,
-                                 "value='" + joinCsv(config.global.smt_rules) + "'");
+                                 "value='" + joinCsv(config.stack_analyzer.smt_rules) + "'");
         }
         else
         {
@@ -400,9 +404,9 @@ namespace
                                  "empty in coretrace config; analyzer default rules");
         }
 
-        if (!config.global.stack_analyzer_extra_args.empty())
+        if (!config.stack_analyzer.extra_args.empty())
         {
-            for (const auto& extraArg : config.global.stack_analyzer_extra_args)
+            for (const auto& extraArg : config.stack_analyzer.extra_args)
             {
                 if (extraArg.empty())
                 {
@@ -526,7 +530,7 @@ namespace ctrace
                                                        ctrace::ProgramConfig config) const
     {
         m_lastDiagnosticsSummary = {};
-        const std::string stableReportPath = resolveStableReportPath(config.global.report_file);
+        const std::string stableReportPath = resolveStableReportPath(config.output.report_file);
 
         std::vector<std::string> inputFiles;
         inputFiles.reserve(files.size());
@@ -559,7 +563,7 @@ namespace ctrace
         const auto analyzerArgBuild = buildAnalyzerArgs(inputFiles, config);
         const std::vector<std::string>& analyzerArgs = analyzerArgBuild.args;
 
-        if (config.global.verbose)
+        if (config.output.verbose)
         {
             coretrace::log(coretrace::Level::Debug, coretrace::Module(kStackAnalyzerModule),
                            "CoreTrace -> stack_analyzer bridge report ({} entries)\n",
@@ -618,11 +622,11 @@ namespace ctrace
         if (!rendered.empty())
         {
             captureToolOutputOnly("stdout", rendered);
-            if (config.global.ipc == "standardIO")
+            if (config.runtime.ipc == "standardIO")
             {
                 ctrace::Thread::Output::tool_out(rendered);
             }
-            else if (config.global.ipc == "socket" && ipc)
+            else if (config.runtime.ipc == "socket" && ipc)
             {
                 ipc->write(rendered);
             }
@@ -637,7 +641,7 @@ namespace ctrace
                                "Unable to persist stack analyzer report to '{}': {}\n",
                                stableReportPath, writeError);
             }
-            else if (config.global.verbose)
+            else if (config.output.verbose)
             {
                 coretrace::log(coretrace::Level::Debug, coretrace::Module(kStackAnalyzerModule),
                                "Stack analyzer report persisted to '{}' ({} bytes)\n",

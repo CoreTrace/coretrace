@@ -37,14 +37,14 @@ namespace ctrace
 
         std::vector<std::string> sourceFiles;
         std::unordered_set<std::string> seenPaths;
-        seenPaths.reserve(config.files.size() + 1);
+        seenPaths.reserve(config.files.input.size() + 1);
 
-        auto fileEntries = config.files;
+        auto fileEntries = config.files.input;
         std::filesystem::path autoDiscoveredCompdbPath;
         bool hasAutoDiscoveredCompdbPath = false;
-        if (fileEntries.empty() && !config.global.compile_commands.empty())
+        if (fileEntries.empty() && !config.files.compile_commands.empty())
         {
-            std::filesystem::path compdbPath(config.global.compile_commands);
+            std::filesystem::path compdbPath(config.files.compile_commands);
             std::error_code fsErr;
             if (std::filesystem::is_directory(compdbPath, fsErr))
             {
@@ -83,15 +83,14 @@ namespace ctrace
             return true;
         };
 
-        for (const auto& fileConfig : fileEntries)
+        for (const std::string& entry : fileEntries)
         {
-            const std::string& entry = fileConfig.src_file;
             const std::filesystem::path entryPath(entry);
             const bool isCompdbAutoDiscoveryEntry =
                 hasAutoDiscoveredCompdbPath &&
                 (entryPath.lexically_normal() == autoDiscoveredCompdbPath);
             const bool filterDependencyEntries =
-                isCompdbAutoDiscoveryEntry && !config.global.include_compdb_deps;
+                isCompdbAutoDiscoveryEntry && !config.files.include_compdb_deps;
 
             const auto shouldSkipDependencyEntry = [&](const std::string& candidate,
                                                        const std::filesystem::path& baseDir) -> bool

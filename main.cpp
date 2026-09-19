@@ -28,12 +28,12 @@ int main(int argc, char* argv[])
 
     coretrace::enable_logging();
     coretrace::set_prefix("== CoreTrace ==");
-    coretrace::set_min_level((config.global.verbose) ? coretrace::Level::Debug
+    coretrace::set_min_level((config.output.verbose) ? coretrace::Level::Debug
                                                      : coretrace::Level::Info);
     coretrace::set_source_location(false);
     coretrace::set_thread_safe(false);
 
-    if (config.global.ipc == "serve")
+    if (config.runtime.ipc == "serve")
     {
         return ctrace::run_server(config);
     }

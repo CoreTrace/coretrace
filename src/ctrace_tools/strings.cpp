@@ -58,6 +58,20 @@ namespace ctrace_tools
 
             return result;
         }
+
+        [[nodiscard]] std::string joinByComma(const std::vector<std::string>& items)
+        {
+            std::string joined;
+            for (std::size_t i = 0; i < items.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    joined.push_back(',');
+                }
+                joined += items[i];
+            }
+            return joined;
+        }
     } // namespace strings
 
 } // namespace ctrace_tools

@@ -15,7 +15,7 @@ namespace ctrace
     {
         ctrace::Thread::Output::cout("\033[32mRunning tscancode on " + file + "\033[0m");
 
-        bool has_sarif_format = config.global.hasSarifFormat;
+        bool has_sarif_format = config.output.sarif_format;
         std::string src_file = file;
 
         try

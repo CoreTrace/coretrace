@@ -90,14 +90,15 @@ namespace ctrace
         {
             ctrace::Thread::Output::cout("Running IKOS on " + file);
             std::string src_file = file;
-            std::string entry_points = config.global.entry_points;
-            std::string report_file = config.global.report_file;
+            std::string entry_points =
+                ctrace_tools::strings::joinByComma(config.files.entry_points);
+            std::string report_file = config.output.report_file;
 
             try
             {
                 std::vector<std::string> argsProcess;
 
-                if (config.global.hasSarifFormat)
+                if (config.output.sarif_format)
                 {
                     argsProcess.push_back("--format=text");
                 }
@@ -177,9 +178,10 @@ namespace ctrace
         {
             ctrace::Thread::Output::cout("Running flawfinder on " + file);
 
-            bool has_sarif_format = config.global.hasSarifFormat;
+            bool has_sarif_format = config.output.sarif_format;
             std::string src_file = file;
-            std::string entry_points = config.global.entry_points;
+            std::string entry_points =
+                ctrace_tools::strings::joinByComma(config.files.entry_points);
 
             try
             {
@@ -199,7 +201,7 @@ namespace ctrace
                     "python3", argsProcess); // or "cmd.exe" for Windows
                 const ProcessResult run = process->execute();
 
-                if (config.global.ipc == "standardIO")
+                if (config.runtime.ipc == "standardIO")
                 {
                     ctrace::Thread::Output::tool_out(run.output);
                 }
@@ -242,9 +244,10 @@ namespace ctrace
         void execute(const std::string& file, ctrace::ProgramConfig config) const override
         {
             ctrace::Thread::Output::cout("Running ikos on " + file);
-            bool has_sarif_format = config.global.hasSarifFormat;
+            bool has_sarif_format = config.output.sarif_format;
             std::string src_file = file;
-            std::string entry_points = config.global.entry_points;
+            std::string entry_points =
+                ctrace_tools::strings::joinByComma(config.files.entry_points);
 
             try
             {
