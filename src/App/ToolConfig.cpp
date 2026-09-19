@@ -1046,6 +1046,20 @@ namespace ctrace
         {
             return false;
         }
+        config.config_file = path.lexically_normal().string();
+        return applyToolConfigObject(config, root, std::filesystem::absolute(path).parent_path(),
+                                     errorMessage);
+    }
+
+    bool applyToolConfigObject(ProgramConfig& config, const json& root,
+                               const std::filesystem::path& configDir, std::string& errorMessage)
+    {
+        errorMessage.clear();
+        if (!root.is_object())
+        {
+            errorMessage = "Config root must be a JSON object.";
+            return false;
+        }
         if (!validateKnownKeys(root,
                                {"schema_version", "analysis", "files", "output", "runtime",
                                 "server", "stack_analyzer", "stack-analyzer", "invoke", "input",
@@ -1059,8 +1073,6 @@ namespace ctrace
             return false;
         }
 
-        const std::filesystem::path configDir = std::filesystem::absolute(path).parent_path();
-        config.config_file = path.lexically_normal().string();
         LoadContext ctx{config, configDir};
 
         // Precedence inside the file: analyzer section, then legacy root keys, then the

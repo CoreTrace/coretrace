@@ -94,52 +94,21 @@ class ApiHandler
         return response;
     }
 
-  private:
     struct ParseError
     {
         std::string code;
         std::string message;
     };
 
-    struct BoolField
-    {
-        const char* key;
-        bool* target;
-    };
+    static bool build_config_from_params(const json& params, ctrace::ProgramConfig& config,
+                                         ParseError& err);
 
-    struct StringField
-    {
-        const char* key;
-        std::string* target;
-    };
-
-    struct Uint64Field
-    {
-        const char* key;
-        uint64_t* target;
-    };
-
+  private:
     ILogger& logger_;
 
     static void log_request(ILogger& logger, const json& request)
     {
         logger.info("Incoming request: " + request.dump());
-    }
-
-    static bool read_bool(const json& params, const char* key, bool& out, ParseError& err)
-    {
-        const auto it = params.find(key);
-        if (it == params.end() || it->is_null())
-        {
-            return true;
-        }
-        if (!it->is_boolean())
-        {
-            err = {"InvalidParams", std::string("Expected boolean for '") + key + "'."};
-            return false;
-        }
-        out = it->get<bool>();
-        return true;
     }
 
     static bool read_string(const json& params, const char* key, std::string& out, ParseError& err)
@@ -158,52 +127,45 @@ class ApiHandler
         return true;
     }
 
-    static bool read_uint64(const json& params, const char* key, uint64_t& out, ParseError& err)
+    /// List parameters accept a comma-separated string or an array of strings; empty items are
+    /// dropped. `input` items are themselves comma-separated (historical CLI form).
+    static bool read_string_list(const json& value, const char* key, bool splitItems,
+                                 std::vector<std::string>& out, ParseError& err)
     {
-        const auto it = params.find(key);
-        if (it == params.end() || it->is_null())
+        const auto append = [&](const std::string& item)
         {
-            return true;
-        }
-        if (!it->is_number_unsigned())
-        {
-            err = {"InvalidParams", std::string("Expected unsigned integer for '") + key + "'."};
-            return false;
-        }
-        out = it->get<uint64_t>();
-        return true;
-    }
-
-    static bool read_string_list(const json& params, const char* key, std::vector<std::string>& out,
-                                 ParseError& err)
-    {
-        const auto it = params.find(key);
-        if (it == params.end() || it->is_null())
-        {
-            return true;
-        }
-
-        if (it->is_string())
-        {
-            const std::string raw = it->get<std::string>();
-            const auto parts = ctrace_tools::strings::splitByComma(raw);
-            for (const auto part : parts)
+            if (!splitItems)
+            {
+                if (!item.empty())
+                {
+                    out.push_back(item);
+                }
+                return;
+            }
+            for (const auto part : ctrace_tools::strings::splitByComma(item))
             {
                 if (!part.empty())
                 {
                     out.emplace_back(part);
                 }
             }
+        };
+
+        if (value.is_string())
+        {
+            const std::string raw = value.get<std::string>();
+            for (const auto part : ctrace_tools::strings::splitByComma(raw))
+            {
+                append(std::string(part));
+            }
             return true;
         }
-
-        if (!it->is_array())
+        if (!value.is_array())
         {
             err = {"InvalidParams", std::string("Expected array or string for '") + key + "'."};
             return false;
         }
-
-        for (const auto& item : *it)
+        for (const auto& item : value)
         {
             if (!item.is_string())
             {
@@ -211,100 +173,21 @@ class ApiHandler
                        std::string("Expected string values in '") + key + "' array."};
                 return false;
             }
-            const std::string value = item.get<std::string>();
-            if (!value.empty())
-            {
-                out.emplace_back(value);
-            }
-        }
-        return true;
-    }
-
-    static bool apply_bool_fields(const json& params, ParseError& err,
-                                  std::initializer_list<BoolField> fields)
-    {
-        for (const auto& field : fields)
-        {
-            if (!read_bool(params, field.key, *field.target, err))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    static bool apply_string_fields(const json& params, ParseError& err,
-                                    std::initializer_list<StringField> fields)
-    {
-        for (const auto& field : fields)
-        {
-            if (!read_string(params, field.key, *field.target, err))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    static bool apply_uint64_fields(const json& params, ParseError& err,
-                                    std::initializer_list<Uint64Field> fields)
-    {
-        for (const auto& field : fields)
-        {
-            if (!read_uint64(params, field.key, *field.target, err))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    template <typename ApplyFn>
-    static bool apply_list_param(const json& params, const char* key, ParseError& err,
-                                 ApplyFn&& apply)
-    {
-        std::vector<std::string> values;
-        if (!read_string_list(params, key, values, err))
-        {
-            return false;
-        }
-        if (!values.empty())
-        {
-            apply(values);
+            append(item.get<std::string>());
         }
         return true;
     }
 
     static std::string join_with_comma(const std::vector<std::string>& items)
     {
-        std::string joined;
-        for (size_t i = 0; i < items.size(); ++i)
-        {
-            if (i > 0)
-            {
-                joined.push_back(',');
-            }
-            joined.append(items[i]);
-        }
-        return joined;
+        return ctrace_tools::strings::joinByComma(items);
     }
 
-    static bool apply_async_field(const json& params, ctrace::ProgramConfig& config,
-                                  ParseError& err)
-    {
-        bool async_enabled = false;
-        if (!read_bool(params, "async", async_enabled, err))
-        {
-            return false;
-        }
-        config.runtime.async = async_enabled;
-        return true;
-    }
-
+    /// `ipc` is protocol-specific: "serv"/"server" alias "serve", and "serve" inside a request
+    /// means the analysis runs in-process (standardIO).
     static bool apply_ipc_field(const json& params, ctrace::ProgramConfig& config, ParseError& err)
     {
         std::string ipc_value;
-
         if (!read_string(params, "ipc", ipc_value, err))
         {
             return false;
@@ -326,18 +209,82 @@ class ApiHandler
                                         "]"};
             return false;
         }
-        if (ipc_value == "serve")
-        {
-            config.runtime.ipc = "standardIO";
-            return true;
-        }
-
-        config.runtime.ipc = ipc_value;
+        config.runtime.ipc = ipc_value == "serve" ? "standardIO" : ipc_value;
         return true;
     }
 
-    static bool build_config_from_params(const json& params, ctrace::ProgramConfig& config,
-                                         ParseError& err)
+    /// Flat run_analysis parameter -> section and key of the config schema.
+    struct ParamSpec
+    {
+        const char* param;
+        const char* section;
+        const char* key;
+        bool list;
+    };
+
+    static const std::vector<ParamSpec>& param_schema()
+    {
+        static const std::vector<ParamSpec> schema = {
+            {"verbose", "output", "verbose", false},
+            {"quiet", "output", "quiet", false},
+            {"demangle", "output", "demangle", false},
+            {"sarif_format", "output", "sarif_format", false},
+            {"report_file", "output", "report_file", false},
+            {"output_file", "output", "output_file", false},
+            {"static_analysis", "analysis", "static", false},
+            {"dynamic_analysis", "analysis", "dynamic", false},
+            {"invoke", "analysis", "invoke", true},
+            {"input", "files", "input", true},
+            {"entry_points", "files", "entry_points", true},
+            {"compile_commands", "files", "compile_commands", false},
+            {"include_compdb_deps", "files", "include_compdb_deps", false},
+            {"async", "runtime", "async", false},
+            {"ipc_path", "runtime", "ipc_path", false},
+            {"timing", "stack_analyzer", "timing", false},
+            {"analysis_profile", "stack_analyzer", "analysis_profile", false},
+            {"smt", "stack_analyzer", "smt", false},
+            {"smt_backend", "stack_analyzer", "smt_backend", false},
+            {"smt_secondary_backend", "stack_analyzer", "smt_secondary_backend", false},
+            {"smt_mode", "stack_analyzer", "smt_mode", false},
+            {"smt_timeout_ms", "stack_analyzer", "smt_timeout_ms", false},
+            {"smt_budget_nodes", "stack_analyzer", "smt_budget_nodes", false},
+            {"smt_rules", "stack_analyzer", "smt_rules", true},
+            {"stack_limit", "stack_analyzer", "stack_limit", false},
+            {"resource_model", "stack_analyzer", "resource_model", false},
+            {"escape_model", "stack_analyzer", "escape_model", false},
+            {"buffer_model", "stack_analyzer", "buffer_model", false},
+            {"stack_analyzer_mode", "stack_analyzer", "mode", false},
+            {"stack_analyzer_output_format", "stack_analyzer", "output_format", false},
+            {"stack_analyzer_extra_args", "stack_analyzer", "extra_args", true},
+        };
+        return schema;
+    }
+
+    /// Loader diagnostics name the sectioned key; clients know the flat parameter.
+    static std::string with_param_names(std::string message)
+    {
+        std::vector<std::pair<std::string, std::string>> renames;
+        for (const ParamSpec& spec : param_schema())
+        {
+            renames.emplace_back(std::string(spec.section) + "." + spec.key, spec.param);
+        }
+        std::sort(renames.begin(), renames.end(),
+                  [](const auto& a, const auto& b) { return a.first.size() > b.first.size(); });
+        for (const auto& [path, param] : renames)
+        {
+            for (auto pos = message.find(path); pos != std::string::npos;
+                 pos = message.find(path, pos + param.size()))
+            {
+                message.replace(pos, path.size(), param);
+            }
+        }
+        return message;
+    }
+
+    /// Translates the flat request parameters into the sectioned config document and applies
+    /// it through the config loader: one validation path for the file, the request and the CLI.
+    static bool build_config_from_params_impl(const json& params, ctrace::ProgramConfig& config,
+                                              ParseError& err)
     {
         if (!params.is_object())
         {
@@ -345,24 +292,7 @@ class ApiHandler
             return false;
         }
 
-        if (!apply_bool_fields(params, err,
-                               {
-                                   {"verbose", &config.output.verbose},
-                                   {"quiet", &config.output.quiet},
-                                   {"demangle", &config.output.demangle},
-                                   {"sarif_format", &config.output.sarif_format},
-                                   {"static_analysis", &config.analysis.static_enabled},
-                                   {"dynamic_analysis", &config.analysis.dynamic_enabled},
-                                   {"include_compdb_deps", &config.files.include_compdb_deps},
-                                   {"timing", &config.stack_analyzer.timing},
-                               }))
-        {
-            return false;
-        }
-        if (!apply_async_field(params, config, err))
-        {
-            return false;
-        }
+        // Precedence: defaults < config file < request parameters.
         std::string configPath;
         if (!read_string(params, "config", configPath, err))
         {
@@ -378,90 +308,37 @@ class ApiHandler
             }
             config.config_file = configPath;
         }
-        if (!apply_string_fields(
-                params, err,
+
+        json document = json::object();
+        for (const ParamSpec& spec : param_schema())
+        {
+            const auto it = params.find(spec.param);
+            if (it == params.end() || it->is_null())
+            {
+                continue;
+            }
+            if (spec.list)
+            {
+                std::vector<std::string> items;
+                if (!read_string_list(*it, spec.param, std::string(spec.param) == "input", items,
+                                      err))
                 {
-                    {"report_file", &config.output.report_file},
-                    {"output_file", &config.output.output_file},
-                    {"config", &config.config_file},
-                    {"compile_commands", &config.files.compile_commands},
-                    {"analysis_profile", &config.stack_analyzer.analysis_profile},
-                    {"smt", &config.stack_analyzer.smt},
-                    {"smt_backend", &config.stack_analyzer.smt_backend},
-                    {"smt_secondary_backend", &config.stack_analyzer.smt_secondary_backend},
-                    {"smt_mode", &config.stack_analyzer.smt_mode},
-                    {"resource_model", &config.stack_analyzer.resource_model},
-                    {"escape_model", &config.stack_analyzer.escape_model},
-                    {"buffer_model", &config.stack_analyzer.buffer_model},
-                    {"stack_analyzer_mode", &config.stack_analyzer.mode},
-                    {"stack_analyzer_output_format", &config.stack_analyzer.output_format},
-                    {"ipc_path", &config.runtime.ipc_path},
-                }))
-        {
-            return false;
+                    return false;
+                }
+                document[spec.section][spec.key] = items;
+                continue;
+            }
+            document[spec.section][spec.key] = *it;
         }
-        uint64_t smt_timeout = config.stack_analyzer.smt_timeout_ms;
-        uint64_t smt_budget = config.stack_analyzer.smt_budget_nodes;
-        uint64_t stack_limit = config.stack_analyzer.stack_limit;
-        if (!apply_uint64_fields(params, err,
-                                 {
-                                     {"smt_timeout_ms", &smt_timeout},
-                                     {"smt_budget_nodes", &smt_budget},
-                                     {"stack_limit", &stack_limit},
-                                 }))
+
+        std::string loaderError;
+        if (!ctrace::applyToolConfigObject(config, document, {}, loaderError))
         {
-            return false;
-        }
-        if (smt_timeout > std::numeric_limits<uint32_t>::max())
-        {
-            err = {"InvalidParams", "smt_timeout_ms is too large."};
-            return false;
-        }
-        config.stack_analyzer.smt_timeout_ms = static_cast<uint32_t>(smt_timeout);
-        config.stack_analyzer.smt_budget_nodes = smt_budget;
-        config.stack_analyzer.stack_limit = stack_limit;
-        if (!apply_list_param(params, "entry_points", err,
-                              [&](const std::vector<std::string>& values)
-                              { config.files.entry_points = values; }))
-        {
-            return false;
-        }
-        if (!apply_list_param(params, "invoke", err, [&](const std::vector<std::string>& values)
-                              { config.analysis.invoke = values; }))
-        {
-            return false;
-        }
-        if (!apply_list_param(params, "smt_rules", err, [&](const std::vector<std::string>& values)
-                              { config.stack_analyzer.smt_rules = values; }))
-        {
-            return false;
-        }
-        if (!apply_list_param(params, "stack_analyzer_extra_args", err,
-                              [&](const std::vector<std::string>& values)
-                              { config.stack_analyzer.extra_args = values; }))
-        {
-            return false;
-        }
-        if (!apply_list_param(params, "input", err,
-                              [&](const std::vector<std::string>& values)
-                              {
-                                  for (const auto& file : values)
-                                  {
-                                      if (!file.empty())
-                                      {
-                                          config.addFile(file);
-                                      }
-                                  }
-                              }))
-        {
-            return false;
-        }
-        if (!apply_ipc_field(params, config, err))
-        {
+            err = {"InvalidParams", with_param_names(loaderError)};
             return false;
         }
 
-        return true;
+        return apply_ipc_field(params, config, err);
     }
 
     static bool run_analysis(const ctrace::ProgramConfig& config, ILogger& logger, json& result,
@@ -633,6 +510,12 @@ class ApiHandler
         return baseResponse;
     }
 };
+
+inline bool ApiHandler::build_config_from_params(const json& params, ctrace::ProgramConfig& config,
+                                                 ParseError& err)
+{
+    return build_config_from_params_impl(params, config, err);
+}
 
 // ============================================================================
 // Couche HTTP / Transport
