@@ -13,13 +13,16 @@ namespace ctrace
 {
     namespace
     {
+        using json = nlohmann::json;
+
+        [[nodiscard]] bool endsWithJson(std::string_view path)
+        {
+            return path.ends_with(".json") || path.ends_with(".JSON");
+        }
+
         [[nodiscard]] bool hasPathSegment(const std::filesystem::path& path,
                                           std::string_view segment)
         {
-            if (segment.empty())
-            {
-                return false;
-            }
             for (const auto& part : path)
             {
                 if (part == std::filesystem::path(segment))
@@ -29,211 +32,145 @@ namespace ctrace
             }
             return false;
         }
-    } // namespace
 
-    CT_NODISCARD std::vector<std::string> resolveSourceFiles(const ProgramConfig& config)
-    {
-        using json = nlohmann::json;
-
-        std::vector<std::string> sourceFiles;
-        std::unordered_set<std::string> seenPaths;
-        seenPaths.reserve(config.files.input.size() + 1);
-
-        auto fileEntries = config.files.input;
-        std::filesystem::path autoDiscoveredCompdbPath;
-        bool hasAutoDiscoveredCompdbPath = false;
-        if (fileEntries.empty() && !config.files.compile_commands.empty())
+        /// Keeps insertion order and drops duplicates after normalization.
+        class FileList
         {
-            std::filesystem::path compdbPath(config.files.compile_commands);
-            std::error_code fsErr;
-            if (std::filesystem::is_directory(compdbPath, fsErr))
+          public:
+            void add(const std::filesystem::path& path)
             {
-                compdbPath /= "compile_commands.json";
+                const std::string normalized = path.lexically_normal().string();
+                if (seen_.insert(normalized).second)
+                {
+                    files_.push_back(normalized);
+                }
             }
-            if (std::filesystem::is_regular_file(compdbPath, fsErr))
-            {
-                compdbPath = compdbPath.lexically_normal();
-                fileEntries.emplace_back(compdbPath.string());
-                autoDiscoveredCompdbPath = compdbPath;
-                hasAutoDiscoveredCompdbPath = true;
-            }
-        }
 
-        sourceFiles.reserve(fileEntries.size());
+            std::vector<std::string> take()
+            {
+                return std::move(files_);
+            }
 
-        const auto appendResolved = [&](const std::string& candidate,
-                                        const std::filesystem::path& baseDir) -> bool
-        {
-            if (candidate.empty())
-            {
-                return false;
-            }
-            std::filesystem::path resolved(candidate);
-            if (resolved.is_relative() && !baseDir.empty())
-            {
-                resolved = baseDir / resolved;
-            }
-            resolved = resolved.lexically_normal();
-            const auto resolvedStr = resolved.string();
-            if (!seenPaths.insert(resolvedStr).second)
-            {
-                return false;
-            }
-            sourceFiles.emplace_back(resolvedStr);
-            return true;
+          private:
+            std::unordered_set<std::string> seen_;
+            std::vector<std::string> files_;
         };
 
-        for (const std::string& entry : fileEntries)
+        /// Reads a Clang compilation database and appends its source files.
+        [[nodiscard]] bool appendCompileDatabase(const std::filesystem::path& databasePath,
+                                                 bool skipDependencyEntries, FileList& out,
+                                                 std::string& error)
         {
-            const std::filesystem::path entryPath(entry);
-            const bool isCompdbAutoDiscoveryEntry =
-                hasAutoDiscoveredCompdbPath &&
-                (entryPath.lexically_normal() == autoDiscoveredCompdbPath);
-            const bool filterDependencyEntries =
-                isCompdbAutoDiscoveryEntry && !config.files.include_compdb_deps;
-
-            const auto shouldSkipDependencyEntry = [&](const std::string& candidate,
-                                                       const std::filesystem::path& baseDir) -> bool
+            std::ifstream stream(databasePath);
+            if (!stream.is_open())
             {
-                if (!filterDependencyEntries || candidate.empty())
-                {
-                    return false;
-                }
-                std::filesystem::path resolved(candidate);
-                if (resolved.is_relative() && !baseDir.empty())
-                {
-                    resolved = baseDir / resolved;
-                }
-                return hasPathSegment(resolved.lexically_normal(), "_deps");
-            };
-
-            bool expanded = false;
-            if (!entry.empty() && (entry.ends_with(".json") || entry.ends_with(".JSON")))
+                error = "Unable to open compile database '" + databasePath.string() + "'.";
+                return false;
+            }
+            std::ostringstream buffer;
+            buffer << stream.rdbuf();
+            const json document = json::parse(buffer.str(), nullptr, false);
+            if (document.is_discarded())
             {
-                std::ifstream manifestStream(entry);
-                if (manifestStream.is_open())
-                {
-                    std::ostringstream buffer;
-                    buffer << manifestStream.rdbuf();
-
-                    const auto manifest = json::parse(buffer.str(), nullptr, false);
-                    if (!manifest.is_discarded())
-                    {
-                        const std::filesystem::path manifestDir =
-                            std::filesystem::path(entry).parent_path();
-
-                        const auto appendFromArray = [&](const json& arr) -> bool
-                        {
-                            bool appended = false;
-                            for (const auto& item : arr)
-                            {
-                                if (item.is_string())
-                                {
-                                    const auto candidate = item.get<std::string>();
-                                    if (shouldSkipDependencyEntry(candidate, manifestDir))
-                                    {
-                                        continue;
-                                    }
-                                    appended |= appendResolved(candidate, manifestDir);
-                                }
-                                else if (item.is_object())
-                                {
-                                    if (const auto it = item.find("file");
-                                        it != item.end() && it->is_string())
-                                    {
-                                        std::filesystem::path entryBase = manifestDir;
-                                        if (const auto itDir = item.find("directory");
-                                            itDir != item.end() && itDir->is_string())
-                                        {
-                                            entryBase = itDir->get<std::string>();
-                                            if (entryBase.is_relative())
-                                            {
-                                                entryBase = manifestDir / entryBase;
-                                            }
-                                        }
-                                        const auto candidate = it->get<std::string>();
-                                        if (shouldSkipDependencyEntry(candidate, entryBase))
-                                        {
-                                            continue;
-                                        }
-                                        appended |= appendResolved(candidate, entryBase);
-                                    }
-                                    else if (const auto itSrc = item.find("src_file");
-                                             itSrc != item.end() && itSrc->is_string())
-                                    {
-                                        const auto candidate = itSrc->get<std::string>();
-                                        if (shouldSkipDependencyEntry(candidate, manifestDir))
-                                        {
-                                            continue;
-                                        }
-                                        appended |= appendResolved(candidate, manifestDir);
-                                    }
-                                    else if (const auto itPath = item.find("path");
-                                             itPath != item.end() && itPath->is_string())
-                                    {
-                                        const auto candidate = itPath->get<std::string>();
-                                        if (shouldSkipDependencyEntry(candidate, manifestDir))
-                                        {
-                                            continue;
-                                        }
-                                        appended |= appendResolved(candidate, manifestDir);
-                                    }
-                                }
-                            }
-                            return appended;
-                        };
-
-                        if (manifest.is_array())
-                        {
-                            expanded = appendFromArray(manifest);
-                        }
-                        else if (manifest.is_object())
-                        {
-                            if (const auto it = manifest.find("files");
-                                it != manifest.end() && it->is_array())
-                            {
-                                expanded = appendFromArray(*it);
-                            }
-                            else if (const auto it = manifest.find("sources");
-                                     it != manifest.end() && it->is_array())
-                            {
-                                expanded = appendFromArray(*it);
-                            }
-                            else if (const auto it = manifest.find("compile_commands");
-                                     it != manifest.end() && it->is_array())
-                            {
-                                expanded = appendFromArray(*it);
-                            }
-                            else if (const auto itFile = manifest.find("file");
-                                     itFile != manifest.end() && itFile->is_string())
-                            {
-                                expanded = appendResolved(itFile->get<std::string>(), manifestDir);
-                            }
-                            else if (const auto itSrc = manifest.find("src_file");
-                                     itSrc != manifest.end() && itSrc->is_string())
-                            {
-                                expanded = appendResolved(itSrc->get<std::string>(), manifestDir);
-                            }
-                            else if (const auto itPath = manifest.find("path");
-                                     itPath != manifest.end() && itPath->is_string())
-                            {
-                                expanded = appendResolved(itPath->get<std::string>(), manifestDir);
-                            }
-                        }
-                    }
-                }
+                error = "Invalid JSON in compile database '" + databasePath.string() + "'.";
+                return false;
             }
 
-            if (!expanded)
+            const std::string notADatabase =
+                "'" + databasePath.string() +
+                "' is not a compile_commands.json document: expected an array of objects "
+                "with a \"file\" field.";
+            if (!document.is_array())
             {
-                if (!entry.empty() && (entry.ends_with(".json") || entry.ends_with(".JSON")))
+                error = notADatabase;
+                return false;
+            }
+
+            const std::filesystem::path databaseDir = databasePath.parent_path();
+            for (const json& entry : document)
+            {
+                const auto file = entry.is_object() ? entry.find("file") : entry.end();
+                if (!entry.is_object() || file == entry.end() || !file->is_string())
+                {
+                    error = notADatabase;
+                    return false;
+                }
+
+                std::filesystem::path base = databaseDir;
+                if (const auto directory = entry.find("directory");
+                    directory != entry.end() && directory->is_string())
+                {
+                    base = directory->get<std::string>();
+                    if (base.is_relative())
+                    {
+                        base = databaseDir / base;
+                    }
+                }
+
+                std::filesystem::path source = file->get<std::string>();
+                if (source.empty())
                 {
                     continue;
                 }
-                (void)appendResolved(entry, {});
+                if (source.is_relative())
+                {
+                    source = base / source;
+                }
+                if (skipDependencyEntries && hasPathSegment(source.lexically_normal(), "_deps"))
+                {
+                    continue;
+                }
+                out.add(source);
+            }
+            return true;
+        }
+    } // namespace
+
+    CT_NODISCARD SourceFileResolution resolveSourceFiles(const ProgramConfig& config)
+    {
+        SourceFileResolution result;
+        FileList files;
+
+        std::vector<std::string> inputs = config.files.input;
+        std::filesystem::path autoDiscovered;
+        if (inputs.empty() && !config.files.compile_commands.empty())
+        {
+            std::filesystem::path candidate(config.files.compile_commands);
+            std::error_code fsError;
+            if (std::filesystem::is_directory(candidate, fsError))
+            {
+                candidate /= "compile_commands.json";
+            }
+            if (std::filesystem::is_regular_file(candidate, fsError))
+            {
+                autoDiscovered = candidate.lexically_normal();
+                inputs.push_back(autoDiscovered.string());
             }
         }
 
-        return sourceFiles;
+        for (const std::string& input : inputs)
+        {
+            if (input.empty())
+            {
+                continue;
+            }
+            if (!endsWithJson(input))
+            {
+                files.add(input);
+                continue;
+            }
+
+            const std::filesystem::path databasePath(input);
+            const bool discovered =
+                !autoDiscovered.empty() && databasePath.lexically_normal() == autoDiscovered;
+            const bool skipDependencyEntries = discovered && !config.files.include_compdb_deps;
+            if (!appendCompileDatabase(databasePath, skipDependencyEntries, files, result.error))
+            {
+                return result;
+            }
+        }
+
+        result.files = files.take();
+        return result;
     }
 } // namespace ctrace
