@@ -435,16 +435,6 @@ namespace
         return result;
     }
 
-    void captureToolOutputOnly(const std::string& stream, const std::string& message)
-    {
-        const auto* ctx = ctrace::Thread::Output::capture_context;
-        if (!ctx || !ctx->buffer || message.empty())
-        {
-            return;
-        }
-        ctx->buffer->append(ctx->tool, stream, message);
-    }
-
     [[nodiscard]] bool writeReportToFile(const std::string& reportPath, std::string_view content,
                                          std::string& errorMessage)
     {
@@ -521,13 +511,15 @@ namespace
 namespace ctrace
 {
     void StackAnalyzerToolImplementation::execute(const std::string& file,
-                                                  ctrace::ProgramConfig config) const
+                                                  const ctrace::ProgramConfig& config,
+                                                  ToolOutput& output) const
     {
-        executeBatch(std::vector<std::string>{file}, std::move(config));
+        executeBatch(std::vector<std::string>{file}, config, output);
     }
 
     void StackAnalyzerToolImplementation::executeBatch(const std::vector<std::string>& files,
-                                                       ctrace::ProgramConfig config) const
+                                                       const ctrace::ProgramConfig& config,
+                                                       ToolOutput& output) const
     {
         m_lastDiagnosticsSummary = {};
         const std::string stableReportPath = resolveStableReportPath(config.output.report_file);
@@ -544,8 +536,7 @@ namespace ctrace
 
         if (inputFiles.empty())
         {
-            ctrace::Thread::Output::tool_err(
-                "Stack analyzer batch execution requested with no input files.");
+            output.error("Stack analyzer batch execution requested with no input files.");
             return;
         }
 
@@ -583,20 +574,13 @@ namespace ctrace
         auto parseResult = ctrace::stack::cli::parseArguments(analyzerArgs);
         if (parseResult.status == ctrace::stack::cli::ParseStatus::Error)
         {
-            if (parseResult.error.empty())
-            {
-                ctrace::Thread::Output::tool_err("Failed to parse stack analyzer arguments.");
-            }
-            else
-            {
-                ctrace::Thread::Output::tool_err(parseResult.error);
-            }
+            output.error(parseResult.error.empty() ? "Failed to parse stack analyzer arguments."
+                                                   : parseResult.error);
             return;
         }
         if (parseResult.status == ctrace::stack::cli::ParseStatus::Help)
         {
-            ctrace::Thread::Output::tool_out(
-                "Stack analyzer help requested; analysis was not executed.");
+            output.result("Stack analyzer help requested; analysis was not executed.");
             return;
         }
 
@@ -610,7 +594,7 @@ namespace ctrace
         }
         if (!analysis.isOk())
         {
-            ctrace::Thread::Output::tool_err(analysis.error);
+            output.error(analysis.error);
             return;
         }
 
@@ -621,14 +605,14 @@ namespace ctrace
         const std::string rendered = ctrace::stack::app::renderReport(report, outputFormat);
         if (!rendered.empty())
         {
-            captureToolOutputOnly("stdout", rendered);
-            if (config.runtime.ipc == "standardIO")
-            {
-                ctrace::Thread::Output::tool_out(rendered);
-            }
-            else if (config.runtime.ipc == "socket" && ipc)
+            if (config.runtime.ipc == "socket" && ipc)
             {
                 ipc->write(rendered);
+                output.record("stdout", rendered);
+            }
+            else
+            {
+                output.result(rendered);
             }
         }
 

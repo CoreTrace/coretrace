@@ -166,7 +166,11 @@ set_tests_properties(ctrace_help_lists_quiet PROPERTIES PASS_REGULAR_EXPRESSION 
 add_test(NAME ctrace_help_lists_version COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSION "--version")
 
+add_executable(ctrace_tool_output_tests tests/tool_output_tests.cpp)
+add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
+
 add_executable(ctrace_process_tests tests/process_tests.cpp)
+target_link_libraries(ctrace_process_tests PRIVATE coretrace::logger)
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
 
 # Server mode: concurrent run_analysis requests through the API handler (ROADMAP C3).

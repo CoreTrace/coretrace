@@ -7,7 +7,8 @@
 #include <vector>
 
 #include "Process.hpp"
-#include "ThreadProcess.hpp"
+
+#include <coretrace/logger.hpp>
 #if defined(_WIN32)
 #include "WinProcess.hpp"
 #else
@@ -22,10 +23,11 @@ class ProcessFactory
                                                   const std::vector<std::string>& args = {})
     {
 #if defined(_WIN32)
-        ctrace::Thread::Output::cout("Creating Windows process for command: " + command);
+        coretrace::log(coretrace::Level::Debug, "Creating Windows process for command: {}\n",
+                       command);
         return std::make_unique<WindowsProcess>(command, args);
 #else
-        ctrace::Thread::Output::cout("Creating Unix process for command: " + command);
+        coretrace::log(coretrace::Level::Debug, "Creating Unix process for command: {}\n", command);
         return std::make_unique<UnixProcess>(command, args);
 #endif
     }

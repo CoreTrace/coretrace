@@ -5,6 +5,7 @@
 // structured summary coretrace exposes matches the analyzer's own report.
 #include "App/ToolConfig.hpp"
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/ToolOutput.hpp"
 #include "app/AnalyzerApp.hpp"
 
 #include <coretrace/logger.hpp>
@@ -80,7 +81,8 @@ int main(int argc, char** argv)
     const std::string input = (repoRoot / "tests/double_free.c").string();
 
     ctrace::StackAnalyzerToolImplementation tool;
-    tool.executeBatch(std::vector<std::string>{input}, config);
+    ctrace::ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
+    tool.executeBatch(std::vector<std::string>{input}, config, output);
     const ctrace::DiagnosticSummary summary = tool.lastDiagnosticsSummary();
 
     report.expect(summary.info == 0 && summary.warning == 0 && summary.error == 1,
