@@ -43,22 +43,22 @@ class ConsoleLogger : public ILogger
   public:
     void info(const std::string& msg) override
     {
-        coretrace::log(coretrace::Level::Info, msg);
+        coretrace::log(coretrace::Level::Info, "{}\n", msg);
     }
 
     void error(const std::string& msg) override
     {
-        coretrace::log(coretrace::Level::Error, msg);
+        coretrace::log(coretrace::Level::Error, "{}\n", msg);
     }
 
     void debug(const std::string& msg)
     {
-        coretrace::log(coretrace::Level::Debug, msg);
+        coretrace::log(coretrace::Level::Debug, "{}\n", msg);
     }
 
     void warn(const std::string& msg)
     {
-        coretrace::log(coretrace::Level::Warn, msg);
+        coretrace::log(coretrace::Level::Warn, "{}\n", msg);
     }
 };
 

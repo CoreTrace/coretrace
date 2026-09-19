@@ -8,12 +8,17 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace
 {
@@ -92,6 +97,59 @@ namespace
         report.expect(foundReport, label + ": stdout entry is the analyzer JSON report");
         return true;
     }
+    /// The console logger receives free text (request dumps, tool errors). It must reach
+    /// stderr verbatim, one line per message, whatever characters it contains.
+    void testConsoleLoggerWritesMessagesVerbatim(TestReport& report)
+    {
+        std::fflush(stderr);
+        std::cerr.flush();
+        char captureTemplate[] = "/tmp/ctrace-server-stderr-XXXXXX";
+        const int captureFd = mkstemp(captureTemplate);
+        if (captureFd < 0)
+        {
+            report.expect(false, "console logger: unable to create stderr capture");
+            return;
+        }
+        unlink(captureTemplate);
+        const int savedStderr = dup(STDERR_FILENO);
+        dup2(captureFd, STDERR_FILENO);
+
+        // The suite runs at Warn to keep CI output short; this check needs Info to pass through.
+        const coretrace::Level previousLevel = coretrace::min_level();
+        coretrace::set_min_level(coretrace::Level::Info);
+        ConsoleLogger logger;
+        logger.info(R"(Incoming request: {"id": 7, "params": {"input": ["a.c"]}})");
+        logger.error("second line");
+        coretrace::set_min_level(previousLevel);
+
+        std::fflush(stderr);
+        std::cerr.flush();
+        dup2(savedStderr, STDERR_FILENO);
+        close(savedStderr);
+
+        std::string captured;
+        if (lseek(captureFd, 0, SEEK_SET) != -1)
+        {
+            char chunk[4096];
+            ssize_t bytesRead = 0;
+            while ((bytesRead = read(captureFd, chunk, sizeof(chunk))) > 0)
+            {
+                captured.append(chunk, static_cast<std::size_t>(bytesRead));
+            }
+        }
+        close(captureFd);
+
+        report.expect(captured.find("log format error") == std::string::npos,
+                      "console logger: braces in a message are not treated as a format string");
+        report.expect(captured.find(R"({"id": 7, "params": {"input": ["a.c"]}})") !=
+                          std::string::npos,
+                      "console logger: the message reaches stderr verbatim");
+        const auto first = captured.find("Incoming request");
+        const auto second = captured.find("second line");
+        report.expect(first != std::string::npos && second != std::string::npos &&
+                          captured.find('\n', first) < second,
+                      "console logger: each message ends its own line");
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -113,6 +171,8 @@ int main(int argc, char** argv)
     std::filesystem::create_directories(reportDir, fsError);
 
     TestReport report;
+    testConsoleLoggerWritesMessagesVerbatim(report);
+
     ConsoleLogger logger;
     ApiHandler handler(logger);
 
