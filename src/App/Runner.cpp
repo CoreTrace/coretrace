@@ -12,8 +12,15 @@
 
 namespace ctrace
 {
+    void configure_server_logging()
+    {
+        coretrace::set_timestamps(true);
+        coretrace::set_thread_safe(true);
+    }
+
     CT_NODISCARD int run_server(const ProgramConfig& config)
     {
+        configure_server_logging();
         coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n",
                        config.global.serverHost, std::to_string(config.global.serverPort));
         ConsoleLogger logger;

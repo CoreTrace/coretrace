@@ -186,6 +186,26 @@ add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)
 add_executable(ctrace_process_tests tests/process_tests.cpp)
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
 
+# Server mode: concurrent run_analysis requests through the API handler (ROADMAP C3).
+add_executable(ctrace_server_concurrency_tests
+    tests/server_concurrency_tests.cpp
+    src/App/Runner.cpp
+    src/App/Files.cpp
+    src/App/ToolConfig.cpp
+    src/Process/Tools/StackAnalyzerToolImplementation.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+
+target_link_libraries(ctrace_server_concurrency_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
+            httplib::httplib)
+
+add_test(NAME ctrace_server_concurrency_tests
+    COMMAND ctrace_server_concurrency_tests ${CMAKE_SOURCE_DIR})
+
 # Compatibility gate with the pinned coretrace-stack-analyzer library (see ROADMAP.md K10).
 add_executable(ctrace_stack_analyzer_bridge_tests
     tests/stack_analyzer_bridge_tests.cpp
