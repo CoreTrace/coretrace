@@ -20,16 +20,10 @@ include_directories(${CMAKE_BINARY_DIR}/generated/include)
 
 message(STATUS "CoreTrace version: ${CTRACE_VERSION_STRING} (${CTRACE_VERSION_SOURCE})")
 
-set(PARSER_TYPE "CLI11" CACHE STRING "Type of parser to use (Getopt or CLI11)")
-set_property(CACHE PARSER_TYPE PROPERTY STRINGS "Getopt" "CLI11")
-
 option(USE_THREAD_SANITIZER "Activer ThreadSanitizer" OFF)
 option(USE_ADDRESS_SANITIZER "Activer AddressSanitizer (Memory)" OFF)
 
-set(COMMON_SOURCES
-    src/ArgumentParser/BaseArgumentParser.cpp
-    src/ArgumentParser/ArgumentManager.cpp
-    src/ArgumentParser/ArgumentParserFactory.cpp
+set(SOURCES
     src/App/Config.cpp
     src/App/ToolConfig.cpp
     src/App/Files.cpp
@@ -42,21 +36,7 @@ set(COMMON_SOURCES
     main.cpp
 )
 
-set(SPECIFIC_SOURCES
-    src/ArgumentParser/GetOpt/GetoptArgumentParser.cpp
-    src/ArgumentParser/CLI11/CLI11ArgumentParser.cpp
-)
-
-set(SOURCES
-    ${COMMON_SOURCES}
-    ${SPECIFIC_SOURCES}
-)
-
 add_executable(ctrace ${SOURCES})
-
-if (PARSER_TYPE STREQUAL "Getopt")
-    target_compile_definitions(ctrace PRIVATE USE_GETOPT)
-endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|MSVC")
     # target_compile_options(ctrace PRIVATE -Wall -Wextra -Wpedantic)
@@ -89,7 +69,7 @@ target_link_libraries(ctrace PRIVATE httplib::httplib)
 
 option(USE_EXTERNAL_CLI11 "Download CLI11" OFF)
 
-if (USE_EXTERNAL_CLI11 AND PARSER_TYPE STREQUAL "CLI11")
+if (USE_EXTERNAL_CLI11)
     include(${CMAKE_SOURCE_DIR}/cmake/CLI11.cmake)
     target_link_libraries(ctrace PRIVATE CLI11::CLI11)
 endif()
@@ -171,17 +151,20 @@ add_executable(ctrace_config_tests
     tests/config_parser_tests.cpp
     src/App/ToolConfig.cpp
     src/App/Config.cpp
-    src/ArgumentParser/BaseArgumentParser.cpp
-    src/ArgumentParser/ArgumentManager.cpp
-    src/ArgumentParser/ArgumentParserFactory.cpp
-    src/ArgumentParser/CLI11/CLI11ArgumentParser.cpp
-    src/ArgumentParser/GetOpt/GetoptArgumentParser.cpp
     src/ctrace_tools/strings.cpp
 )
 
 target_link_libraries(ctrace_config_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
 
 add_test(NAME ctrace_config_tests COMMAND ctrace_config_tests)
+
+# The help text is the CLI contract: every option must be listed by `ctrace --help`.
+add_test(NAME ctrace_help_lists_stack_limit COMMAND ctrace --help)
+set_tests_properties(ctrace_help_lists_stack_limit PROPERTIES PASS_REGULAR_EXPRESSION "--stack-limit")
+add_test(NAME ctrace_help_lists_quiet COMMAND ctrace --help)
+set_tests_properties(ctrace_help_lists_quiet PROPERTIES PASS_REGULAR_EXPRESSION "--quiet")
+add_test(NAME ctrace_help_lists_version COMMAND ctrace --help)
+set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSION "--version")
 
 add_executable(ctrace_process_tests tests/process_tests.cpp)
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)

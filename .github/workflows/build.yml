@@ -61,7 +61,6 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build -G Ninja \
-            -DPARSER_TYPE=CLI11 \
             -DUSE_THREAD_SANITIZER=OFF \
             -DUSE_ADDRESS_SANITIZER=OFF \
             -DLLVM_DIR="${LLVM_DIR}" \

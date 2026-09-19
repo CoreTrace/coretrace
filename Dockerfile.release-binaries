@@ -33,7 +33,6 @@ COPY . /repo
 
 RUN cmake -S . -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
-        -DPARSER_TYPE=CLI11 \
         -DUSE_THREAD_SANITIZER=OFF \
         -DUSE_ADDRESS_SANITIZER=OFF \
         -DCLANG_LINK_CLANG_DYLIB=ON \
