@@ -55,6 +55,13 @@ namespace ctrace
         int port = 8080;
         std::string shutdown_token;
         int shutdown_timeout_ms = 0; ///< 0 = wait indefinitely.
+
+        /// Largest accepted request body. Requests carry a file list, not file contents.
+        std::uint64_t max_body_bytes = 1024ULL * 1024ULL;
+
+        /// Origin allowed to call the API from a browser. Empty means no cross-origin header
+        /// is sent, so a browser on another origin cannot read the response.
+        std::string cors_origin;
     };
 
     /// Settings forwarded to coretrace-stack-analyzer. Empty strings and zero mean "keep the

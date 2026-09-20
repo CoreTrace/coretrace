@@ -381,6 +381,22 @@ namespace
         return err;
     }
 
+    void testServerHardeningIsConfigurable()
+    {
+        const auto cfg = loadOrDie("server-hardening.json", R"json(
+{"server": {"max_body_bytes": 4096, "cors_origin": "https://gui.example"}}
+)json");
+        CHECK(cfg.server.max_body_bytes == 4096U);
+        CHECK(cfg.server.cors_origin == "https://gui.example");
+
+        const ctrace::ProgramConfig defaults;
+        CHECK(defaults.server.max_body_bytes == 1024U * 1024U);
+        CHECK(defaults.server.cors_origin.empty());
+
+        CHECK(loadError("server-body-type.json", R"({"server": {"max_body_bytes": "big"}})") ==
+              "Expected unsigned integer for 'server.max_body_bytes'.");
+    }
+
     void testToolPathsAreConfigurable()
     {
         const auto cfg = loadOrDie("tool-paths.json", R"json(
@@ -551,6 +567,7 @@ int main()
     testInvalidPortIsAnError();
     testSocketIpcIsDeprecated();
     testToolPathsAreConfigurable();
+    testServerHardeningIsConfigurable();
     testCliValuesShareTheLoaderRules();
     testMissingConfigFileIsAnError();
     testUnknownOptionIsAnError();

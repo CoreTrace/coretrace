@@ -219,6 +219,22 @@ target_link_libraries(ctrace_server_concurrency_tests
 add_test(NAME ctrace_server_concurrency_tests
     COMMAND ctrace_server_concurrency_tests ${CMAKE_SOURCE_DIR})
 
+add_executable(ctrace_server_http_tests
+    tests/server_http_tests.cpp
+    src/App/Runner.cpp
+    src/App/Files.cpp
+    src/App/ToolConfig.cpp
+    src/Process/Tools/StackAnalyzerToolImplementation.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+target_link_libraries(ctrace_server_http_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
+            httplib::httplib)
+add_test(NAME ctrace_server_http_tests COMMAND ctrace_server_http_tests)
+
 # An unreachable IPC socket must be reported, not crash the process.
 add_test(NAME ctrace_socket_failure_is_reported
     COMMAND ctrace --ipc socket --ipc-path /nonexistent/ctrace-test.sock
@@ -262,6 +278,7 @@ foreach(coretrace_target
     ctrace_tool_output_tests
     ctrace_process_tests
     ctrace_server_concurrency_tests
+    ctrace_server_http_tests
     ctrace_stack_analyzer_bridge_tests
 )
     coretrace_enable_warnings(${coretrace_target})
