@@ -265,6 +265,22 @@ namespace
               "Invalid value for --smt-timeout-ms: 'abc' is not an unsigned integer.\n");
     }
 
+    // Socket mode still works but is on its way out; every entry point must say so once.
+    void testSocketIpcIsDeprecated()
+    {
+        const std::string notice = ctrace_defs::ipcDeprecationNotice("socket");
+        CHECK(notice.find("deprecated") != std::string::npos);
+        CHECK(notice.find("socket") != std::string::npos);
+        CHECK(ctrace_defs::ipcDeprecationNotice("standardIO").empty());
+        CHECK(ctrace_defs::ipcDeprecationNotice("serve").empty());
+        CHECK(ctrace_defs::ipcDeprecationNotice("").empty());
+
+        // It stays a valid value: deprecation is a warning, not a rejection.
+        const auto result = buildFromArgs({"ctrace", "--ipc", "socket", "--input", "a.c"});
+        CHECK(result.config.has_value());
+        CHECK(result.config->runtime.ipc == "socket");
+    }
+
     void testInvalidPortIsAnError()
     {
         const auto result = buildFromArgs({"ctrace", "--ipc", "serve", "--serve-port", "abc"});
@@ -504,6 +520,7 @@ int main()
     testUnknownToolIsAnError();
     testInvalidSmtTimeoutIsAnError();
     testInvalidPortIsAnError();
+    testSocketIpcIsDeprecated();
     testCliValuesShareTheLoaderRules();
     testMissingConfigFileIsAnError();
     testUnknownOptionIsAnError();

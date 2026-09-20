@@ -138,6 +138,12 @@ namespace ctrace
             }
             else
             {
+                if (const std::string notice =
+                        ctrace_defs::ipcDeprecationNotice(m_config.runtime.ipc);
+                    !notice.empty())
+                {
+                    coretrace::log(coretrace::Level::Warn, "{}\n", notice);
+                }
                 m_ipc = std::make_shared<UnixSocketStrategy>(m_config.runtime.ipc_path);
 
                 for (auto& [_, tool] : tools)

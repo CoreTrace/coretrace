@@ -148,6 +148,9 @@ Default: `"standardIO"`
 Allowed: `standardIO|socket|serve`
 Description: IPC mode.
 Impact: selects standard output, socket transport, or HTTP server mode.
+Deprecation: `socket` is deprecated and will be removed in a future release. Only some tools
+ever wrote to the socket, and nothing in the project reads from it. It still works and emits a
+warning; use `standardIO`, or `serve` to consume results over HTTP.
 CLI: `--ipc`
 
 - `runtime.ipc_path`
@@ -155,7 +158,7 @@ Type: `string`
 Default: `"/tmp/coretrace_ipc"`
 Allowed: socket path.
 Description: IPC socket path.
-Impact: used when IPC mode is socket.
+Impact: used when IPC mode is socket, which is deprecated (see `runtime.ipc`).
 CLI: `--ipc-path`
 
 ## server
