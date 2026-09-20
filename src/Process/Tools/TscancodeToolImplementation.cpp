@@ -3,7 +3,8 @@
 
 #include <coretrace/logger.hpp>
 
-#include <fstream>
+#include <algorithm>
+#include <cctype>
 #include <map>
 #include <regex>
 #include <sstream>
@@ -13,22 +14,23 @@
 namespace ctrace
 {
 
+    std::vector<std::string> TscancodeToolImplementation::buildArguments(const ProgramConfig&,
+                                                                         const std::string& file)
+    {
+        return {"--enable=all", file};
+    }
+
     void TscancodeToolImplementation::execute(const std::string& file, const ProgramConfig& config,
                                               ToolOutput& output) const
     {
         coretrace::log(coretrace::Level::Info, "Running tscancode on {}\n", file);
 
-        bool has_sarif_format = config.output.sarif_format;
-        std::string src_file = file;
+        const bool has_sarif_format = config.output.sarif_format;
 
         try
         {
-            std::vector<std::string> argsProcess;
-            argsProcess.push_back("--enable=all");
-            argsProcess.push_back(src_file);
-
             auto process = ProcessFactory::createProcess(
-                "./tscancode/src/tscancode/trunk/tscancode", argsProcess);
+                "./tscancode/src/tscancode/trunk/tscancode", buildArguments(config, file));
             const ProcessResult run = process->execute();
             output.result(run.output);
             coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", file);
@@ -39,7 +41,7 @@ namespace ctrace
 
             if (has_sarif_format)
             {
-                output.result(sarifFormat(run.output, "ccoretrace-sarif-tscancode.json").dump());
+                output.result(sarifFormat(run.output).dump());
             }
         }
         catch (const std::exception& e)
@@ -54,36 +56,41 @@ namespace ctrace
         return "tscancode";
     }
 
+    /// tscancode spells severities in lower case in its text output and capitalized in its
+    /// documentation, so the mapping is case-insensitive.
     std::string_view TscancodeToolImplementation::severityToLevel(const std::string& severity) const
     {
         static constexpr std::pair<std::string_view, std::string_view> mappings[] = {
-            {"Warning", "warning"}, {"Information", "note"}, {"Error", "error"}};
+            {"warning", "warning"}, {"information", "note"}, {"error", "error"}};
         static const std::unordered_map<std::string_view, std::string_view> severity_map(
             mappings, mappings + std::size(mappings));
 
-        if (const auto it = severity_map.find(severity); it != severity_map.end())
+        std::string lowered = severity;
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+        if (const auto it = severity_map.find(lowered); it != severity_map.end())
         {
             return it->second;
         }
         return "none";
     }
 
-    json TscancodeToolImplementation::sarifFormat(const std::string& buffer,
-                                                  const std::string& outputFile) const
+    nlohmann::json TscancodeToolImplementation::sarifFormat(const std::string& buffer) const
     {
         std::regex diagnostic_regex(R"(\[(.*):(\d+)\]: \((\w+)\) (.*))");
 
-        json sarif;
+        nlohmann::json sarif;
         sarif["version"] = "2.1.0";
         sarif["$schema"] = "https://json.schemastore.org/sarif-2.1.0.json";
-        sarif["runs"] = json::array();
+        sarif["runs"] = nlohmann::json::array();
 
-        json run;
+        nlohmann::json run;
         run["tool"]["driver"]["name"] = "coretrace";
         run["tool"]["driver"]["version"] = "1.0.0";
         run["tool"]["driver"]["informationUri"] = "https://coretrace.fr/";
-        run["tool"]["driver"]["rules"] = json::array();
-        run["results"] = json::array();
+        run["tool"]["driver"]["rules"] = nlohmann::json::array();
+        run["results"] = nlohmann::json::array();
 
         std::map<std::string, int> ruleMap;
         int ruleCounter = 0;
@@ -105,7 +112,7 @@ namespace ctrace
 
                 if (ruleMap.find(ruleId) == ruleMap.end())
                 {
-                    json rule;
+                    nlohmann::json rule;
                     rule["id"] = ruleId;
                     rule["name"] = severity;
                     rule["shortDescription"]["text"] = severity + " reported by coretrace";
@@ -113,7 +120,7 @@ namespace ctrace
                     ruleMap[ruleId] = ruleCounter++;
                 }
 
-                json result;
+                nlohmann::json result;
                 result["ruleId"] = ruleId;
                 result["level"] = severityToLevel(severity);
                 result["message"]["text"] = message;
@@ -125,9 +132,6 @@ namespace ctrace
         }
 
         sarif["runs"].push_back(run);
-
-        std::ofstream out(outputFile);
-        out << sarif.dump(4);
         return sarif;
     }
 

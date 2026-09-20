@@ -2,9 +2,6 @@
 #ifndef ANALYSIS_TOOLS_HPP
 #define ANALYSIS_TOOLS_HPP
 
-#include <regex>
-
-// #include "IAnalysisTools.hpp"
 #include "AnalysisToolsBase.hpp"
 #include "ctrace_tools/languageType.hpp"
 #include "ctrace_tools/mangle.hpp"
@@ -14,12 +11,8 @@
 #include <coretrace/logger.hpp>
 #include <nlohmann/json.hpp>
 
-#include "StackUsageAnalyzer.hpp"
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/Support/SourceMgr.h>
-#include <llvm/Support/raw_ostream.h>
-
-using json = nlohmann::json;
+#include <string>
+#include <vector>
 
 class EntryPoint
 {
@@ -88,55 +81,39 @@ namespace ctrace
     class IkosToolImplementation : public AnalysisToolBase
     {
       public:
+        /// ikos has no SARIF writer: a SARIF request maps to its structured JSON output,
+        /// which the bridge can convert, and plain runs keep the human-readable text.
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
+        {
+            std::vector<std::string> args;
+            args.push_back(config.output.sarif_format ? "--format=json" : "--format=text");
+            args.push_back("-a=upa,dfa,pcmp,poa,nullity,fca");
+            args.push_back("-d=congruence");
+            args.push_back("--partitioning=return");
+
+            const std::string entry_points =
+                ctrace_tools::strings::joinByComma(config.files.entry_points);
+            const EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
+            const bool isC = ctrace_tools::detectLanguage(file) == ctrace_defs::LanguageType::C;
+            args.push_back("--entry-points=" +
+                           std::string(isC ? entryPoint.getEntryPointNameCMode()
+                                           : entryPoint.getEntryPointNameCCMode()));
+            args.push_back("--report-file=" + config.output.report_file);
+            args.push_back(file);
+            return args;
+        }
+
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override
         {
-            coretrace::log(coretrace::Level::Info, "Running IKOS on {}\n", file);
-            std::string src_file = file;
-            std::string entry_points =
-                ctrace_tools::strings::joinByComma(config.files.entry_points);
-            std::string report_file = config.output.report_file;
+            coretrace::log(coretrace::Level::Info, "Running ikos on {}\n", file);
 
             try
             {
-                std::vector<std::string> argsProcess;
-
-                if (config.output.sarif_format)
-                {
-                    argsProcess.push_back("--format=text");
-                }
-                argsProcess.push_back("-a=upa,dfa,pcmp,poa,nullity,fca");
-                argsProcess.push_back("-d=congruence");
-                // argsProcess.push_back("--rm-db");
-                argsProcess.push_back("--partitioning=return");
-
-                ctrace_defs::LanguageType lang = ctrace_tools::detectLanguage(src_file);
-
-                if (lang == ctrace_defs::LanguageType::C)
-                {
-                    coretrace::log(coretrace::Level::Debug, "C file detected\n");
-                    EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
-                    coretrace::log(coretrace::Level::Debug, "Entry point: {}\n",
-                                   entryPoint.getEntryPointNameCMode());
-                    std::string arg = "--entry-points=";
-                    arg += entryPoint.getEntryPointNameCMode();
-                    argsProcess.push_back(arg);
-                }
-                else if (lang == ctrace_defs::LanguageType::CPP)
-                {
-                    coretrace::log(coretrace::Level::Debug, "C++ file detected\n");
-                    EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
-                    coretrace::log(coretrace::Level::Debug, "Entry point: {}\n",
-                                   entryPoint.getEntryPointNameCCMode());
-                    std::string arg = "--entry-points=";
-                    arg += entryPoint.getEntryPointNameCCMode();
-                    argsProcess.push_back(arg);
-                }
-                argsProcess.push_back("--report-file=" + report_file);
-                argsProcess.push_back(src_file);
-
-                auto process = ProcessFactory::createProcess(
-                    "./ikos/src/ikos-build/bin/ikos", argsProcess); // ou "cmd.exe" pour Windows
+                const std::vector<std::string> argsProcess = buildArguments(config, file);
+                auto process =
+                    ProcessFactory::createProcess("./ikos/src/ikos-build/bin/ikos", argsProcess);
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 const ProcessResult run = process->execute();
                 output.result(run.output);
@@ -177,32 +154,32 @@ namespace ctrace
     class FlawfinderToolImplementation : public AnalysisToolBase
     {
       public:
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
+        {
+            std::vector<std::string> args = {
+                "./flawfinder/src/flawfinder-build/flawfinder.py",
+                "-c",
+                "-C",
+                "-D",
+            };
+            if (config.output.sarif_format)
+            {
+                args.push_back("--sarif");
+            }
+            args.push_back(file);
+            return args;
+        }
+
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override
         {
             coretrace::log(coretrace::Level::Info, "Running flawfinder on {}\n", file);
 
-            bool has_sarif_format = config.output.sarif_format;
-            std::string src_file = file;
-            std::string entry_points =
-                ctrace_tools::strings::joinByComma(config.files.entry_points);
-
             try
             {
-                std::vector<std::string> argsProcess;
-                // = {"flawfinder.py", "-F", "-c", "-C", "-D", "main.c"};
-                argsProcess.push_back("./flawfinder/src/flawfinder-build/flawfinder.py");
-                // argsProcess.push_back("-F");
-                argsProcess.push_back("-c");
-                argsProcess.push_back("-C");
-                argsProcess.push_back("-D");
-                if (has_sarif_format)
-                {
-                    argsProcess.push_back("--sarif");
-                }
-                argsProcess.push_back(src_file);
-                auto process = ProcessFactory::createProcess(
-                    "python3", argsProcess); // or "cmd.exe" for Windows
+                const std::vector<std::string> argsProcess = buildArguments(config, file);
+                auto process = ProcessFactory::createProcess("python3", argsProcess);
                 const ProcessResult run = process->execute();
 
                 if (config.runtime.ipc == "standardIO")
@@ -233,40 +210,45 @@ namespace ctrace
     class TscancodeToolImplementation : public AnalysisToolBase
     {
       public:
+        [[nodiscard]] static std::vector<std::string> buildArguments(const ProgramConfig& config,
+                                                                     const std::string& file);
         void execute(const std::string& file, const ProgramConfig& config,
                      ToolOutput& output) const override;
         std::string name() const override;
 
+        /// Converts tscancode's text diagnostics into a SARIF document. Pure: the caller
+        /// decides where the document goes.
+        [[nodiscard]] nlohmann::json sarifFormat(const std::string& buffer) const;
+
       protected:
-        std::string_view severityToLevel(const std::string& severity) const;
-        json sarifFormat(const std::string& buffer, const std::string& outputFile) const;
+        [[nodiscard]] std::string_view severityToLevel(const std::string& severity) const;
     };
 
     class CppCheckToolImplementation : public AnalysisToolBase
     {
       public:
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
+        {
+            std::vector<std::string> args;
+            if (config.output.sarif_format)
+            {
+                args.push_back("--output-format=sarif");
+            }
+            args.push_back(file);
+            return args;
+        }
+
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override
         {
-            coretrace::log(coretrace::Level::Info, "Running ikos on {}\n", file);
-            bool has_sarif_format = config.output.sarif_format;
-            std::string src_file = file;
-            std::string entry_points =
-                ctrace_tools::strings::joinByComma(config.files.entry_points);
+            coretrace::log(coretrace::Level::Info, "Running cppcheck on {}\n", file);
 
             try
             {
-                std::vector<std::string> argsProcess;
-
-                if (has_sarif_format)
-                {
-                    argsProcess.push_back("--output-format=sarif");
-                }
-                // argsProcess.push_back("--enable=all");
-                argsProcess.push_back(src_file);
-
-                auto process = ProcessFactory::createProcess(
-                    "/opt/homebrew/bin/cppcheck", argsProcess); // ou "cmd.exe" pour Windows
+                const std::vector<std::string> argsProcess = buildArguments(config, file);
+                auto process =
+                    ProcessFactory::createProcess("/opt/homebrew/bin/cppcheck", argsProcess);
                 const ProcessResult run = process->execute();
                 output.result(run.output);
                 if (!run.succeeded())
@@ -282,7 +264,7 @@ namespace ctrace
         }
         std::string name() const override
         {
-            return "ikos";
+            return "cppcheck";
         }
     };
 
