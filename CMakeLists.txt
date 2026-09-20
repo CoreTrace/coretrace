@@ -38,10 +38,22 @@ set(SOURCES
 
 add_executable(ctrace ${SOURCES})
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|MSVC")
-    # target_compile_options(ctrace PRIVATE -Wall -Wextra -Wpedantic)
-    target_compile_options(ctrace PRIVATE)
-endif()
+# Warnings are errors on the code we own. Fetched dependencies keep their own flags.
+option(CORETRACE_WERROR "Treat compiler warnings as errors" ON)
+
+function(coretrace_enable_warnings target)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        if (CORETRACE_WERROR)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(${target} PRIVATE /W4)
+        if (CORETRACE_WERROR)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+    endif()
+endfunction()
 
 if (USE_THREAD_SANITIZER)
     include(${CMAKE_SOURCE_DIR}/cmake/debug/sanitizer/ThreadSanitizer.cmake)
@@ -232,3 +244,17 @@ add_test(NAME ctrace_stack_analyzer_cli_smoke
 set_tests_properties(ctrace_stack_analyzer_cli_smoke PROPERTIES
     PASS_REGULAR_EXPRESSION
         "\\(ctrace_stack_analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
+
+# Applied last so every executable we own exists by now.
+foreach(coretrace_target
+    ctrace
+    ctrace_config_tests
+    ctrace_tool_arguments_tests
+    ctrace_files_tests
+    ctrace_tool_output_tests
+    ctrace_process_tests
+    ctrace_server_concurrency_tests
+    ctrace_stack_analyzer_bridge_tests
+)
+    coretrace_enable_warnings(${coretrace_target})
+endforeach()

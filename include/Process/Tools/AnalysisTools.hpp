@@ -272,8 +272,8 @@ namespace ctrace
     class DynTool1 : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& /*config*/,
+                     ToolOutput& /*output*/) const override
         {
             coretrace::log(coretrace::Level::Info, "Running dyn_tools_1 on {}\n", file);
         }
@@ -286,8 +286,8 @@ namespace ctrace
     class DynTool2 : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& /*config*/,
+                     ToolOutput& /*output*/) const override
         {
             coretrace::log(coretrace::Level::Info, "Running dyn_tools_2 on {}\n", file);
         }
@@ -300,8 +300,8 @@ namespace ctrace
     class DynTool3 : public AnalysisToolBase
     {
       public:
-        void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override
+        void execute(const std::string& file, const ctrace::ProgramConfig& /*config*/,
+                     ToolOutput& /*output*/) const override
         {
             coretrace::log(coretrace::Level::Info, "Running dyn_tools_3 on {}\n", file);
         }

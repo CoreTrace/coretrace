@@ -40,7 +40,7 @@ class UnixSocketStrategy : public IpcStrategy
     std::string path;
 
   public:
-    UnixSocketStrategy(const std::string& socketPath) : path(socketPath), sock(-1)
+    explicit UnixSocketStrategy(const std::string& socketPath) : sock(-1), path(socketPath)
     {
         sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if (sock == -1)

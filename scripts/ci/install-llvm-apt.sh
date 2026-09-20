@@ -22,7 +22,9 @@ fi
 
 keyring=/etc/apt/keyrings/apt.llvm.org.gpg
 install -d -m 0755 /etc/apt/keyrings
-curl -fsSL --retry 3 https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o "${keyring}"
+# --retry alone ignores connection failures, which is how this step flakes in CI.
+curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 15 \
+    https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o "${keyring}"
 echo "deb [signed-by=${keyring}] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${llvm_version} main" \
     > /etc/apt/sources.list.d/apt.llvm.org.list
 
