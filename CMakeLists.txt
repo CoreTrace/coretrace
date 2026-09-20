@@ -219,6 +219,14 @@ target_link_libraries(ctrace_server_concurrency_tests
 add_test(NAME ctrace_server_concurrency_tests
     COMMAND ctrace_server_concurrency_tests ${CMAKE_SOURCE_DIR})
 
+# An unreachable IPC socket must be reported, not crash the process.
+add_test(NAME ctrace_socket_failure_is_reported
+    COMMAND ctrace --ipc socket --ipc-path /nonexistent/ctrace-test.sock
+        --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck)
+set_tests_properties(ctrace_socket_failure_is_reported PROPERTIES
+    PASS_REGULAR_EXPRESSION "deprecated"
+    FAIL_REGULAR_EXPRESSION "terminating due to uncaught exception")
+
 # Compatibility gate with the pinned coretrace-stack-analyzer library (see ROADMAP.md K10).
 add_executable(ctrace_stack_analyzer_bridge_tests
     tests/stack_analyzer_bridge_tests.cpp
