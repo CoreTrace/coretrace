@@ -76,6 +76,19 @@ class EntryPoint
 
 namespace ctrace
 {
+    /// The command to run for an external tool: the configured path when there is one,
+    /// otherwise the tool's own name, which the process layer resolves through PATH.
+    [[nodiscard]] inline std::string toolCommand(const ProgramConfig& config,
+                                                 const IAnalysisTool& tool)
+    {
+        const std::string name = tool.name();
+        const auto configured = config.tools.paths.find(name);
+        if (configured != config.tools.paths.end() && !configured->second.empty())
+        {
+            return configured->second;
+        }
+        return name;
+    }
 
     // Static analysis tools
     class IkosToolImplementation : public AnalysisToolBase
@@ -113,7 +126,7 @@ namespace ctrace
             {
                 const std::vector<std::string> argsProcess = buildArguments(config, file);
                 auto process =
-                    ProcessFactory::createProcess("./ikos/src/ikos-build/bin/ikos", argsProcess);
+                    ProcessFactory::createProcess(toolCommand(config, *this), argsProcess);
                 // std::this_thread::sleep_for(std::chrono::seconds(5));
                 const ProcessResult run = process->execute();
                 output.result(run.output);
@@ -157,12 +170,7 @@ namespace ctrace
         [[nodiscard]] static std::vector<std::string>
         buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
         {
-            std::vector<std::string> args = {
-                "./flawfinder/src/flawfinder-build/flawfinder.py",
-                "-c",
-                "-C",
-                "-D",
-            };
+            std::vector<std::string> args = {"-c", "-C", "-D"};
             if (config.output.sarif_format)
             {
                 args.push_back("--sarif");
@@ -179,7 +187,8 @@ namespace ctrace
             try
             {
                 const std::vector<std::string> argsProcess = buildArguments(config, file);
-                auto process = ProcessFactory::createProcess("python3", argsProcess);
+                auto process =
+                    ProcessFactory::createProcess(toolCommand(config, *this), argsProcess);
                 const ProcessResult run = process->execute();
 
                 if (config.runtime.ipc == "standardIO")
@@ -248,7 +257,7 @@ namespace ctrace
             {
                 const std::vector<std::string> argsProcess = buildArguments(config, file);
                 auto process =
-                    ProcessFactory::createProcess("/opt/homebrew/bin/cppcheck", argsProcess);
+                    ProcessFactory::createProcess(toolCommand(config, *this), argsProcess);
                 const ProcessResult run = process->execute();
                 output.result(run.output);
                 if (!run.succeeded())

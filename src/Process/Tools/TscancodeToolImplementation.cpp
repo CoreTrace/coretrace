@@ -29,8 +29,8 @@ namespace ctrace
 
         try
         {
-            auto process = ProcessFactory::createProcess(
-                "./tscancode/src/tscancode/trunk/tscancode", buildArguments(config, file));
+            auto process = ProcessFactory::createProcess(toolCommand(config, *this),
+                                                         buildArguments(config, file));
             const ProcessResult run = process->execute();
             output.result(run.output);
             coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", file);

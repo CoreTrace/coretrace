@@ -914,6 +914,8 @@ namespace ctrace
 
         // ------------------------------------------------------------- root layout
 
+        [[nodiscard]] std::vector<const char*> toolsSectionKeys();
+
         [[nodiscard]] bool applyLegacyRootInvokeAndInput(const json& root, LoadContext& ctx,
                                                          std::string& errorMessage)
         {
@@ -974,8 +976,7 @@ namespace ctrace
                 errorMessage = "Expected object for 'tools'.";
                 return nullptr;
             }
-            if (!validateKnownKeys(*itTools, {"ctrace_stack_analyzer", "stack_analyzer"}, "tools",
-                                   errorMessage))
+            if (!validateKnownKeys(*itTools, toolsSectionKeys(), "tools", errorMessage))
             {
                 return nullptr;
             }
@@ -987,6 +988,71 @@ namespace ctrace
                 }
             }
             return nullptr;
+        }
+
+        /// `tools` holds one entry per external tool plus the legacy analyzer section.
+        [[nodiscard]] std::vector<const char*> toolsSectionKeys()
+        {
+            std::vector<const char*> keys = {"ctrace_stack_analyzer", "stack_analyzer"};
+            for (const std::string_view tool : SUPPORTED_TOOLS)
+            {
+                if (tool != "ctrace_stack_analyzer")
+                {
+                    keys.push_back(tool.data());
+                }
+            }
+            return keys;
+        }
+
+        /// Reads `tools.<name>.path` for every external tool. The analyzer entries are the
+        /// legacy analyzer configuration and are handled by findStackAnalyzerSection.
+        [[nodiscard]] bool applyToolsSection(const json& root, LoadContext& ctx,
+                                             std::string& errorMessage)
+        {
+            const auto itTools = root.find("tools");
+            if (itTools == root.end() || itTools->is_null())
+            {
+                return true;
+            }
+            if (!itTools->is_object())
+            {
+                errorMessage = "Expected object for 'tools'.";
+                return false;
+            }
+            if (!validateKnownKeys(*itTools, toolsSectionKeys(), "tools", errorMessage))
+            {
+                return false;
+            }
+
+            for (const std::string_view tool : SUPPORTED_TOOLS)
+            {
+                if (tool == "ctrace_stack_analyzer")
+                {
+                    continue;
+                }
+                const auto itTool = itTools->find(std::string(tool));
+                if (itTool == itTools->end() || itTool->is_null())
+                {
+                    continue;
+                }
+                const std::string location = "tools." + std::string(tool);
+                if (!validateKnownKeys(*itTool, {"path"}, location, errorMessage))
+                {
+                    return false;
+                }
+                const auto itPath = itTool->find("path");
+                if (itPath == itTool->end() || itPath->is_null())
+                {
+                    continue;
+                }
+                Value value;
+                if (!readValue(*itPath, Kind::String, location + ".path", value, errorMessage))
+                {
+                    return false;
+                }
+                ctx.config.tools.paths[std::string(tool)] = value.text;
+            }
+            return true;
         }
 
         [[nodiscard]] bool applySchemaVersion(const json& root, std::string& errorMessage)
@@ -1087,6 +1153,11 @@ namespace ctrace
             }
         }
         else if (!errorMessage.empty())
+        {
+            return false;
+        }
+
+        if (!applyToolsSection(root, ctx, errorMessage))
         {
             return false;
         }

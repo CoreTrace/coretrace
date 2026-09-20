@@ -3,6 +3,7 @@
 #define CONFIG_HPP
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -100,6 +101,13 @@ namespace ctrace
         std::vector<std::string> extra_args; ///< Forwarded verbatim after mapped options.
     };
 
+    /// Where external tools live. A value may be a bare command name, resolved through PATH,
+    /// or an absolute path. Tools absent from the map use their own name as the command.
+    struct ToolsConfig
+    {
+        std::map<std::string, std::string> paths;
+    };
+
     struct ProgramConfig
     {
         AnalysisConfig analysis;
@@ -108,6 +116,7 @@ namespace ctrace
         RuntimeConfig runtime;
         ServerConfig server;
         StackAnalyzerConfig stack_analyzer;
+        ToolsConfig tools;
         std::string config_file; ///< Path of the loaded JSON config, empty when none.
 
         /// Splits a comma-separated list of paths into `files.input`.
