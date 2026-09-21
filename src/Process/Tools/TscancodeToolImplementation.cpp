@@ -14,10 +14,14 @@
 namespace ctrace
 {
 
-    std::vector<std::string> TscancodeToolImplementation::buildArguments(const ProgramConfig&,
-                                                                         const std::string& file)
+    std::vector<std::string>
+    TscancodeToolImplementation::buildArguments(const ProgramConfig& config,
+                                                const std::string& file)
     {
-        return {"--enable=all", file};
+        std::vector<std::string> args = {"--enable=all"};
+        appendToolArguments(args, config, "tscancode");
+        args.push_back(file);
+        return args;
     }
 
     void TscancodeToolImplementation::execute(const std::string& file, const ProgramConfig& config,

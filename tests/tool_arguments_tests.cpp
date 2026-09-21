@@ -93,6 +93,66 @@ int main()
                       "flawfinder: no script path in the arguments");
     }
 
+    // cppcheck gets the checks and the build context the configuration already knows about.
+    {
+        const auto args = CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c");
+        report.expect(contains(args, "--enable=warning,style,performance,portability"),
+                      "cppcheck: warning, style, performance and portability checks are enabled");
+        report.expect(contains(args, "--inline-suppr"),
+                      "cppcheck: inline suppression comments are honoured");
+        report.expect(!contains(args, "-j") && args.back() == "a.c",
+                      "cppcheck: no -j without a numeric jobs value; file last");
+
+        ctrace::ProgramConfig config = configWithSarif(false);
+        config.stack_analyzer.include_dirs = {"inc", "third_party"};
+        config.stack_analyzer.defines = {"FOO=1", "BAR"};
+        config.stack_analyzer.jobs = "4";
+        const auto derived = CppCheckToolImplementation::buildArguments(config, "a.c");
+        report.expect(contains(derived, "-Iinc") && contains(derived, "-Ithird_party"),
+                      "cppcheck: include_dirs become -I");
+        report.expect(contains(derived, "-DFOO=1") && contains(derived, "-DBAR"),
+                      "cppcheck: defines become -D");
+        const auto jobs = std::find(derived.begin(), derived.end(), "-j");
+        report.expect(jobs != derived.end() && std::next(jobs) != derived.end() &&
+                          *std::next(jobs) == "4",
+                      "cppcheck: a numeric jobs value becomes -j N");
+        config.stack_analyzer.jobs = "auto";
+        report.expect(!contains(CppCheckToolImplementation::buildArguments(config, "a.c"), "-j"),
+                      "cppcheck: jobs=auto is not forwarded (cppcheck needs a number)");
+    }
+
+    // Per-tool pass-through arguments come after the derived options, so they can override
+    // them, and before the file.
+    {
+        ctrace::ProgramConfig config = configWithSarif(false);
+        config.tools.args["cppcheck"] = {"--disable=style", "--std=c++20"};
+        const auto args = CppCheckToolImplementation::buildArguments(config, "a.c");
+        const auto enable = std::find_if(args.begin(), args.end(), [](const std::string& arg)
+                                         { return arg.rfind("--enable=", 0) == 0; });
+        const auto disable = std::find(args.begin(), args.end(), "--disable=style");
+        report.expect(
+            enable != args.end() && disable != args.end() && enable < disable &&
+                contains(args, "--std=c++20") && args.back() == "a.c",
+            "cppcheck: tools.cppcheck.args follow the derived options and precede the file");
+
+        config.tools.args["flawfinder"] = {"--minlevel=3"};
+        config.tools.args["tscancode"] = {"--xml"};
+        config.tools.args["ikos"] = {"--opt=1"};
+        const auto flaw = FlawfinderToolImplementation::buildArguments(config, "a.c");
+        const auto tscan = TscancodeToolImplementation::buildArguments(config, "a.c");
+        const auto ikos = IkosToolImplementation::buildArguments(config, "a.c");
+        report.expect(contains(flaw, "--minlevel=3") && flaw.back() == "a.c",
+                      "flawfinder: pass-through arguments precede the file");
+        report.expect(contains(tscan, "--xml") && tscan.back() == "a.c",
+                      "tscancode: pass-through arguments precede the file");
+        report.expect(contains(ikos, "--opt=1") && ikos.back() == "a.c",
+                      "ikos: pass-through arguments precede the file");
+        report.expect(
+            !contains(CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c"),
+                      "--disable=style"),
+            "pass-through arguments are per tool and off by default");
+    }
+
     // Tools are named, not located: PATH resolves them unless the configuration says otherwise.
     {
         ctrace::ProgramConfig config;

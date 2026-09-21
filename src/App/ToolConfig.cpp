@@ -1055,8 +1055,9 @@ namespace ctrace
             return keys;
         }
 
-        /// Reads `tools.<name>.path` for every external tool. The analyzer entries are the
-        /// legacy analyzer configuration and are handled by findStackAnalyzerSection.
+        /// Reads `tools.<name>.path` and `tools.<name>.args` for every external tool. The
+        /// analyzer entries are the legacy analyzer configuration and are handled by
+        /// findStackAnalyzerSection.
         [[nodiscard]] bool applyToolsSection(const json& root, LoadContext& ctx,
                                              std::string& errorMessage)
         {
@@ -1087,21 +1088,31 @@ namespace ctrace
                     continue;
                 }
                 const std::string location = "tools." + std::string(tool);
-                if (!validateKnownKeys(*itTool, {"path"}, location, errorMessage))
+                if (!validateKnownKeys(*itTool, {"path", "args"}, location, errorMessage))
                 {
                     return false;
                 }
-                const auto itPath = itTool->find("path");
-                if (itPath == itTool->end() || itPath->is_null())
+                if (const auto itPath = itTool->find("path");
+                    itPath != itTool->end() && !itPath->is_null())
                 {
-                    continue;
+                    Value value;
+                    if (!readValue(*itPath, Kind::String, location + ".path", value, errorMessage))
+                    {
+                        return false;
+                    }
+                    ctx.config.tools.paths[std::string(tool)] = value.text;
                 }
-                Value value;
-                if (!readValue(*itPath, Kind::String, location + ".path", value, errorMessage))
+                if (const auto itArgs = itTool->find("args");
+                    itArgs != itTool->end() && !itArgs->is_null())
                 {
-                    return false;
+                    Value value;
+                    if (!readValue(*itArgs, Kind::StringList, location + ".args", value,
+                                   errorMessage))
+                    {
+                        return false;
+                    }
+                    ctx.config.tools.args[std::string(tool)] = value.list;
                 }
-                ctx.config.tools.paths[std::string(tool)] = value.text;
             }
             return true;
         }

@@ -91,6 +91,17 @@ namespace ctrace
         return name;
     }
 
+    /// Appends `tools.<name>.args`, what the user adds to a tool's command line, verbatim.
+    inline void appendToolArguments(std::vector<std::string>& args, const ProgramConfig& config,
+                                    const std::string& tool)
+    {
+        if (const auto configured = config.tools.args.find(tool);
+            configured != config.tools.args.end())
+        {
+            args.insert(args.end(), configured->second.begin(), configured->second.end());
+        }
+    }
+
     /// Runs an external tool to completion. A tool that cannot be started is reported on the
     /// sink and yields nothing. A non-zero exit is reported too, but the output is still
     /// returned: partial findings are not lost because the tool ended badly.
@@ -138,6 +149,7 @@ namespace ctrace
                            std::string(isC ? entryPoint.getEntryPointNameCMode()
                                            : entryPoint.getEntryPointNameCCMode()));
             args.push_back("--report-file=" + config.output.report_file);
+            appendToolArguments(args, config, "ikos");
             args.push_back(file);
             return args;
         }
