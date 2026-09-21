@@ -300,7 +300,7 @@ namespace ctrace
         {
             const std::string configPath = valueOf(app, "--config");
             std::string toolConfigError;
-            if (!applyToolConfigFile(config, configPath, toolConfigError))
+            if (!applyToolConfigFile(config, configPath, toolConfigError, &result.warnings))
             {
                 result.error =
                     "Error: failed to load config '" + configPath + "': " + toolConfigError + "\n";

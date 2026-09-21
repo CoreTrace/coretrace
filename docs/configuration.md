@@ -393,3 +393,13 @@ The loader still accepts legacy shapes:
 - `tools.ctrace_stack_analyzer` / `tools.stack_analyzer`
 
 When both legacy and canonical sections are present, canonical sections (`analysis`, `files`, `output`, `runtime`, `server`) are applied last and therefore take precedence inside the config file.
+
+Every legacy spelling is reported when the file is loaded, on stderr for the CLI and in the
+server log for a request that names a config file, with the canonical key to use instead:
+
+```
+Warning: Deprecated config key 'analysis-profile' in 'stack_analyzer': use 'analysis_profile'.
+```
+
+Legacy spellings will be removed in a future release; a canonical document produces no
+warning.
