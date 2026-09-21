@@ -3,7 +3,7 @@
 // Server mode handles requests on a thread pool. Concurrent run_analysis requests must each
 // come back complete and correct, with the logging configured the way run_server does it.
 #include "App/Runner.hpp"
-#include "Process/Ipc/HttpServer.hpp"
+#include "Process/Ipc/ApiHandler.hpp"
 
 #include <nlohmann/json.hpp>
 

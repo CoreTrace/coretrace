@@ -5,6 +5,7 @@
 #include "App/Runner.hpp"
 #include "Process/Ipc/HttpServer.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -35,7 +36,12 @@ namespace
         explicit ServerFixture(const ctrace::ServerConfig& config)
             : handler_(logger_), server_(handler_, logger_, config), config_(config)
         {
-            thread_ = std::thread([this] { server_.run(config_.host, config_.port); });
+            thread_ = std::thread(
+                [this]
+                {
+                    server_.run(config_.host, config_.port);
+                    runReturned_.store(true);
+                });
             httplib::Client probe(config_.host, config_.port);
             probe.set_connection_timeout(0, 100000);
             for (int attempt = 0; attempt < 100; ++attempt)
@@ -57,6 +63,21 @@ namespace
             }
         }
 
+        /// True once run() has returned, i.e. the listener stopped and the drain completed.
+        [[nodiscard]] bool finished(std::chrono::milliseconds within)
+        {
+            const auto deadline = std::chrono::steady_clock::now() + within;
+            while (std::chrono::steady_clock::now() < deadline)
+            {
+                if (runReturned_.load())
+                {
+                    return true;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            return runReturned_.load();
+        }
+
         [[nodiscard]] httplib::Client client() const
         {
             httplib::Client client(config_.host, config_.port);
@@ -70,6 +91,7 @@ namespace
         HttpServer server_;
         ctrace::ServerConfig config_;
         std::thread thread_;
+        std::atomic<bool> runReturned_{false};
     };
 
     ctrace::ServerConfig localConfig(int port)
@@ -139,6 +161,39 @@ namespace
                           "the configured origin is echoed back");
         }
     }
+    // K5: the shutdown endpoint is token-protected and stops the server gracefully.
+    void testGracefulShutdown(TestReport& report)
+    {
+        {
+            const ServerFixture server(localConfig(18804));
+            const auto response = server.client().Post("/shutdown", "", "application/json");
+            report.expect(response && response->status == 403 &&
+                              response->body.find("Shutdown token not configured.") !=
+                                  std::string::npos,
+                          "shutdown without a configured token is refused with 403");
+        }
+
+        ctrace::ServerConfig config = localConfig(18805);
+        config.shutdown_token = "s3cret";
+        ServerFixture server(config);
+        auto client = server.client();
+
+        const auto wrong =
+            client.Post("/shutdown", {{"Authorization", "Bearer nope"}}, "", "application/json");
+        report.expect(wrong && wrong->status == 403 &&
+                          wrong->body.find("Invalid shutdown token.") != std::string::npos,
+                      "shutdown with a wrong token is refused with 403");
+        report.expect(!server.finished(std::chrono::milliseconds(200)),
+                      "a refused shutdown leaves the server running");
+
+        const auto accepted =
+            client.Post("/shutdown", {{"X-Admin-Token", "s3cret"}}, "", "application/json");
+        report.expect(accepted && accepted->status == 202 &&
+                          accepted->body.find("Shutdown initiated.") != std::string::npos,
+                      "shutdown with the token is accepted with 202");
+        report.expect(server.finished(std::chrono::seconds(5)),
+                      "the server stops after an accepted shutdown");
+    }
 } // namespace
 
 int main()
@@ -150,6 +205,7 @@ int main()
     testBindPolicy(report);
     testBodyLimit(report);
     testCorsHeaders(report);
+    testGracefulShutdown(report);
 
     if (report.failures == 0)
     {

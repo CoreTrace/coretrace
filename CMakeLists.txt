@@ -28,6 +28,9 @@ set(SOURCES
     src/App/ToolConfig.cpp
     src/App/Files.cpp
     src/App/Runner.cpp
+    src/Process/Ipc/ApiHandler.cpp
+    src/Process/Ipc/GracefulShutdown.cpp
+    src/Process/Ipc/HttpServer.cpp
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
     src/ctrace_tools/strings.cpp
@@ -203,6 +206,9 @@ add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
 add_executable(ctrace_server_concurrency_tests
     tests/server_concurrency_tests.cpp
     src/App/Runner.cpp
+    src/Process/Ipc/ApiHandler.cpp
+    src/Process/Ipc/GracefulShutdown.cpp
+    src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
     src/App/ToolConfig.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
@@ -222,6 +228,9 @@ add_test(NAME ctrace_server_concurrency_tests
 add_executable(ctrace_server_http_tests
     tests/server_http_tests.cpp
     src/App/Runner.cpp
+    src/Process/Ipc/ApiHandler.cpp
+    src/Process/Ipc/GracefulShutdown.cpp
+    src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
     src/App/ToolConfig.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
