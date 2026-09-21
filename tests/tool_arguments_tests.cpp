@@ -80,6 +80,29 @@ int main()
             FlawfinderToolImplementation::buildArguments(configWithSarif(true), "a.c");
         report.expect(contains(args, "--sarif") && args.back() == "a.c",
                       "flawfinder: SARIF request is forwarded and the file comes last");
+        report.expect(std::none_of(args.begin(), args.end(), [](const std::string& arg)
+                                   { return arg.find(".py") != std::string::npos; }),
+                      "flawfinder: no script path in the arguments");
+    }
+
+    // Tools are named, not located: PATH resolves them unless the configuration says otherwise.
+    {
+        ctrace::ProgramConfig config;
+        report.expect(toolCommand(config, CppCheckToolImplementation()) == "cppcheck" &&
+                          toolCommand(config, IkosToolImplementation()) == "ikos" &&
+                          toolCommand(config, FlawfinderToolImplementation()) == "flawfinder" &&
+                          toolCommand(config, TscancodeToolImplementation()) == "tscancode",
+                      "default command is the tool name, resolved through PATH");
+        report.expect(toolCommand(config, CppCheckToolImplementation()).find('/') ==
+                          std::string::npos,
+                      "default command carries no path separator");
+
+        config.tools.paths["cppcheck"] = "/opt/homebrew/bin/cppcheck";
+        report.expect(toolCommand(config, CppCheckToolImplementation()) ==
+                          "/opt/homebrew/bin/cppcheck",
+                      "a configured path overrides the lookup");
+        report.expect(toolCommand(config, IkosToolImplementation()) == "ikos",
+                      "an override for one tool leaves the others alone");
     }
     {
         const auto args =

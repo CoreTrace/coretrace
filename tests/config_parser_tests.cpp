@@ -381,6 +381,35 @@ namespace
         return err;
     }
 
+    void testToolPathsAreConfigurable()
+    {
+        const auto cfg = loadOrDie("tool-paths.json", R"json(
+{
+  "tools": {
+    "cppcheck": {"path": "/usr/local/bin/cppcheck"},
+    "flawfinder": {"path": "flawfinder-3"}
+  }
+}
+)json");
+        CHECK(cfg.tools.paths.at("cppcheck") == "/usr/local/bin/cppcheck");
+        CHECK(cfg.tools.paths.at("flawfinder") == "flawfinder-3");
+        CHECK(cfg.tools.paths.count("ikos") == 0);
+
+        // The analyzer section keeps its meaning under the same key.
+        const auto legacy = loadOrDie("tool-paths-legacy.json", R"json(
+{"tools": {"stack_analyzer": {"mode": "abi"}, "cppcheck": {"path": "cc-check"}}}
+)json");
+        CHECK(legacy.stack_analyzer.mode == "abi");
+        CHECK(legacy.tools.paths.at("cppcheck") == "cc-check");
+
+        CHECK(loadError("tool-unknown.json", R"({"tools": {"nope": {"path": "x"}}})")
+                  .find("Unknown key 'nope' in 'tools'") != std::string::npos);
+        CHECK(loadError("tool-key.json", R"({"tools": {"cppcheck": {"pat": "x"}}})")
+                  .find("Unknown key 'pat' in 'tools.cppcheck'") != std::string::npos);
+        CHECK(loadError("tool-type.json", R"({"tools": {"cppcheck": {"path": 7}}})") ==
+              "Expected string for 'tools.cppcheck.path'.");
+    }
+
     void testCanonicalRepoConfigLoads()
     {
         const auto repoConfig =
@@ -521,6 +550,7 @@ int main()
     testInvalidSmtTimeoutIsAnError();
     testInvalidPortIsAnError();
     testSocketIpcIsDeprecated();
+    testToolPathsAreConfigurable();
     testCliValuesShareTheLoaderRules();
     testMissingConfigFileIsAnError();
     testUnknownOptionIsAnError();

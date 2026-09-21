@@ -195,6 +195,33 @@ Description: graceful shutdown timeout.
 Impact: waits for in-flight requests up to timeout (`0` = wait indefinitely).
 CLI: `--shutdown-timeout-ms`
 
+## tools
+
+External tools are invoked by name and resolved through `PATH`. Give a tool an explicit
+location only when it is not on `PATH` or when you need a specific build.
+
+- `tools.<name>.path`
+Type: `string`
+Default: the tool's own name (`cppcheck`, `ikos`, `tscancode`, `flawfinder`)
+Allowed: a command name resolved through `PATH`, or an absolute path.
+Description: the command to execute for that tool.
+Impact: replaces the default lookup. A command that cannot be found or executed is reported
+with its name and the tool is skipped.
+CLI: not exposed (`config/tool-config.json` only)
+
+```json
+{
+  "tools": {
+    "cppcheck": {"path": "/opt/homebrew/bin/cppcheck"},
+    "flawfinder": {"path": "flawfinder-3"}
+  }
+}
+```
+
+`tools.ctrace_stack_analyzer` and `tools.stack_analyzer` keep their legacy meaning: they are
+alternative spellings of the `stack_analyzer` section below. The stack analyzer runs in
+process and has no command to resolve.
+
 ## stack_analyzer
 
 - `stack_analyzer.mode`
