@@ -34,6 +34,9 @@ set(SOURCES
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
     src/ctrace_tools/strings.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     main.cpp
@@ -183,6 +186,9 @@ set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSIO
 
 add_executable(ctrace_tool_arguments_tests
     tests/tool_arguments_tests.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
@@ -198,6 +204,31 @@ add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
 add_executable(ctrace_tool_output_tests tests/tool_output_tests.cpp)
 add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 
+# The unified diagnostic model and the per-tool parsers that feed it.
+add_executable(ctrace_tool_diagnostics_tests
+    tests/tool_diagnostics_tests.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+target_link_libraries(ctrace_tool_diagnostics_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+add_test(NAME ctrace_tool_diagnostics_tests COMMAND ctrace_tool_diagnostics_tests)
+
+# External tool findings feed the same counters as the stack analyzer; a tool whose output
+# was not interpreted says so instead of reporting zero.
+add_test(NAME ctrace_cppcheck_diagnostics_are_counted
+    COMMAND ctrace --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck)
+set_tests_properties(ctrace_cppcheck_diagnostics_are_counted PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\(cppcheck\\) Diagnostics summary: info=0, warning=0, error=1")
+add_test(NAME ctrace_uninterpreted_tool_is_reported
+    COMMAND ctrace --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke ikos)
+set_tests_properties(ctrace_uninterpreted_tool_is_reported PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\(ikos\\) Diagnostics summary: not available")
+
 add_executable(ctrace_process_tests tests/process_tests.cpp)
 target_link_libraries(ctrace_process_tests PRIVATE coretrace::logger)
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
@@ -211,6 +242,9 @@ add_executable(ctrace_server_concurrency_tests
     src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
     src/App/ToolConfig.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
@@ -233,6 +267,9 @@ add_executable(ctrace_server_http_tests
     src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
     src/App/ToolConfig.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
@@ -269,7 +306,11 @@ set_tests_properties(ctrace_socket_failure_is_reported PROPERTIES
 # Compatibility gate with the pinned coretrace-stack-analyzer library (see ROADMAP.md K10).
 add_executable(ctrace_stack_analyzer_bridge_tests
     tests/stack_analyzer_bridge_tests.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
     src/App/ToolConfig.cpp
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
@@ -307,6 +348,7 @@ foreach(coretrace_target
     ctrace_tool_arguments_tests
     ctrace_files_tests
     ctrace_tool_output_tests
+    ctrace_tool_diagnostics_tests
     ctrace_process_tests
     ctrace_server_concurrency_tests
     ctrace_server_http_tests

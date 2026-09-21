@@ -9,19 +9,13 @@
 #include <vector>
 
 #include "Config/config.hpp"
+#include "Process/Tools/Diagnostic.hpp"
 #include "Process/Tools/ToolOutput.hpp"
 
 class IpcStrategy;
 
 namespace ctrace
 {
-    struct DiagnosticSummary
-    {
-        std::size_t info = 0;
-        std::size_t warning = 0;
-        std::size_t error = 0;
-    };
-
     /**
      * @brief Interface for an analysis tool (Strategy pattern).
      *
@@ -77,19 +71,6 @@ namespace ctrace
             {
                 execute(file, config, output);
             }
-        }
-
-        /**
-             * @brief Returns the last diagnostics summary produced by the tool.
-             *
-             * Tools that do not expose structured diagnostics can keep the default
-             * implementation returning a zeroed summary.
-             *
-             * @return DiagnosticSummary Counts grouped by severity.
-             */
-        [[nodiscard]] virtual DiagnosticSummary lastDiagnosticsSummary() const
-        {
-            return {};
         }
 
         /**

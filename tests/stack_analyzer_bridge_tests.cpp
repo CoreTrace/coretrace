@@ -5,6 +5,7 @@
 // structured summary coretrace exposes matches the analyzer's own report.
 #include "App/ToolConfig.hpp"
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/Diagnostic.hpp"
 #include "Process/Tools/ToolOutput.hpp"
 #include "app/AnalyzerApp.hpp"
 
@@ -83,7 +84,14 @@ int main(int argc, char** argv)
     ctrace::StackAnalyzerToolImplementation tool;
     ctrace::ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
     tool.executeBatch(std::vector<std::string>{input}, config, output);
-    const ctrace::DiagnosticSummary summary = tool.lastDiagnosticsSummary();
+    report.expect(output.interpreted(), "the bridge reports structured diagnostics");
+    const ctrace::DiagnosticSummary summary = ctrace::summarize(output.diagnostics());
+    report.expect(!output.diagnostics().empty() &&
+                      output.diagnostics().front().tool == "ctrace_stack_analyzer" &&
+                      output.diagnostics().front().ruleId == "ResourceLifetime.DoubleRelease" &&
+                      output.diagnostics().front().cwe == "CWE-415" &&
+                      output.diagnostics().front().file.find("double_free.c") != std::string::npos,
+                  "the diagnostic carries tool, rule, CWE and file");
 
     report.expect(summary.info == 0 && summary.warning == 0 && summary.error == 1,
                   "double_free.c yields exactly one error-level diagnostic (got info=" +

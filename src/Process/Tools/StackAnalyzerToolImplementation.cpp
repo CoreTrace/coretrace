@@ -484,6 +484,36 @@ namespace
         return true;
     }
 
+    [[nodiscard]] ctrace::Severity toSeverity(ctrace::stack::DiagnosticSeverity severity)
+    {
+        switch (severity)
+        {
+        case ctrace::stack::DiagnosticSeverity::Info:
+            return ctrace::Severity::Info;
+        case ctrace::stack::DiagnosticSeverity::Error:
+            return ctrace::Severity::Error;
+        case ctrace::stack::DiagnosticSeverity::Warning:
+            break;
+        }
+        return ctrace::Severity::Warning;
+    }
+
+    /// The per-file diagnostics, in report order: the same set `report.summary` counts.
+    [[nodiscard]] std::vector<ctrace::Diagnostic>
+    toDiagnostics(const ctrace::stack::app::AnalysisReport& report, const std::string& tool)
+    {
+        std::vector<ctrace::Diagnostic> diagnostics;
+        for (const auto& file : report.files)
+        {
+            for (const auto& item : file.result.diagnostics)
+            {
+                diagnostics.push_back({tool, item.ruleId, item.filePath, item.line, item.column,
+                                       toSeverity(item.severity), item.message, item.cweId});
+            }
+        }
+        return diagnostics;
+    }
+
     [[nodiscard]] std::string resolveStableReportPath(std::string_view reportPath)
     {
         if (reportPath.empty())
@@ -521,7 +551,6 @@ namespace ctrace
                                                        const ctrace::ProgramConfig& config,
                                                        ToolOutput& output) const
     {
-        m_lastDiagnosticsSummary = {};
         const std::string stableReportPath = resolveStableReportPath(config.output.report_file);
 
         std::vector<std::string> inputFiles;
@@ -599,8 +628,7 @@ namespace ctrace
         }
 
         const ctrace::stack::app::AnalysisReport& report = *analysis.report;
-        m_lastDiagnosticsSummary = {report.summary.info, report.summary.warning,
-                                    report.summary.error};
+        output.diagnostics(toDiagnostics(report, name()));
 
         const std::string rendered = ctrace::stack::app::renderReport(report, outputFormat);
         if (!rendered.empty())
@@ -637,11 +665,6 @@ namespace ctrace
     std::string StackAnalyzerToolImplementation::name() const
     {
         return "ctrace_stack_analyzer";
-    }
-
-    DiagnosticSummary StackAnalyzerToolImplementation::lastDiagnosticsSummary() const
-    {
-        return m_lastDiagnosticsSummary;
     }
 
 } // namespace ctrace

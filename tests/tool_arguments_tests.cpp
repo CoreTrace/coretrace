@@ -70,16 +70,24 @@ int main()
         const auto args = CppCheckToolImplementation::buildArguments(configWithSarif(true), "a.c");
         report.expect(contains(args, "--output-format=sarif") && contains(args, "a.c"),
                       "cppcheck: SARIF request is forwarded");
-        report.expect(
-            !contains(CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c"),
-                      "--output-format=sarif"),
-            "cppcheck: no SARIF flag without the request");
+        const auto text = CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c");
+        report.expect(!contains(text, "--output-format=sarif"),
+                      "cppcheck: no SARIF flag without the request");
+        // The template is the parsing contract: the same on every cppcheck version.
+        report.expect(contains(text, std::string("--template=") +
+                                         CppCheckToolImplementation::kOutputTemplate) &&
+                          text.back() == "a.c",
+                      "cppcheck: text runs use the explicit output template, file last");
     }
     {
         const auto args =
             FlawfinderToolImplementation::buildArguments(configWithSarif(true), "a.c");
         report.expect(contains(args, "--sarif") && args.back() == "a.c",
                       "flawfinder: SARIF request is forwarded and the file comes last");
+        report.expect(
+            contains(FlawfinderToolImplementation::buildArguments(configWithSarif(false), "a.c"),
+                     "--sarif"),
+            "flawfinder: the structured output is always requested; CoreTrace renders the text");
         report.expect(std::none_of(args.begin(), args.end(), [](const std::string& arg)
                                    { return arg.find(".py") != std::string::npos; }),
                       "flawfinder: no script path in the arguments");

@@ -74,6 +74,16 @@ namespace
                           total.value("error", -1) == 1,
                       label + ": diagnostics_summary_total is exactly one error");
 
+        const json& diagnostics = result["diagnostics"];
+        report.expect(diagnostics.is_array() && diagnostics.size() == 1 &&
+                          diagnostics[0].value("tool", "") == "ctrace_stack_analyzer" &&
+                          diagnostics[0].value("severity", "") == "error" &&
+                          diagnostics[0].value("rule_id", "") == "ResourceLifetime.DoubleRelease",
+                      label + ": diagnostics list the one structured finding");
+        const json& uninterpreted = result["uninterpreted_tools"];
+        report.expect(uninterpreted.is_array() && uninterpreted.empty(),
+                      label + ": every tool that ran was interpreted");
+
         const json& outputs = result["outputs"];
         const bool hasToolOutput = outputs.contains("ctrace_stack_analyzer") &&
                                    outputs["ctrace_stack_analyzer"].is_array() &&
