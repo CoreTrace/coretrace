@@ -1,0 +1,10 @@
+# Build tree
+build/
+
+# Analyzer cache and reports produced by a run with config/tool-config.json
+config/.cache/
+coretrace-results.json
+ctrace-report.txt
+
+# macOS
+.DS_Store
