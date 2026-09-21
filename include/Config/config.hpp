@@ -2,11 +2,13 @@
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "ctrace_defs/types.hpp"
@@ -17,11 +19,50 @@ namespace ctrace
     // The configuration mirrors docs/configuration.md section by section. Every input path
     // (config file, HTTP params, CLI) fills the same structure; see ROADMAP.md M1/M2.
 
+    /// Lowest severity that makes the run exit non-zero (`analysis.fail_on`, `--fail-on`).
+    enum class FailOn
+    {
+        None,
+        Warning,
+        Error
+    };
+
+    inline constexpr std::array<std::pair<std::string_view, FailOn>, 3> kFailOnValues = {{
+        {"none", FailOn::None},
+        {"warning", FailOn::Warning},
+        {"error", FailOn::Error},
+    }};
+
+    [[nodiscard]] constexpr std::optional<FailOn> parseFailOn(std::string_view name) noexcept
+    {
+        for (const auto& [candidate, value] : kFailOnValues)
+        {
+            if (candidate == name)
+            {
+                return value;
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] constexpr std::string_view failOnName(FailOn policy) noexcept
+    {
+        for (const auto& [name, value] : kFailOnValues)
+        {
+            if (value == policy)
+            {
+                return name;
+            }
+        }
+        return "error";
+    }
+
     struct AnalysisConfig
     {
         bool static_enabled = false;     ///< `analysis.static`: run the static tool set.
         bool dynamic_enabled = false;    ///< `analysis.dynamic`: run the dynamic tool set.
         std::vector<std::string> invoke; ///< `analysis.invoke`: explicit tool selection.
+        FailOn fail_on = FailOn::Error;  ///< `analysis.fail_on`: exit-code gate policy.
     };
 
     struct FilesConfig

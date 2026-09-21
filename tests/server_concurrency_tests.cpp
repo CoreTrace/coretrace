@@ -80,6 +80,9 @@ namespace
                           diagnostics[0].value("severity", "") == "error" &&
                           diagnostics[0].value("rule_id", "") == "ResourceLifetime.DoubleRelease",
                       label + ": diagnostics list the one structured finding");
+        const json& gate = result["gate"];
+        report.expect(gate.value("fail_on", "") == "error" && gate.value("exit_code", -1) == 2,
+                      label + ": the gate reports findings at the default error threshold");
         const json& uninterpreted = result["uninterpreted_tools"];
         report.expect(uninterpreted.is_array() && uninterpreted.empty(),
                       label + ": every tool that ran was interpreted");

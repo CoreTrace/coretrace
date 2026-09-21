@@ -3,6 +3,7 @@
 #define TOOLS_INVOKER_HPP
 
 #include "AnalysisTools.hpp"
+#include "App/ExitPolicy.hpp"
 #include "Process/Ipc/IpcStrategy.hpp"
 
 #include <coretrace/logger.hpp>
@@ -213,6 +214,27 @@ namespace ctrace
             return summarize(diagnostics());
         }
 
+        /// Tools that could not be started, crashed or exited abnormally at least once.
+        [[nodiscard]] std::vector<std::string> failedTools() const
+        {
+            std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
+            std::vector<std::string> names;
+            for (const auto& [name, collected] : m_diagnosticsByTool)
+            {
+                if (collected.failed)
+                {
+                    names.push_back(name);
+                }
+            }
+            return names;
+        }
+
+        /// The run's verdict input: every finding counted, and whether any tool failed.
+        [[nodiscard]] AnalysisOutcome outcome() const
+        {
+            return {diagnosticsSummaryTotal(), !failedTools().empty()};
+        }
+
         /// Tools that ran without ever reporting structured findings. Their output may hold
         /// findings the counters do not see; this is distinct from a tool with zero findings.
         [[nodiscard]] std::vector<std::string> uninterpretedTools() const
@@ -393,6 +415,7 @@ namespace ctrace
         {
             std::vector<Diagnostic> items;
             bool interpreted = false;
+            bool failed = false;
         };
 
         void recordDiagnostics(const std::string& tool_name, const ToolOutput& output)
@@ -414,6 +437,7 @@ namespace ctrace
             std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
             CollectedDiagnostics& collected = m_diagnosticsByTool[tool_name];
             collected.interpreted = collected.interpreted || output.interpreted();
+            collected.failed = collected.failed || output.failed();
             collected.items.insert(collected.items.end(), output.diagnostics().begin(),
                                    output.diagnostics().end());
         }

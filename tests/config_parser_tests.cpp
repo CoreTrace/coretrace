@@ -693,6 +693,28 @@ namespace
         CHECK(explicitModel.config.has_value());
         CHECK(explicitModel.config->stack_analyzer.resource_model == "mine.txt");
     }
+
+    // --fail-on is the gate policy; it is validated like every other enumerated value.
+    void testFailOnPolicy()
+    {
+        CHECK(buildFromArgs({"ctrace", "--input", "a.c"}).config->analysis.fail_on ==
+              ctrace::FailOn::Error);
+        CHECK(buildFromArgs({"ctrace", "--input", "a.c", "--fail-on", "warning"})
+                  .config->analysis.fail_on == ctrace::FailOn::Warning);
+        CHECK(buildFromArgs({"ctrace", "--input", "a.c", "--fail-on", "none"})
+                  .config->analysis.fail_on == ctrace::FailOn::None);
+        const auto bogus = buildFromArgs({"ctrace", "--input", "a.c", "--fail-on", "bogus"});
+        CHECK(!bogus.config.has_value());
+        CHECK(bogus.exitCode == 1);
+        CHECK(bogus.error.find("--fail-on") != std::string::npos);
+        CHECK(bogus.error.find("[none, warning, error]") != std::string::npos);
+
+        CHECK(
+            loadOrDie("fail-on.json", R"({"analysis": {"fail_on": "warning"}})").analysis.fail_on ==
+            ctrace::FailOn::Warning);
+        CHECK(loadError("fail-on-bad.json", R"({"analysis": {"fail_on": "info"}})")
+                  .find("Invalid value 'info' for 'analysis.fail_on'") != std::string::npos);
+    }
 } // namespace
 
 int main()
@@ -723,6 +745,7 @@ int main()
     testDefaultModelsDirectoryFollowsTheExecutable();
     testDefaultModelsFillOnlyEmptyFields();
     testBuildConfigAppliesDefaultModels();
+    testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;
     return 0;
 }

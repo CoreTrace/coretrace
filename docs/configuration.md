@@ -45,6 +45,17 @@ Description: explicit tool selection.
 Impact: runs only selected tools through specific-tool path.
 CLI: `--invoke`
 
+- `analysis.fail_on`
+Type: `string`
+Default: `"error"`
+Allowed: `error|warning|none`
+Description: lowest severity that makes the run exit non-zero.
+Impact: the process exits `2` when a finding at or above this level was reported, `0`
+otherwise. `none` never fails on findings. Independently of this value, the process exits `3`
+when a tool could not be started, crashed or exited abnormally, and `1` on a usage or
+configuration error. Server mode returns the same verdict in `result.gate`.
+CLI: `--fail-on`
+
 ## files
 
 - `files.input`

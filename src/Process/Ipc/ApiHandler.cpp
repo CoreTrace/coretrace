@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Ipc/ApiHandler.hpp"
 
+#include "App/ExitPolicy.hpp"
 #include "App/Files.hpp"
 #include "App/ToolConfig.hpp"
 #include "Process/Tools/ToolsInvoker.hpp"
@@ -148,6 +149,7 @@ namespace
             {"static_analysis", "analysis", "static", false},
             {"dynamic_analysis", "analysis", "dynamic", false},
             {"invoke", "analysis", "invoke", true},
+            {"fail_on", "analysis", "fail_on", false},
             {"input", "files", "input", true},
             {"entry_points", "files", "entry_points", true},
             {"compile_commands", "files", "compile_commands", false},
@@ -378,6 +380,11 @@ namespace
         }
         result["diagnostics"] = std::move(diagnostics);
         result["uninterpreted_tools"] = invoker.uninterpretedTools();
+        // The same verdict the CLI exits with, so a client applies one policy.
+        const ctrace::AnalysisOutcome outcome = invoker.outcome();
+        result["gate"] = {{"fail_on", ctrace::failOnName(config.analysis.fail_on)},
+                          {"exit_code", ctrace::exitCodeFor(config.analysis.fail_on, outcome)},
+                          {"failed_tools", invoker.failedTools()}};
         if (output_capture)
         {
             json outputs = json::object();

@@ -66,6 +66,24 @@ You can also override the embedded version manually:
 cmake .. -DCORETRACE_VERSION_OVERRIDE=v0.74.0
 ```
 
+### EXIT CODES
+
+`ctrace` is meant to gate a CI pipeline, so its exit code is a verdict on the run:
+
+| Code | Meaning |
+|---|---|
+| `0` | Analysis complete, no finding at or above `--fail-on` |
+| `1` | Usage or configuration error |
+| `2` | Findings at or above `--fail-on` (default: `error`) |
+| `3` | Analysis incomplete: a tool could not be started, crashed or exited abnormally |
+
+`--fail-on error|warning|none` (config: `analysis.fail_on`) sets the threshold. `none` never
+fails on findings but still returns `3` on a broken tool. Code `3` takes precedence over `2`.
+
+```bash
+./ctrace --fail-on warning --input src/main.c --invoke cppcheck,ctrace_stack_analyzer
+```
+
 ### CONFIGURATION
 
 - Canonical default config: `config/tool-config.json`
@@ -114,6 +132,7 @@ curl -X POST http://127.0.0.1:8080/api \
 Response notes:
 - `status` is `ok` or `error`.
 - `result.diagnostics` lists every finding in one model (`tool`, `rule_id`, `file`, `line`, `column`, `severity`, `message`, `cwe`), whatever tool produced it; `result.diagnostics_summary_total` counts them by severity.
+- `result.gate` carries the verdict the CLI would exit with: `fail_on`, `exit_code` (see EXIT CODES) and `failed_tools`.
 - `result.uninterpreted_tools` names the tools whose output CoreTrace could not interpret: their findings are shown in `result.outputs` but are not counted.
 - `result.outputs` groups tool output by tool name.
 - Each output entry has `stream` and `message`. If a tool emits JSON, `message` is returned as a JSON object.
