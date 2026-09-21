@@ -252,10 +252,11 @@ add_test(NAME ctrace_bridge_report_is_logged
 set_tests_properties(ctrace_bridge_report_is_logged PROPERTIES
     PASS_REGULAR_EXPRESSION "\\[applied\\] --mode - value='ir'")
 
-# K7: the version is a release tag, a git describe string, or the dev fallback.
+# K7: the version is a release tag, a git describe string (which is a bare commit hash in a
+# shallow clone without tags, as on CI), or the dev fallback.
 add_test(NAME ctrace_version_is_resolved COMMAND ctrace --version)
 set_tests_properties(ctrace_version_is_resolved PROPERTIES
-    PASS_REGULAR_EXPRESSION "^ctrace (v[0-9]+\\.[0-9]+|dev)")
+    PASS_REGULAR_EXPRESSION "^ctrace (v[0-9]+\\.[0-9]+|dev|[0-9a-f]+)")
 
 # An unreachable IPC socket must be reported, not crash the process.
 add_test(NAME ctrace_socket_failure_is_reported
