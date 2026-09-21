@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/ReportFile.hpp"
 #include "app/AnalyzerApp.hpp"
 
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -134,7 +134,13 @@ namespace
                          "stack_analyzer.print_effective_config enabled",
                          "stack_analyzer.print_effective_config disabled");
 
-        if (!config.stack_analyzer.output_format.empty())
+        if (config.output.sarif_format)
+        {
+            appendBridgeDecision(report, "--format", false,
+                                 "coretrace --sarif-format: findings go to the merged SARIF "
+                                 "document, the analyzer renders nothing");
+        }
+        else if (!config.stack_analyzer.output_format.empty())
         {
             args.emplace_back("--format=" + config.stack_analyzer.output_format);
             appendBridgeDecision(report, "--format", true,
@@ -142,9 +148,8 @@ namespace
         }
         else
         {
-            appendFlagOption(args, report, "--format=json", config.output.sarif_format,
-                             "derived from coretrace --sarif-format",
-                             "empty stack_analyzer.output_format and sarif disabled");
+            appendBridgeDecision(report, "--format", false,
+                                 "empty stack_analyzer.output_format; analyzer default kept");
         }
         appendFlagOption(args, report, "--verbose", config.output.verbose,
                          "coretrace --verbose enabled", "coretrace --verbose disabled");
@@ -435,55 +440,6 @@ namespace
         return result;
     }
 
-    [[nodiscard]] bool writeReportToFile(const std::string& reportPath, std::string_view content,
-                                         std::string& errorMessage)
-    {
-        errorMessage.clear();
-        if (reportPath.empty())
-        {
-            errorMessage = "report path is empty";
-            return false;
-        }
-
-        try
-        {
-            const std::filesystem::path targetPath(reportPath);
-            const auto parent = targetPath.parent_path();
-            if (!parent.empty())
-            {
-                std::error_code mkdirError;
-                std::filesystem::create_directories(parent, mkdirError);
-                if (mkdirError)
-                {
-                    errorMessage = "failed to create report directory '" + parent.string() +
-                                   "': " + mkdirError.message();
-                    return false;
-                }
-            }
-
-            std::ofstream out(targetPath, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-            {
-                errorMessage = "failed to open report file '" + targetPath.string() + "'";
-                return false;
-            }
-
-            out.write(content.data(), static_cast<std::streamsize>(content.size()));
-            if (!out.good())
-            {
-                errorMessage = "failed to write report file '" + targetPath.string() + "'";
-                return false;
-            }
-        }
-        catch (const std::exception& ex)
-        {
-            errorMessage = "failed to write report file '" + reportPath + "': " + ex.what();
-            return false;
-        }
-
-        return true;
-    }
-
     [[nodiscard]] ctrace::Severity toSeverity(ctrace::stack::DiagnosticSeverity severity)
     {
         switch (severity)
@@ -629,6 +585,10 @@ namespace ctrace
 
         const ctrace::stack::app::AnalysisReport& report = *analysis.report;
         output.diagnostics(toDiagnostics(report, name()));
+        if (config.output.sarif_format)
+        {
+            return; // The runner renders the merged SARIF document and the report file.
+        }
 
         const std::string rendered = ctrace::stack::app::renderReport(report, outputFormat);
         if (!rendered.empty())

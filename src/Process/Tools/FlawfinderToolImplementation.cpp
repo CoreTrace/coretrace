@@ -34,36 +34,39 @@ namespace ctrace
             return;
         }
         const auto diagnostics = parseDiagnostics(run->output);
-        std::string text;
-        if (config.output.sarif_format || !diagnostics)
-        {
-            text = run->output;
-        }
-        else if (!diagnostics->empty())
-        {
-            text = renderLines(*diagnostics);
-        }
-        if (!text.empty())
-        {
-            if (config.runtime.ipc == "standardIO" || !ipc)
-            {
-                output.result(text);
-            }
-            else
-            {
-                ipc->write(text);
-                output.record("stdout", text);
-            }
-        }
-        if (diagnostics)
-        {
-            output.diagnostics(*diagnostics);
-        }
-        else
+        if (!diagnostics)
         {
             coretrace::log(coretrace::Level::Warn, coretrace::Module(name()),
                            "output is not a SARIF document (flawfinder >= 2.0 is required); "
                            "findings are not counted\n");
+            emit(config, output, run->output, /*toConsole=*/!config.output.sarif_format);
+            return;
+        }
+        // In SARIF mode the merged document is the output; text lines would pollute it.
+        if (!config.output.sarif_format && !diagnostics->empty())
+        {
+            emit(config, output, renderLines(*diagnostics), /*toConsole=*/true);
+        }
+        output.diagnostics(*diagnostics);
+    }
+
+    /// Text goes to the deprecated socket when one is configured, else to the sink; a text
+    /// that must not reach stdout (raw output in SARIF mode) is only recorded.
+    void FlawfinderToolImplementation::emit(const ctrace::ProgramConfig& config, ToolOutput& output,
+                                            const std::string& text, bool toConsole) const
+    {
+        if (config.runtime.ipc != "standardIO" && ipc)
+        {
+            ipc->write(text);
+            output.record("stdout", text);
+        }
+        else if (toConsole)
+        {
+            output.result(text);
+        }
+        else
+        {
+            output.record("stdout", text);
         }
     }
 

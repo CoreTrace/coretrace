@@ -3,7 +3,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstdint>
+#include <map>
 #include <regex>
+#include <set>
+#include <string_view>
 
 namespace ctrace
 {
@@ -90,6 +94,119 @@ namespace ctrace
             }
         }
         return diagnostics;
+    }
+
+    namespace
+    {
+        constexpr std::string_view kSarifSchema =
+            "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/"
+            "sarif-schema-2.1.0.json";
+
+        [[nodiscard]] constexpr std::string_view levelOf(Severity severity) noexcept
+        {
+            switch (severity)
+            {
+            case Severity::Info:
+                return "note";
+            case Severity::Warning:
+                return "warning";
+            case Severity::Error:
+                return "error";
+            }
+            return "warning";
+        }
+
+        /// FNV-1a over the identity fields, in hex. Deterministic across platforms, unlike
+        /// std::hash, which is what "the same alert next run" needs.
+        [[nodiscard]] std::string fingerprintOf(const Diagnostic& diagnostic)
+        {
+            std::uint64_t hash = 14695981039346656037ULL;
+            const auto feed = [&hash](std::string_view text)
+            {
+                for (const unsigned char ch : text)
+                {
+                    hash ^= ch;
+                    hash *= 1099511628211ULL;
+                }
+                hash ^= 0xFFU;
+                hash *= 1099511628211ULL;
+            };
+            feed(diagnostic.tool);
+            feed(diagnostic.ruleId);
+            feed(diagnostic.file);
+            feed(diagnostic.message);
+            constexpr std::string_view digits = "0123456789abcdef";
+            std::string hex(16, '0');
+            for (std::size_t i = 0; i < 16; ++i)
+            {
+                hex[15 - i] = digits[hash & 0xFU];
+                hash >>= 4;
+            }
+            return hex;
+        }
+
+        [[nodiscard]] nlohmann::json resultOf(const Diagnostic& diagnostic)
+        {
+            nlohmann::json result;
+            if (!diagnostic.ruleId.empty())
+            {
+                result["ruleId"] = diagnostic.ruleId;
+            }
+            result["level"] = levelOf(diagnostic.severity);
+            result["message"]["text"] = diagnostic.message;
+            if (!diagnostic.file.empty())
+            {
+                nlohmann::json physical;
+                physical["artifactLocation"]["uri"] = diagnostic.file;
+                if (diagnostic.line > 0)
+                {
+                    physical["region"]["startLine"] = diagnostic.line;
+                    if (diagnostic.column > 0)
+                    {
+                        physical["region"]["startColumn"] = diagnostic.column;
+                    }
+                }
+                result["locations"] = nlohmann::json::array({{{"physicalLocation", physical}}});
+            }
+            result["partialFingerprints"]["coretrace/v1"] = fingerprintOf(diagnostic);
+            if (!diagnostic.cwe.empty())
+            {
+                result["properties"]["cwe"] = diagnostic.cwe;
+            }
+            return result;
+        }
+    } // namespace
+
+    nlohmann::json renderSarif(const std::vector<Diagnostic>& diagnostics)
+    {
+        std::map<std::string, std::vector<const Diagnostic*>> byTool;
+        for (const Diagnostic& diagnostic : diagnostics)
+        {
+            byTool[diagnostic.tool].push_back(&diagnostic);
+        }
+
+        nlohmann::json log;
+        log["version"] = "2.1.0";
+        log["$schema"] = kSarifSchema;
+        log["runs"] = nlohmann::json::array();
+        for (const auto& [tool, items] : byTool)
+        {
+            nlohmann::json run;
+            run["tool"]["driver"]["name"] = tool;
+            run["tool"]["driver"]["rules"] = nlohmann::json::array();
+            run["results"] = nlohmann::json::array();
+            std::set<std::string> rules;
+            for (const Diagnostic* diagnostic : items)
+            {
+                if (!diagnostic->ruleId.empty() && rules.insert(diagnostic->ruleId).second)
+                {
+                    run["tool"]["driver"]["rules"].push_back({{"id", diagnostic->ruleId}});
+                }
+                run["results"].push_back(resultOf(*diagnostic));
+            }
+            log["runs"].push_back(std::move(run));
+        }
+        return log;
     }
 
     std::optional<std::vector<Diagnostic>> diagnosticsFromSarifText(const std::string& text,

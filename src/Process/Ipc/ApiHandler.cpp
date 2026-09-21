@@ -2,6 +2,8 @@
 #include "Process/Ipc/ApiHandler.hpp"
 
 #include "App/ExitPolicy.hpp"
+#include "Process/Tools/ReportFile.hpp"
+#include "Process/Tools/Sarif.hpp"
 #include "App/Files.hpp"
 #include "App/ToolConfig.hpp"
 #include "Process/Tools/ToolsInvoker.hpp"
@@ -380,6 +382,17 @@ namespace
         }
         result["diagnostics"] = std::move(diagnostics);
         result["uninterpreted_tools"] = invoker.uninterpretedTools();
+        if (config.output.sarif_format)
+        {
+            // The merged document the CLI prints; also persisted like the CLI does.
+            result["sarif"] = ctrace::renderSarif(invoker.diagnostics());
+            std::string writeError;
+            if (!ctrace::writeReportToFile(config.output.report_file, result["sarif"].dump(2),
+                                           writeError))
+            {
+                logger.error("Unable to write the SARIF report: " + writeError);
+            }
+        }
         // The same verdict the CLI exits with, so a client applies one policy.
         const ctrace::AnalysisOutcome outcome = invoker.outcome();
         result["gate"] = {{"fail_on", ctrace::failOnName(config.analysis.fail_on)},

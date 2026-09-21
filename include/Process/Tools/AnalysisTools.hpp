@@ -160,11 +160,21 @@ namespace ctrace
                      ToolOutput& output) const override
         {
             coretrace::log(coretrace::Level::Info, "Running ikos on {}\n", file);
-            if (const auto run =
-                    runExternalTool(config, *this, buildArguments(config, file), output))
+            const auto run = runExternalTool(config, *this, buildArguments(config, file), output);
+            if (!run)
             {
-                output.result(run->output);
+                return;
             }
+            if (config.output.sarif_format)
+            {
+                // Not part of the merged document: kept for the API, out of stdout.
+                output.record("stdout", run->output);
+                coretrace::log(coretrace::Level::Warn, coretrace::Module(name()),
+                               "output is not interpreted; its findings are not in the SARIF "
+                               "document\n");
+                return;
+            }
+            output.result(run->output);
         }
         std::string name() const override
         {
@@ -197,6 +207,10 @@ namespace ctrace
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override;
         std::string name() const override;
+
+      private:
+        void emit(const ctrace::ProgramConfig& config, ToolOutput& output, const std::string& text,
+                  bool toConsole) const;
     };
 
     class TscancodeToolImplementation : public AnalysisToolBase
@@ -210,13 +224,6 @@ namespace ctrace
 
         /// Reads tscancode's `[file:line]: (severity) message` lines.
         [[nodiscard]] static std::vector<Diagnostic> parseDiagnostics(const std::string& output);
-
-        /// Converts tscancode's text diagnostics into a SARIF document. Pure: the caller
-        /// decides where the document goes.
-        [[nodiscard]] nlohmann::json sarifFormat(const std::string& buffer) const;
-
-      protected:
-        [[nodiscard]] std::string_view severityToLevel(const std::string& severity) const;
     };
 
     class CppCheckToolImplementation : public AnalysisToolBase

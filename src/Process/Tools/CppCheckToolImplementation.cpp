@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
-#include "Process/Tools/Sarif.hpp"
-
 #include <coretrace/logger.hpp>
 
 #include <algorithm>
@@ -29,7 +27,7 @@ namespace ctrace
         }
     } // namespace
 
-    /// The command line: output contract, then the checks and the build context the
+    /// The command line: the output template CoreTrace parses, then the checks and the build context the
     /// configuration already carries for the stack analyzer, then the user's own arguments
     /// (which can override what precedes, e.g. `--disable=style`), then the file.
     std::vector<std::string>
@@ -37,14 +35,7 @@ namespace ctrace
                                                const std::string& file)
     {
         std::vector<std::string> args;
-        if (config.output.sarif_format)
-        {
-            args.push_back("--output-format=sarif");
-        }
-        else
-        {
-            args.push_back(std::string("--template=") + kOutputTemplate);
-        }
+        args.push_back(std::string("--template=") + kOutputTemplate);
         // cppcheck enables only `error` by default (85 of 320 checks); the warning-class
         // checks are what a static analysis run is expected to report.
         args.push_back("--enable=warning,style,performance,portability");
@@ -112,22 +103,9 @@ namespace ctrace
         {
             return;
         }
-        if (config.output.sarif_format)
-        {
-            output.result(run->output);
-            if (const auto parsed = diagnosticsFromSarifText(run->output, name()))
-            {
-                output.diagnostics(*parsed);
-            }
-            else
-            {
-                coretrace::log(coretrace::Level::Warn, coretrace::Module(name()),
-                               "SARIF output could not be interpreted; findings are not counted\n");
-            }
-            return;
-        }
         const std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
-        if (!diagnostics.empty())
+        // In SARIF mode the merged document is the output; text lines would pollute it.
+        if (!config.output.sarif_format && !diagnostics.empty())
         {
             output.result(renderLines(diagnostics));
         }

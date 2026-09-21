@@ -361,6 +361,20 @@ set_tests_properties(ctrace_default_models_without_config PROPERTIES
     PASS_REGULAR_EXPRESSION
         "\\(ctrace_stack_analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
 
+# --sarif-format: one SARIF log for the whole run, one run per tool, on stdout and in the
+# report file (which no longer receives the analyzer's own JSON in that mode).
+set(ctrace_merged_sarif ${CMAKE_BINARY_DIR}/ctrace-merged.sarif)
+add_test(NAME ctrace_sarif_is_merged_per_tool
+    COMMAND ctrace --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer
+        --config ${CMAKE_SOURCE_DIR}/config/tool-config.json
+        --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_merged_sarif})
+set_tests_properties(ctrace_sarif_is_merged_per_tool PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"name\": \"ctrace_stack_analyzer\"")
+add_test(NAME ctrace_sarif_report_file_is_the_merged_log
+    COMMAND sh -c "grep -q '\"\$schema\"' ${ctrace_merged_sarif} && grep -q '\"name\": \"cppcheck\"' ${ctrace_merged_sarif} && grep -q '\"name\": \"ctrace_stack_analyzer\"' ${ctrace_merged_sarif} && ! grep -q 'diagnosticsSummary' ${ctrace_merged_sarif}")
+set_tests_properties(ctrace_sarif_report_file_is_the_merged_log PROPERTIES
+    DEPENDS ctrace_sarif_is_merged_per_tool)
+
 # Applied last so every executable we own exists by now.
 foreach(coretrace_target
     ctrace

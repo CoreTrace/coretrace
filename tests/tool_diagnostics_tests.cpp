@@ -165,6 +165,69 @@ int main()
         }
     }
 
+    // One SARIF log for the whole run: one run per tool, rules collected, stable fingerprints.
+    {
+        const std::vector<Diagnostic> items = {
+            {"ctrace_stack_analyzer", "ResourceLifetime.DoubleRelease", "tests/double_free.c", 12,
+             5, Severity::Error, "double release of ptr", "CWE-415"},
+            {"cppcheck", "doubleFree", "tests/double_free.c", 12, 5, Severity::Error,
+             "Memory pointed to by 'ptr' is freed twice.", ""},
+            {"cppcheck", "unreadVariable", "tests/dead_code.cc", 4, 11, Severity::Warning,
+             "Variable 'y' is assigned a value that is never used.", ""},
+            {"cppcheck", "unreadVariable", "tests/dead_code.cc", 14, 11, Severity::Warning,
+             "Variable 'y' is assigned a value that is never used.", ""},
+            {"tscancode", "", "", 0, 0, Severity::Info, "no location, no rule", ""},
+        };
+        const nlohmann::json log = renderSarif(items);
+        report.expect(log.value("version", "") == "2.1.0" && log.contains("$schema") &&
+                          log["runs"].is_array() && log["runs"].size() == 3,
+                      "renderSarif: a 2.1.0 log with one run per tool");
+        if (log["runs"].size() == 3)
+        {
+            const auto& runs = log["runs"];
+            report.expect(runs[0]["tool"]["driver"]["name"] == "cppcheck" &&
+                              runs[1]["tool"]["driver"]["name"] == "ctrace_stack_analyzer" &&
+                              runs[2]["tool"]["driver"]["name"] == "tscancode",
+                          "renderSarif: runs are ordered by tool name");
+            const auto& cppcheck = runs[0];
+            report.expect(cppcheck["results"].size() == 3 &&
+                              cppcheck["tool"]["driver"]["rules"].size() == 2,
+                          "renderSarif: every diagnostic is a result; rules are listed once");
+            const auto& first = cppcheck["results"][0];
+            report.expect(
+                first["ruleId"] == "doubleFree" && first["level"] == "error" &&
+                    first["message"]["text"] == "Memory pointed to by 'ptr' is freed twice." &&
+                    first["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] ==
+                        "tests/double_free.c" &&
+                    first["locations"][0]["physicalLocation"]["region"]["startLine"] == 12 &&
+                    first["locations"][0]["physicalLocation"]["region"]["startColumn"] == 5,
+                "renderSarif: rule, level, message and location are mapped");
+            report.expect(cppcheck["results"][1]["level"] == "warning" &&
+                              runs[2]["results"][0]["level"] == "note",
+                          "renderSarif: warning and info map to the SARIF levels");
+            const auto& analyzer = runs[1]["results"][0];
+            report.expect(analyzer["properties"]["cwe"] == "CWE-415",
+                          "renderSarif: the CWE travels as a property");
+            const std::string fp1 = cppcheck["results"][1]["partialFingerprints"]["coretrace/v1"];
+            const std::string fp2 = cppcheck["results"][2]["partialFingerprints"]["coretrace/v1"];
+            const std::string fp0 = cppcheck["results"][0]["partialFingerprints"]["coretrace/v1"];
+            report.expect(
+                !fp1.empty() && fp1 == fp2 && fp0 != fp1,
+                "renderSarif: fingerprints ignore the line and depend on rule and message");
+            report.expect(
+                fp1 == renderSarif(
+                           items)["runs"][0]["results"][1]["partialFingerprints"]["coretrace/v1"]
+                           .get<std::string>(),
+                "renderSarif: fingerprints are stable across renderings");
+            const auto& bare = runs[2]["results"][0];
+            report.expect(!bare.contains("ruleId") && !bare.contains("locations") &&
+                              runs[2]["tool"]["driver"]["rules"].empty(),
+                          "renderSarif: no rule and no location are left out, not zeroed");
+        }
+        report.expect(renderSarif({})["runs"].is_array() && renderSarif({})["runs"].empty(),
+                      "renderSarif: nothing to report is an empty runs array");
+    }
+
     if (report.failures == 0)
     {
         std::cout << "tool_diagnostics_tests: all checks passed\n";

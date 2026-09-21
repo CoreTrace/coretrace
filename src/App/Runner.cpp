@@ -4,11 +4,14 @@
 #include "App/ExitPolicy.hpp"
 #include "App/Files.hpp"
 #include "Process/Ipc/HttpServer.hpp"
+#include "Process/Tools/ReportFile.hpp"
+#include "Process/Tools/Sarif.hpp"
 #include "Process/Tools/ToolsInvoker.hpp"
 
 #include <coretrace/logger.hpp>
 
 #include <cstdlib>
+#include <iostream>
 #include <thread>
 #include <unordered_set>
 
@@ -57,6 +60,28 @@ namespace ctrace
         server.run(config.server.host, config.server.port);
         return EXIT_SUCCESS;
     }
+
+    namespace
+    {
+        /// --sarif-format: the whole run as one SARIF log, on stdout and in the report file.
+        void writeMergedSarif(const ProgramConfig& config,
+                              const std::vector<Diagnostic>& diagnostics)
+        {
+            const std::string document = renderSarif(diagnostics).dump(2);
+            std::cout << document << std::endl;
+            std::string error;
+            if (writeReportToFile(config.output.report_file, document, error))
+            {
+                coretrace::log(coretrace::Level::Info, "SARIF report written to '{}'\n",
+                               config.output.report_file);
+            }
+            else
+            {
+                coretrace::log(coretrace::Level::Warn, "Unable to write the SARIF report: {}\n",
+                               error);
+            }
+        }
+    } // namespace
 
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config)
     {
@@ -133,6 +158,11 @@ namespace ctrace
             coretrace::log(coretrace::Level::Info, "Running specific tools on {} file(s)\n",
                            sourceFiles.size());
             invoker.runSpecificTools(config.analysis.invoke, sourceFiles);
+        }
+
+        if (config.output.sarif_format)
+        {
+            writeMergedSarif(config, invoker.diagnostics());
         }
 
         const AnalysisOutcome outcome = invoker.outcome();
