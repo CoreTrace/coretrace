@@ -397,6 +397,60 @@ namespace
               "Expected unsigned integer for 'server.max_body_bytes'.");
     }
 
+    // K3: legacy spellings keep working, and the loader says which canonical key to use.
+    void testLegacySpellingsAreAcceptedWithAWarning()
+    {
+        const auto path = makeTempConfigPath("legacy-warnings.json");
+        writeTextFile(path, R"json(
+{
+  "invoke": ["cppcheck"],
+  "stack-analyzer": {"analysis-profile": "fast", "smt-timeout-ms": 5, "only-func": ["f"]},
+  "analysis": {"static_analysis": true}
+}
+)json");
+        ctrace::ProgramConfig cfg;
+        std::string err;
+        std::vector<std::string> warnings;
+        CHECK(ctrace::applyToolConfigFile(cfg, path.string(), err, &warnings));
+        CHECK(cfg.stack_analyzer.analysis_profile == "fast");
+        CHECK(cfg.analysis.static_enabled);
+
+        const auto mentions = [&](const std::string& legacy, const std::string& canonical)
+        {
+            for (const std::string& warning : warnings)
+            {
+                if (warning.find("'" + legacy + "'") != std::string::npos &&
+                    warning.find("'" + canonical + "'") != std::string::npos)
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+        CHECK(mentions("analysis-profile", "analysis_profile"));
+        CHECK(mentions("smt-timeout-ms", "smt_timeout_ms"));
+        CHECK(mentions("only-func", "only_functions"));
+        CHECK(mentions("static_analysis", "static"));
+        CHECK(mentions("stack-analyzer", "stack_analyzer"));
+        CHECK(mentions("invoke", "analysis.invoke"));
+        CHECK(warnings.size() == 6);
+
+        // A canonical document warns about nothing.
+        const auto canonical = makeTempConfigPath("legacy-warnings-none.json");
+        writeTextFile(canonical, R"json(
+{"analysis": {"static": true, "invoke": ["cppcheck"]}, "stack_analyzer": {"analysis_profile": "fast"}}
+)json");
+        ctrace::ProgramConfig clean;
+        std::vector<std::string> none;
+        CHECK(ctrace::applyToolConfigFile(clean, canonical.string(), err, &none));
+        CHECK(none.empty());
+
+        // The command line surfaces them.
+        const auto result = buildFromArgs({"ctrace", "--config", path.string(), "--input", "a.c"});
+        CHECK(result.config.has_value());
+        CHECK(result.warnings.size() == 6);
+    }
+
     void testToolPathsAreConfigurable()
     {
         const auto cfg = loadOrDie("tool-paths.json", R"json(
@@ -567,6 +621,7 @@ int main()
     testInvalidPortIsAnError();
     testSocketIpcIsDeprecated();
     testToolPathsAreConfigurable();
+    testLegacySpellingsAreAcceptedWithAWarning();
     testServerHardeningIsConfigurable();
     testCliValuesShareTheLoaderRules();
     testMissingConfigFileIsAnError();

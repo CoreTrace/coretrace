@@ -198,7 +198,7 @@ namespace
     /// Translates the flat request parameters into the sectioned config document and applies
     /// it through the config loader: one validation path for the file, the request and the CLI.
     bool build_config_from_params_impl(const json& params, ctrace::ProgramConfig& config,
-                                       ParseError& err)
+                                       ParseError& err, std::vector<std::string>* warnings)
     {
         if (!params.is_object())
         {
@@ -215,7 +215,7 @@ namespace
         if (!configPath.empty())
         {
             std::string toolConfigError;
-            if (!ctrace::applyToolConfigFile(config, configPath, toolConfigError))
+            if (!ctrace::applyToolConfigFile(config, configPath, toolConfigError, warnings))
             {
                 err = {"InvalidParams", "Failed to load config: " + toolConfigError};
                 return false;
@@ -433,7 +433,7 @@ json ApiHandler::handle_request(const json& request)
 bool ApiHandler::build_config_from_params(const json& params, ctrace::ProgramConfig& config,
                                           ParseError& err)
 {
-    return build_config_from_params_impl(params, config, err);
+    return build_config_from_params_impl(params, config, err, nullptr);
 }
 
 json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
@@ -441,11 +441,16 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     ctrace::ProgramConfig config;
     ParseError err;
 
-    if (!build_config_from_params(params, config, err))
+    std::vector<std::string> warnings;
+    if (!build_config_from_params_impl(params, config, err, &warnings))
     {
         baseResponse["status"] = "error";
         baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
         return baseResponse;
+    }
+    for (const std::string& warning : warnings)
+    {
+        logger_.info("Warning: " + warning);
     }
 
     json result;

@@ -338,6 +338,17 @@ namespace ctrace
         {
             ProgramConfig& config;
             const std::filesystem::path& configDir;
+            std::vector<std::string>* warnings = nullptr;
+
+            void deprecated(const std::string& legacy, std::string_view where,
+                            const std::string& canonical) const
+            {
+                if (warnings != nullptr)
+                {
+                    warnings->push_back("Deprecated config key '" + legacy + "' in '" +
+                                        std::string(where) + "': use '" + canonical + "'.");
+                }
+            }
         };
 
         using ApplyFn = std::function<bool(const Value&, LoadContext&,
@@ -436,17 +447,23 @@ namespace ctrace
             for (const FieldSpec& field : spec.fields)
             {
                 const json* raw = nullptr;
+                const char* matched = nullptr;
                 for (const char* key : field.keys)
                 {
                     if (const auto it = section.find(key); it != section.end())
                     {
                         raw = &(*it);
+                        matched = key;
                         break;
                     }
                 }
                 if (raw == nullptr || raw->is_null())
                 {
                     continue;
+                }
+                if (std::string_view(matched) != field.name)
+                {
+                    ctx.deprecated(matched, location, field.name);
                 }
                 const std::string locationPath = std::string(location) + "." + field.name;
                 Value value;
@@ -929,6 +946,7 @@ namespace ctrace
         {
             if (const auto it = root.find("invoke"); it != root.end() && !it->is_null())
             {
+                ctx.deprecated("invoke", "root", "analysis.invoke");
                 Value value;
                 if (!readValue(*it, Kind::StringList, "invoke", value, errorMessage) ||
                     !applyInvoke(value, ctx, "invoke", errorMessage))
@@ -938,6 +956,7 @@ namespace ctrace
             }
             if (const auto it = root.find("input"); it != root.end() && !it->is_null())
             {
+                ctx.deprecated("input", "root", "files.input");
                 if (it->is_object())
                 {
                     errorMessage = "Expected string or array of strings for 'input'.";
@@ -955,7 +974,7 @@ namespace ctrace
 
         /// `stack_analyzer`, `stack-analyzer`, `tools.ctrace_stack_analyzer` or
         /// `tools.stack_analyzer`, in that order of preference.
-        [[nodiscard]] const json* findStackAnalyzerSection(const json& root,
+        [[nodiscard]] const json* findStackAnalyzerSection(const json& root, LoadContext& ctx,
                                                            std::string& errorMessage)
         {
             const auto asObject = [&](const json& value, const char* name) -> const json*
@@ -971,6 +990,10 @@ namespace ctrace
             {
                 if (const auto it = root.find(key); it != root.end() && !it->is_null())
                 {
+                    if (std::string_view(key) != "stack_analyzer")
+                    {
+                        ctx.deprecated(key, "root", "stack_analyzer");
+                    }
                     return asObject(*it, key);
                 }
             }
@@ -992,6 +1015,7 @@ namespace ctrace
             {
                 if (const auto it = itTools->find(key); it != itTools->end() && !it->is_null())
                 {
+                    ctx.deprecated(key, "tools", "stack_analyzer");
                     return asObject(*it, (std::string("tools.") + key).c_str());
                 }
             }
@@ -1105,7 +1129,7 @@ namespace ctrace
     } // namespace
 
     bool applyToolConfigFile(ProgramConfig& config, std::string_view configPath,
-                             std::string& errorMessage)
+                             std::string& errorMessage, std::vector<std::string>* warnings)
     {
         errorMessage.clear();
         if (configPath.empty())
@@ -1122,11 +1146,12 @@ namespace ctrace
         }
         config.config_file = path.lexically_normal().string();
         return applyToolConfigObject(config, root, std::filesystem::absolute(path).parent_path(),
-                                     errorMessage);
+                                     errorMessage, warnings);
     }
 
     bool applyToolConfigObject(ProgramConfig& config, const json& root,
-                               const std::filesystem::path& configDir, std::string& errorMessage)
+                               const std::filesystem::path& configDir, std::string& errorMessage,
+                               std::vector<std::string>* warnings)
     {
         errorMessage.clear();
         if (!root.is_object())
@@ -1147,11 +1172,11 @@ namespace ctrace
             return false;
         }
 
-        LoadContext ctx{config, configDir};
+        LoadContext ctx{config, configDir, warnings};
 
         // Precedence inside the file: analyzer section, then legacy root keys, then the
         // canonical sections, which therefore win (docs/configuration.md, Legacy Compatibility).
-        if (const json* analyzerSection = findStackAnalyzerSection(root, errorMessage);
+        if (const json* analyzerSection = findStackAnalyzerSection(root, ctx, errorMessage);
             analyzerSection != nullptr)
         {
             if (!applySection(*analyzerSection, stackAnalyzerSection(), "stack_analyzer", ctx,

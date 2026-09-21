@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace ctrace
 {
@@ -17,6 +18,7 @@ namespace ctrace
         std::optional<ProgramConfig> config; ///< Present when the program should run.
         std::string output;                  ///< Text for stdout (help, version, notices).
         std::string error;                   ///< Text for stderr.
+        std::vector<std::string> warnings;   ///< Deprecation notices, one per line, for stderr.
         int exitCode = 0;                    ///< Process exit code when `config` is absent.
     };
 

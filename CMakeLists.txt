@@ -244,6 +244,20 @@ target_link_libraries(ctrace_server_http_tests
             httplib::httplib)
 add_test(NAME ctrace_server_http_tests COMMAND ctrace_server_http_tests)
 
+# K4: the bridge report explains every option forwarded to the analyzer, at verbose level.
+add_test(NAME ctrace_bridge_report_is_logged
+    COMMAND ctrace --verbose --config ${CMAKE_SOURCE_DIR}/config/tool-config.json
+        --input ${CMAKE_SOURCE_DIR}/tests/double_free.c
+        --report-file ${CMAKE_BINARY_DIR}/ctrace-bridge-report.json)
+set_tests_properties(ctrace_bridge_report_is_logged PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\[applied\\] --mode - value='ir'")
+
+# K7: the version is a release tag, a git describe string (which is a bare commit hash in a
+# shallow clone without tags, as on CI), or the dev fallback.
+add_test(NAME ctrace_version_is_resolved COMMAND ctrace --version)
+set_tests_properties(ctrace_version_is_resolved PROPERTIES
+    PASS_REGULAR_EXPRESSION "^ctrace (v[0-9]+\\.[0-9]+|dev|[0-9a-f]+)")
+
 # An unreachable IPC socket must be reported, not crash the process.
 add_test(NAME ctrace_socket_failure_is_reported
     COMMAND ctrace --ipc socket --ipc-path /nonexistent/ctrace-test.sock

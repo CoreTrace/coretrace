@@ -43,7 +43,8 @@ jobs:
             ninja-build \
             curl \
             ca-certificates \
-            gnupg
+            gnupg \
+            cppcheck
           sudo ./scripts/ci/install-llvm-apt.sh 20
           echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
@@ -52,7 +53,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          brew install cmake ninja llvm@20
+          brew install cmake ninja llvm@20 cppcheck
           echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=$(brew --prefix llvm@20)/lib/cmake/clang" >> "$GITHUB_ENV"
           echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
@@ -80,3 +81,12 @@ jobs:
         run: |
           set -euo pipefail
           ctest --test-dir build --output-on-failure
+
+      # The async proof harness drives cppcheck and the stack analyzer in both modes and
+      # compares diagnostic fingerprints. The speed-up assertion is disabled: it is a timing
+      # claim that a shared runner cannot make reliably, and the fingerprints are the point.
+      - name: Async harness (F7)
+        run: |
+          set -euo pipefail
+          python3 tests/BTP-STACK-ANALYZER-F7 --ctrace-bin ./build/ctrace \
+            --iterations 1 --warmups 0 --min-speedup-ratio 0

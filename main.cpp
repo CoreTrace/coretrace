@@ -34,6 +34,10 @@ int main(int argc, char* argv[])
     {
         std::cout << loaded.output;
     }
+    for (const std::string& warning : loaded.warnings)
+    {
+        std::cerr << "Warning: " << warning << '\n';
+    }
     if (!loaded.error.empty())
     {
         std::cerr << loaded.error;
