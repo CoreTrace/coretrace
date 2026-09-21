@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <thread>
+#include <unordered_set>
 
 namespace ctrace
 {
@@ -18,9 +19,35 @@ namespace ctrace
         coretrace::set_thread_safe(true);
     }
 
+    CT_NODISCARD std::string validateServerConfig(const ServerConfig& config)
+    {
+        static const std::unordered_set<std::string> loopbackHosts = {
+            "",
+            "127.0.0.1",
+            "::1",
+            "localhost",
+        };
+        if (loopbackHosts.count(config.host) != 0 || config.host.rfind("127.", 0) == 0)
+        {
+            return {};
+        }
+        if (config.shutdown_token.empty())
+        {
+            return "Refusing to serve on '" + config.host +
+                   "': the API is unauthenticated, so a host reachable beyond the loopback "
+                   "interface requires server.shutdown_token (--shutdown-token).";
+        }
+        return {};
+    }
+
     CT_NODISCARD int run_server(const ProgramConfig& config)
     {
         configure_server_logging();
+        if (const std::string error = validateServerConfig(config.server); !error.empty())
+        {
+            coretrace::log(coretrace::Level::Error, "{}\n", error);
+            return EXIT_FAILURE;
+        }
         coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n", config.server.host,
                        std::to_string(config.server.port));
         ConsoleLogger logger;

@@ -703,6 +703,14 @@ namespace ctrace
                  setBoundedInt(&ServerConfig::shutdown_timeout_ms,
                                std::numeric_limits<uint64_t>::max(),
                                "server.shutdown_timeout_ms is too large.")},
+                {"max_body_bytes",
+                 {"max_body_bytes"},
+                 Kind::Uint64,
+                 setUint64(&ProgramConfig::server, &ServerConfig::max_body_bytes)},
+                {"cors_origin",
+                 {"cors_origin"},
+                 Kind::String,
+                 setString(&ProgramConfig::server, &ServerConfig::cors_origin)},
             }};
             return spec;
         }

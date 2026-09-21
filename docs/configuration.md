@@ -195,6 +195,30 @@ Description: graceful shutdown timeout.
 Impact: waits for in-flight requests up to timeout (`0` = wait indefinitely).
 CLI: `--shutdown-timeout-ms`
 
+- `server.max_body_bytes`
+Type: `uint`
+Default: `1048576` (1 MiB)
+Allowed: `0..UINT64_MAX`, `0` meaning no limit.
+Description: largest accepted request body.
+Impact: a larger body is answered with `413`. Requests carry a file list, not file contents.
+CLI: not exposed (`config/tool-config.json` only)
+
+- `server.cors_origin`
+Type: `string`
+Default: `""`
+Allowed: an origin such as `https://gui.example`.
+Description: origin allowed to call the API from a browser.
+Impact: empty sends no `Access-Control-*` header, so a page on another origin cannot read the
+response. Set it only for the origin of your own front end.
+CLI: not exposed (`config/tool-config.json` only)
+
+### Exposure
+
+The API has no authentication. Binding `server.host` to anything outside the loopback
+interface therefore requires `server.shutdown_token`; the server refuses to start otherwise.
+The token protects `POST /shutdown` only, so treat a non-loopback bind as giving anyone who
+can reach the port the ability to run analyses on this machine.
+
 ## tools
 
 External tools are invoked by name and resolved through `PATH`. Give a tool an explicit

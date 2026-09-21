@@ -532,8 +532,20 @@ class HttpServer
   public:
     HttpServer(ApiHandler& apiHandler, ILogger& logger, const ctrace::ServerConfig& config)
         : apiHandler_(apiHandler), logger_(logger), shutdown_token_(config.shutdown_token),
+          cors_origin_(config.cors_origin),
           shutdown_timeout_(std::chrono::milliseconds(config.shutdown_timeout_ms))
     {
+        // Requests carry a file list, not file contents; cpp-httplib is otherwise unbounded.
+        if (config.max_body_bytes > 0)
+        {
+            server_.set_payload_max_length(static_cast<size_t>(config.max_body_bytes));
+        }
+    }
+
+    /// Stops accepting connections. Safe to call from another thread.
+    void stop()
+    {
+        server_.stop();
     }
 
     void run(const std::string& host, int port)
@@ -614,6 +626,7 @@ class HttpServer
     std::condition_variable shutdown_cv_;
     std::thread shutdown_thread_;
     std::string shutdown_token_;
+    std::string cors_origin_;
     std::chrono::milliseconds shutdown_timeout_{0};
 
     bool is_shutting_down() const
@@ -621,9 +634,15 @@ class HttpServer
         return shutting_down_.load(std::memory_order_acquire);
     }
 
-    static void set_cors(httplib::Response& res)
+    /// Cross-origin access is opt-in: without a configured origin no header is sent, so a
+    /// page on another origin cannot read the response.
+    void set_cors(httplib::Response& res) const
     {
-        res.set_header("Access-Control-Allow-Origin", "*");
+        if (cors_origin_.empty())
+        {
+            return;
+        }
+        res.set_header("Access-Control-Allow-Origin", cors_origin_);
         res.set_header("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type");
     }
