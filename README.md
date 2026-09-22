@@ -84,6 +84,21 @@ fails on findings but still returns `3` on a broken tool. Code `3` takes precede
 ./ctrace --fail-on warning --input src/main.c --invoke cppcheck,ctrace_stack_analyzer
 ```
 
+### SARIF OUTPUT
+
+`--sarif-format` reports the whole run as **one** SARIF 2.1.0 log, whatever tools ran: one
+`run` per tool, rules collected per tool, a `coretrace/v1` partial fingerprint per result for
+stable alerts across runs, and the CWE as a result property. The document is printed to
+stdout and written to `--report-file`, ready for `github/codeql-action/upload-sarif`.
+
+```bash
+./ctrace --sarif-format --invoke cppcheck,flawfinder,ctrace_stack_analyzer \
+    --input src/main.c --report-file ctrace.sarif
+```
+
+Findings are not deduplicated across tools: a defect seen by two analyzers appears in both
+runs, each attributed to its tool.
+
 ### CONFIGURATION
 
 - Canonical default config: `config/tool-config.json`
@@ -132,6 +147,7 @@ curl -X POST http://127.0.0.1:8080/api \
 Response notes:
 - `status` is `ok` or `error`.
 - `result.diagnostics` lists every finding in one model (`tool`, `rule_id`, `file`, `line`, `column`, `severity`, `message`, `cwe`), whatever tool produced it; `result.diagnostics_summary_total` counts them by severity.
+- `result.sarif` is the merged SARIF log when `sarif_format` is true (also written to `report_file`).
 - `result.gate` carries the verdict the CLI would exit with: `fail_on`, `exit_code` (see EXIT CODES) and `failed_tools`.
 - `result.uninterpreted_tools` names the tools whose output CoreTrace could not interpret: their findings are shown in `result.outputs` but are not counted.
 - `result.outputs` groups tool output by tool name.

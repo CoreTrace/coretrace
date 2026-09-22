@@ -67,12 +67,14 @@ int main()
                       "ikos: without SARIF the text format is used");
     }
     {
+        // The merged SARIF document is rendered by CoreTrace from the model, so cppcheck
+        // always runs with the template CoreTrace parses, whatever the output mode.
         const auto args = CppCheckToolImplementation::buildArguments(configWithSarif(true), "a.c");
-        report.expect(contains(args, "--output-format=sarif") && contains(args, "a.c"),
-                      "cppcheck: SARIF request is forwarded");
+        report.expect(!contains(args, "--output-format=sarif") &&
+                          contains(args, std::string("--template=") +
+                                             CppCheckToolImplementation::kOutputTemplate),
+                      "cppcheck: a SARIF request keeps the parsed text template");
         const auto text = CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c");
-        report.expect(!contains(text, "--output-format=sarif"),
-                      "cppcheck: no SARIF flag without the request");
         // The template is the parsing contract: the same on every cppcheck version.
         report.expect(contains(text, std::string("--template=") +
                                          CppCheckToolImplementation::kOutputTemplate) &&
@@ -177,29 +179,6 @@ int main()
             TscancodeToolImplementation::buildArguments(configWithSarif(false), "a.c");
         report.expect(contains(args, "--enable=all") && args.back() == "a.c",
                       "tscancode: enables all checks and passes the file");
-    }
-
-    // The SARIF conversion of tscancode output is a pure transformation.
-    {
-        const TscancodeToolImplementation tool;
-        const std::string toolOutput = "[src/main.c:12]: (error) Memory leak: buffer\n"
-                                       "[src/util.c:3]: (Warning) Unused variable\n"
-                                       "not a diagnostic line\n";
-        const nlohmann::json sarif = tool.sarifFormat(toolOutput);
-        const auto& results = sarif["runs"][0]["results"];
-        report.expect(sarif.value("version", "") == "2.1.0" && results.size() == 2,
-                      "tscancode SARIF: only diagnostic lines become results");
-        if (results.size() == 2)
-        {
-            report.expect(
-                results[0]["level"] == "error" &&
-                    results[0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] ==
-                        "src/main.c" &&
-                    results[0]["locations"][0]["physicalLocation"]["region"]["startLine"] == 12,
-                "tscancode SARIF: severity and location are mapped");
-            report.expect(results[1]["level"] == "warning",
-                          "tscancode SARIF: Warning maps to the SARIF warning level");
-        }
     }
 
     if (report.failures == 0)

@@ -99,8 +99,13 @@ CLI: `--include-compdb-deps`
 Type: `bool`
 Default: `false`
 Allowed: `true|false`
-Description: enable SARIF-oriented output behavior.
-Impact: toggles SARIF-related output mapping/forwarding.
+Description: report the whole run as one SARIF 2.1.0 log.
+Impact: every tool's findings are normalized and rendered into a single document with one
+`run` per tool, printed to stdout and written to `output.report_file`. Tools print nothing
+else to stdout in this mode; the stack analyzer's own report is not written (its findings
+are in the merged document), and a tool whose output is not interpreted (ikos) is reported
+with a warning and kept in `result.outputs` in server mode. Without this flag each finding
+is printed as `file:line:col: severity: message [tool/rule]`.
 CLI: `--sarif-format`
 
 - `output.report_file`
@@ -287,8 +292,9 @@ CLI: not exposed (`config/tool-config.json` only)
 Type: `string`
 Default: `""`
 Allowed: analyzer-supported formats (`json`, `sarif`, `text`, ...).
-Description: explicit stack analyzer output format.
-Impact: forwarded as `--format=<value>`; if empty and SARIF is enabled, bridge uses `--format=json`.
+Description: explicit stack analyzer output format for its own report.
+Impact: forwarded as `--format=<value>` when non-empty; ignored under `--sarif-format`, where
+the analyzer renders nothing and its findings go to the merged document.
 CLI: not exposed (`config/tool-config.json` only)
 
 - `stack_analyzer.timing`

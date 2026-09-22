@@ -310,6 +310,26 @@ int main(int argc, char** argv)
         }
     }
 
+    // sarif_format: the response carries the merged document and the report file holds it
+    // instead of the analyzer's own JSON.
+    {
+        const auto sarifFile = reportDir / "merged.sarif";
+        json request = makeRequest(repoRoot, sarifFile, 99);
+        request["params"]["sarif_format"] = true;
+        const json response = handler.handle_request(request);
+        const json sarif = response.value("result", json::object()).value("sarif", json());
+        report.expect(sarif.is_object() && sarif.value("version", "") == "2.1.0" &&
+                          sarif["runs"].is_array() && sarif["runs"].size() == 1 &&
+                          sarif["runs"][0]["tool"]["driver"]["name"] == "ctrace_stack_analyzer" &&
+                          sarif["runs"][0]["results"].size() == 1,
+                      "sarif_format: the response carries one merged SARIF log with one run");
+        std::ifstream in(sarifFile);
+        const json document = in.is_open() ? json::parse(in, nullptr, false) : json();
+        report.expect(!document.is_discarded() && document.is_object() &&
+                          document.contains("$schema") && !document.contains("diagnosticsSummary"),
+                      "sarif_format: the report file is the merged SARIF log");
+    }
+
     if (report.failures == 0)
     {
         std::cout << "server_concurrency_tests: all checks passed\n";
