@@ -17,3 +17,8 @@ FetchContent_MakeAvailable(stack_analyzer)
 # (they live at the root of the directory, upstream models are in subdirs).
 file(COPY "${stack_analyzer_SOURCE_DIR}/models/"
      DESTINATION "${CMAKE_SOURCE_DIR}/config/models")
+
+# The binary resolves its default models from <build dir>/config/models when it is not
+# installed (see defaultModelsDirectory in src/App/Config.cpp).
+file(COPY "${stack_analyzer_SOURCE_DIR}/models/"
+     DESTINATION "${CMAKE_BINARY_DIR}/config/models")

@@ -292,6 +292,14 @@ set_tests_properties(ctrace_stack_analyzer_cli_smoke PROPERTIES
     PASS_REGULAR_EXPRESSION
         "\\(ctrace_stack_analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
 
+# The default stack analyzer models are found next to the executable: no --config needed.
+add_test(NAME ctrace_default_models_without_config
+    COMMAND ctrace --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke ctrace_stack_analyzer
+        --report-file ${CMAKE_BINARY_DIR}/ctrace-default-models-report.json)
+set_tests_properties(ctrace_default_models_without_config PROPERTIES
+    PASS_REGULAR_EXPRESSION
+        "\\(ctrace_stack_analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
+
 # Applied last so every executable we own exists by now.
 foreach(coretrace_target
     ctrace

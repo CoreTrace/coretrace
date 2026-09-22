@@ -606,6 +606,93 @@ namespace
         CHECK(loadError("legacy-input.json", R"({"input": {"a": 1}})") ==
               "Expected string or array of strings for 'input'.");
     }
+
+    std::filesystem::path makeLayout(const std::string& name,
+                                     const std::vector<std::string>& modelFiles)
+    {
+        const auto root = std::filesystem::temp_directory_path() / "ctrace-config-tests" / name;
+        std::error_code err;
+        std::filesystem::remove_all(root, err);
+        for (const auto& file : modelFiles)
+        {
+            std::filesystem::create_directories((root / file).parent_path(), err);
+            writeTextFile(root / file, "# model\n");
+        }
+        std::filesystem::create_directories(root / "bin", err);
+        std::filesystem::create_directories(root / "build", err);
+        return root;
+    }
+
+    // The models ship next to the binary: <prefix>/config/models after install, and
+    // <build>/config/models in a build tree. The first existing layout wins.
+    void testDefaultModelsDirectoryFollowsTheExecutable()
+    {
+        const auto installed =
+            makeLayout("installed", {"config/models/resource-lifetime/generic.txt"});
+        CHECK(ctrace::defaultModelsDirectory(installed / "bin/ctrace") ==
+              (installed / "config/models").lexically_normal());
+
+        const auto buildTree =
+            makeLayout("build-tree", {"build/config/models/resource-lifetime/generic.txt"});
+        CHECK(ctrace::defaultModelsDirectory(buildTree / "build/ctrace") ==
+              (buildTree / "build/config/models").lexically_normal());
+
+        const auto bare = makeLayout("bare", {});
+        CHECK(ctrace::defaultModelsDirectory(bare / "bin/ctrace").empty());
+    }
+
+    void testDefaultModelsFillOnlyEmptyFields()
+    {
+        const auto root = makeLayout("partial", {"config/models/resource-lifetime/generic.txt",
+                                                 "config/models/stack-escape/generic.txt"});
+        const auto modelsDir = root / "config/models";
+
+        ctrace::ProgramConfig cfg;
+        cfg.analysis.invoke = {"ctrace_stack_analyzer"};
+        cfg.stack_analyzer.resource_model = "mine.txt";
+        std::vector<std::string> warnings;
+        ctrace::applyDefaultModels(cfg, modelsDir, warnings);
+
+        CHECK(cfg.stack_analyzer.resource_model == "mine.txt");
+        CHECK(cfg.stack_analyzer.escape_model ==
+              (modelsDir / "stack-escape/generic.txt").lexically_normal().string());
+        CHECK(cfg.stack_analyzer.buffer_model.empty());
+        // A missing default is never silent: one warning names the inactive model.
+        CHECK(warnings.size() == 1);
+        CHECK(warnings.front().find("buffer_model") != std::string::npos);
+        CHECK(warnings.front().find(modelsDir.string()) != std::string::npos);
+
+        // The warning only matters when the stack analyzer will run.
+        ctrace::ProgramConfig cppcheckOnly;
+        cppcheckOnly.analysis.invoke = {"cppcheck"};
+        std::vector<std::string> silent;
+        ctrace::applyDefaultModels(cppcheckOnly, modelsDir, silent);
+        CHECK(silent.empty());
+        CHECK(cppcheckOnly.stack_analyzer.resource_model.empty());
+    }
+
+    // End to end: the test binary lives in the build tree, so buildConfig finds the models
+    // copied there by CMake without any --config.
+    void testBuildConfigAppliesDefaultModels()
+    {
+        const auto result =
+            buildFromArgs({"ctrace", "--input", "a.c", "--invoke", "ctrace_stack_analyzer"});
+        CHECK(result.config.has_value());
+        CHECK(result.config->stack_analyzer.resource_model.find(
+                  "models/resource-lifetime/generic.txt") != std::string::npos);
+        CHECK(result.config->stack_analyzer.escape_model.find("models/stack-escape/generic.txt") !=
+              std::string::npos);
+        CHECK(result.config->stack_analyzer.buffer_model.find(
+                  "models/buffer-overflow/generic.txt") != std::string::npos);
+        CHECK(result.warnings.empty());
+
+        // An explicit value is never overridden by the default.
+        const auto explicitModel =
+            buildFromArgs({"ctrace", "--input", "a.c", "--invoke", "ctrace_stack_analyzer",
+                           "--resource-model", "mine.txt"});
+        CHECK(explicitModel.config.has_value());
+        CHECK(explicitModel.config->stack_analyzer.resource_model == "mine.txt");
+    }
 } // namespace
 
 int main()
@@ -633,6 +720,9 @@ int main()
     testToolsSectionAliasAndCanonicalPrecedence();
     testPathsAreResolvedFromConfigDirectory();
     testValidationMessages();
+    testDefaultModelsDirectoryFollowsTheExecutable();
+    testDefaultModelsFillOnlyEmptyFields();
+    testBuildConfigAppliesDefaultModels();
     std::cout << "config_parser_tests: all checks passed" << std::endl;
     return 0;
 }

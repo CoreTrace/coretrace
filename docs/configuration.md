@@ -346,7 +346,7 @@ CLI: `--stack-limit`
 
 - `stack_analyzer.resource_model`
 Type: `string`
-Default: `""`
+Default: `<models dir>/resource-lifetime/generic.txt` when that file exists (see below), else `""`
 Allowed: file path.
 Description: resource lifetime model path.
 Impact: forwarded as `--resource-model` when non-empty; relative paths resolved from config dir.
@@ -354,7 +354,7 @@ CLI: `--resource-model`
 
 - `stack_analyzer.escape_model`
 Type: `string`
-Default: `""`
+Default: `<models dir>/stack-escape/generic.txt` when that file exists (see below), else `""`
 Allowed: file path.
 Description: escape model path.
 Impact: forwarded as `--escape-model` when non-empty; relative paths resolved from config dir.
@@ -362,11 +362,18 @@ CLI: `--escape-model`
 
 - `stack_analyzer.buffer_model`
 Type: `string`
-Default: `""`
+Default: `<models dir>/buffer-overflow/generic.txt` when that file exists (see below), else `""`
 Allowed: file path.
 Description: buffer model path.
 Impact: forwarded as `--buffer-model` when non-empty; relative paths resolved from config dir.
 CLI: `--buffer-model`
+
+Default models: when a model key is still empty after the config file and the command line,
+`ctrace` looks for the models shipped next to the executable, in the first existing of
+`<exe dir>/../config/models` (install prefix, or a `build/` directory inside the repository)
+and `<exe dir>/config/models` (any build directory). When the stack analyzer is selected and a
+default model cannot be found, a startup warning names the key so the loss of its rule family
+is visible. An explicit value is never overridden.
 
 - `stack_analyzer.extra_args`
 Type: `string|string[]`

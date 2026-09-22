@@ -10,13 +10,20 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace ctrace
 {
@@ -256,7 +263,101 @@ namespace ctrace
             }
             return message;
         }
+
+        /// The running executable, from the OS when it knows (installed binaries are usually
+        /// started through PATH, so argv[0] alone is not enough), else from argv[0].
+        [[nodiscard]] std::filesystem::path executablePath(const char* argv0)
+        {
+            std::error_code err;
+#if defined(__APPLE__)
+            std::uint32_t size = 0;
+            _NSGetExecutablePath(nullptr, &size); // Reports the required buffer size.
+            std::string buffer(size, '\0');
+            if (_NSGetExecutablePath(buffer.data(), &size) == 0)
+            {
+                buffer.resize(std::char_traits<char>::length(buffer.c_str()));
+                return std::filesystem::canonical(buffer, err);
+            }
+#elif defined(__linux__)
+            if (const auto self = std::filesystem::read_symlink("/proc/self/exe", err); !err)
+            {
+                return self;
+            }
+#endif
+            return std::filesystem::absolute(argv0 == nullptr ? "" : argv0, err);
+        }
+
+        struct DefaultModel
+        {
+            const char* key; ///< Config key, for the warning.
+            const char* relativePath;
+            std::string StackAnalyzerConfig::* member;
+        };
+
+        constexpr std::array<DefaultModel, 3> kDefaultModels = {{
+            {"stack_analyzer.resource_model", "resource-lifetime/generic.txt",
+             &StackAnalyzerConfig::resource_model},
+            {"stack_analyzer.escape_model", "stack-escape/generic.txt",
+             &StackAnalyzerConfig::escape_model},
+            {"stack_analyzer.buffer_model", "buffer-overflow/generic.txt",
+             &StackAnalyzerConfig::buffer_model},
+        }};
+
+        [[nodiscard]] bool selectsStackAnalyzer(const ProgramConfig& config)
+        {
+            return config.analysis.static_enabled ||
+                   std::find(config.analysis.invoke.begin(), config.analysis.invoke.end(),
+                             "ctrace_stack_analyzer") != config.analysis.invoke.end();
+        }
     } // namespace
+
+    CT_NODISCARD std::filesystem::path
+    defaultModelsDirectory(const std::filesystem::path& executable)
+    {
+        const std::filesystem::path exeDir = executable.parent_path();
+        for (const auto& candidate :
+             {exeDir / ".." / "config" / "models", exeDir / "config" / "models"})
+        {
+            std::error_code err;
+            if (std::filesystem::is_directory(candidate, err))
+            {
+                return candidate.lexically_normal();
+            }
+        }
+        return {};
+    }
+
+    void applyDefaultModels(ProgramConfig& config, const std::filesystem::path& modelsDir,
+                            std::vector<std::string>& warnings)
+    {
+        if (!selectsStackAnalyzer(config))
+        {
+            return;
+        }
+        for (const DefaultModel& model : kDefaultModels)
+        {
+            std::string& value = config.stack_analyzer.*model.member;
+            if (!value.empty())
+            {
+                continue;
+            }
+            const std::filesystem::path candidate = modelsDir / model.relativePath;
+            std::error_code err;
+            if (!modelsDir.empty() && std::filesystem::is_regular_file(candidate, err))
+            {
+                value = candidate.lexically_normal().string();
+            }
+            else
+            {
+                const std::string where =
+                    modelsDir.empty()
+                        ? "no config/models directory next to the executable"
+                        : "no file at '" + candidate.lexically_normal().string() + "'";
+                warnings.push_back(std::string(model.key) + " is not set and " + where +
+                                   "; the rules driven by this model stay inactive.");
+            }
+        }
+    }
 
     CT_NODISCARD ConfigResult buildConfig(int argc, char* argv[])
     {
@@ -328,6 +429,8 @@ namespace ctrace
         {
             config.config_file = valueOf(app, "--config");
         }
+        applyDefaultModels(config, defaultModelsDirectory(executablePath(argv[0])),
+                           result.warnings);
         if (wasGiven(app, "--async"))
         {
             result.output += "Asynchronous execution enabled.\n";
