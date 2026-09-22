@@ -218,6 +218,21 @@ add_executable(ctrace_tool_diagnostics_tests
 target_link_libraries(ctrace_tool_diagnostics_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
 add_test(NAME ctrace_tool_diagnostics_tests COMMAND ctrace_tool_diagnostics_tests)
 
+add_executable(ctrace_exit_policy_tests tests/exit_policy_tests.cpp)
+add_test(NAME ctrace_exit_policy_tests COMMAND ctrace_exit_policy_tests)
+
+# The exit code is the CI gate: 0 clean, 1 usage, 2 findings at/above --fail-on, 3 incomplete.
+add_test(NAME ctrace_exit_2_on_error_finding
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck; test $? -eq 2")
+add_test(NAME ctrace_exit_0_with_fail_on_none
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --fail-on none --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck; test $? -eq 0")
+add_test(NAME ctrace_exit_0_when_below_threshold
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/dead_code.cc --invoke cppcheck; test $? -eq 0")
+add_test(NAME ctrace_exit_3_when_a_tool_cannot_run
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --config ${CMAKE_SOURCE_DIR}/tests/missing-tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck; test $? -eq 3")
+add_test(NAME ctrace_help_lists_fail_on COMMAND ctrace --help)
+set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSION "--fail-on")
+
 # External tool findings feed the same counters as the stack analyzer; a tool whose output
 # was not interpreted says so instead of reporting zero.
 add_test(NAME ctrace_cppcheck_diagnostics_are_counted
@@ -349,6 +364,7 @@ foreach(coretrace_target
     ctrace_files_tests
     ctrace_tool_output_tests
     ctrace_tool_diagnostics_tests
+    ctrace_exit_policy_tests
     ctrace_process_tests
     ctrace_server_concurrency_tests
     ctrace_server_http_tests

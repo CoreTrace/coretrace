@@ -617,6 +617,25 @@ namespace ctrace
                  Kind::Bool,
                  setBool(&ProgramConfig::analysis, &AnalysisConfig::dynamic_enabled)},
                 {"invoke", {"invoke"}, Kind::StringList, applyInvoke},
+                {"fail_on",
+                 {"fail_on", "fail-on"},
+                 Kind::String,
+                 [](const Value& v, LoadContext& ctx, const std::string& location,
+                    std::string& error)
+                 {
+                     const std::optional<FailOn> policy = parseFailOn(v.text);
+                     if (!policy)
+                     {
+                         std::string allowed;
+                         for (const auto& [name, _] : kFailOnValues)
+                         {
+                             allowed += (allowed.empty() ? "" : ", ") + std::string(name);
+                         }
+                         return invalidValue(v.text, location, allowed, error);
+                     }
+                     ctx.config.analysis.fail_on = *policy;
+                     return true;
+                 }},
             }};
             return spec;
         }

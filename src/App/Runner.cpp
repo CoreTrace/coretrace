@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "App/Runner.hpp"
 
+#include "App/ExitPolicy.hpp"
 #include "App/Files.hpp"
 #include "Process/Ipc/HttpServer.hpp"
 #include "Process/Tools/ToolsInvoker.hpp"
@@ -133,6 +134,22 @@ namespace ctrace
                            sourceFiles.size());
             invoker.runSpecificTools(config.analysis.invoke, sourceFiles);
         }
-        return 0;
+
+        const AnalysisOutcome outcome = invoker.outcome();
+        const int exitCode = exitCodeFor(config.analysis.fail_on, outcome);
+        if (outcome.toolFailed)
+        {
+            coretrace::log(coretrace::Level::Error,
+                           "Analysis incomplete: {} could not run (exit code {})\n",
+                           ctrace_tools::strings::joinByComma(invoker.failedTools()), exitCode);
+        }
+        else
+        {
+            coretrace::log(coretrace::Level::Info,
+                           "Verdict: info={}, warning={}, error={}, fail-on={} (exit code {})\n",
+                           outcome.summary.info, outcome.summary.warning, outcome.summary.error,
+                           failOnName(config.analysis.fail_on), exitCode);
+        }
+        return exitCode;
     }
 } // namespace ctrace

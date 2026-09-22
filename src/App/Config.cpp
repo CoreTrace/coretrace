@@ -122,6 +122,10 @@ namespace ctrace
              Kind::List, "analysis", "invoke"},
             {"--input", "FILES", "Specifies the source files to analyse (comma-separated).",
              Kind::List, "files", "input"},
+            {"--fail-on", "LEVEL",
+             "Exit code 2 when a finding at or above LEVEL is reported: error|warning|none "
+             "(default: error). Exit code 3 when a tool could not run.",
+             Kind::Text, "analysis", "fail_on"},
             {"--ipc", "METHOD", "Specifies the IPC method to use: standardIO|socket|serve.",
              Kind::Text, "runtime", "ipc"},
             {"--ipc-path", "PATH", "Specifies the IPC path (default: /tmp/coretrace_ipc).",
