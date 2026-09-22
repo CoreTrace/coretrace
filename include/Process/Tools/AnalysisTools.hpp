@@ -11,6 +11,7 @@
 #include <coretrace/logger.hpp>
 #include <nlohmann/json.hpp>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,30 @@ namespace ctrace
         return name;
     }
 
+    /// Runs an external tool to completion. A tool that cannot be started is reported on the
+    /// sink and yields nothing. A non-zero exit is reported too, but the output is still
+    /// returned: partial findings are not lost because the tool ended badly.
+    [[nodiscard]] inline std::optional<ProcessResult>
+    runExternalTool(const ProgramConfig& config, const IAnalysisTool& tool,
+                    const std::vector<std::string>& args, ToolOutput& output)
+    {
+        try
+        {
+            auto process = ProcessFactory::createProcess(toolCommand(config, tool), args);
+            const ProcessResult run = process->execute();
+            if (!run.succeeded())
+            {
+                output.error(run.describeFailure(tool.name()));
+            }
+            return run;
+        }
+        catch (const std::exception& e)
+        {
+            output.error("Error: " + std::string(e.what()));
+            return std::nullopt;
+        }
+    }
+
     // Static analysis tools
     class IkosToolImplementation : public AnalysisToolBase
     {
@@ -117,27 +142,16 @@ namespace ctrace
             return args;
         }
 
+        /// ikos output is not interpreted yet: it is shown as is and the tool is reported as
+        /// uninterpreted rather than counted as zero findings.
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override
         {
             coretrace::log(coretrace::Level::Info, "Running ikos on {}\n", file);
-
-            try
+            if (const auto run =
+                    runExternalTool(config, *this, buildArguments(config, file), output))
             {
-                const std::vector<std::string> argsProcess = buildArguments(config, file);
-                auto process =
-                    ProcessFactory::createProcess(toolCommand(config, *this), argsProcess);
-                // std::this_thread::sleep_for(std::chrono::seconds(5));
-                const ProcessResult run = process->execute();
-                output.result(run.output);
-                if (!run.succeeded())
-                {
-                    output.error(run.describeFailure(name()));
-                }
-            }
-            catch (const std::exception& e)
-            {
-                output.error("Error: " + std::string(e.what()));
+                output.result(run->output);
             }
         }
         std::string name() const override
@@ -157,63 +171,20 @@ namespace ctrace
         }
         void executeBatch(const std::vector<std::string>& files,
                           const ctrace::ProgramConfig& config, ToolOutput& output) const override;
-        [[nodiscard]] DiagnosticSummary lastDiagnosticsSummary() const override;
         std::string name() const override;
-
-      private:
-        mutable DiagnosticSummary m_lastDiagnosticsSummary{};
     };
 
     class FlawfinderToolImplementation : public AnalysisToolBase
     {
       public:
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
-        {
-            std::vector<std::string> args = {"-c", "-C", "-D"};
-            if (config.output.sarif_format)
-            {
-                args.push_back("--sarif");
-            }
-            args.push_back(file);
-            return args;
-        }
-
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
+        /// Reads flawfinder's SARIF output; nothing when the output is not SARIF.
+        [[nodiscard]] static std::optional<std::vector<Diagnostic>>
+        parseDiagnostics(const std::string& output);
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override
-        {
-            coretrace::log(coretrace::Level::Info, "Running flawfinder on {}\n", file);
-
-            try
-            {
-                const std::vector<std::string> argsProcess = buildArguments(config, file);
-                auto process =
-                    ProcessFactory::createProcess(toolCommand(config, *this), argsProcess);
-                const ProcessResult run = process->execute();
-
-                if (config.runtime.ipc == "standardIO")
-                {
-                    output.result(run.output);
-                }
-                else
-                {
-                    ipc->write(run.output);
-                }
-                if (!run.succeeded())
-                {
-                    output.error(run.describeFailure(name()));
-                }
-            }
-            catch (const std::exception& e)
-            {
-                output.error("Error: " + std::string(e.what()));
-                return;
-            }
-        }
-        std::string name() const override
-        {
-            return "flawfinder";
-        }
+                     ToolOutput& output) const override;
+        std::string name() const override;
     };
 
     class TscancodeToolImplementation : public AnalysisToolBase
@@ -224,6 +195,9 @@ namespace ctrace
         void execute(const std::string& file, const ProgramConfig& config,
                      ToolOutput& output) const override;
         std::string name() const override;
+
+        /// Reads tscancode's `[file:line]: (severity) message` lines.
+        [[nodiscard]] static std::vector<Diagnostic> parseDiagnostics(const std::string& output);
 
         /// Converts tscancode's text diagnostics into a SARIF document. Pure: the caller
         /// decides where the document goes.
@@ -236,45 +210,17 @@ namespace ctrace
     class CppCheckToolImplementation : public AnalysisToolBase
     {
       public:
+        /// The text output contract: one line per finding, on every cppcheck version.
+        static constexpr const char* kOutputTemplate =
+            "{file}:{line}:{column}: {severity}: {message} [{id}]";
+
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
-        {
-            std::vector<std::string> args;
-            if (config.output.sarif_format)
-            {
-                args.push_back("--output-format=sarif");
-            }
-            args.push_back(file);
-            return args;
-        }
-
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
+        /// Reads lines laid out by kOutputTemplate; other lines (progress) are ignored.
+        [[nodiscard]] static std::vector<Diagnostic> parseDiagnostics(const std::string& output);
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override
-        {
-            coretrace::log(coretrace::Level::Info, "Running cppcheck on {}\n", file);
-
-            try
-            {
-                const std::vector<std::string> argsProcess = buildArguments(config, file);
-                auto process =
-                    ProcessFactory::createProcess(toolCommand(config, *this), argsProcess);
-                const ProcessResult run = process->execute();
-                output.result(run.output);
-                if (!run.succeeded())
-                {
-                    output.error(run.describeFailure(name()));
-                }
-            }
-            catch (const std::exception& e)
-            {
-                output.error("Error: " + std::string(e.what()));
-                return;
-            }
-        }
-        std::string name() const override
-        {
-            return "cppcheck";
-        }
+                     ToolOutput& output) const override;
+        std::string name() const override;
     };
 
     // Outils dynamiques

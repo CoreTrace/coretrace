@@ -24,31 +24,22 @@ namespace ctrace
                                               ToolOutput& output) const
     {
         coretrace::log(coretrace::Level::Info, "Running tscancode on {}\n", file);
-
-        const bool has_sarif_format = config.output.sarif_format;
-
-        try
+        const auto run = runExternalTool(config, *this, buildArguments(config, file), output);
+        if (!run)
         {
-            auto process = ProcessFactory::createProcess(toolCommand(config, *this),
-                                                         buildArguments(config, file));
-            const ProcessResult run = process->execute();
-            output.result(run.output);
-            coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", file);
-            if (!run.succeeded())
-            {
-                output.error(run.describeFailure(name()));
-            }
-
-            if (has_sarif_format)
-            {
-                output.result(sarifFormat(run.output).dump());
-            }
-        }
-        catch (const std::exception& e)
-        {
-            output.error("Error: " + std::string(e.what()));
             return;
         }
+        coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", file);
+        const std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
+        if (config.output.sarif_format)
+        {
+            output.result(sarifFormat(run->output).dump());
+        }
+        else if (!diagnostics.empty())
+        {
+            output.result(renderLines(diagnostics));
+        }
+        output.diagnostics(diagnostics);
     }
 
     std::string TscancodeToolImplementation::name() const
@@ -76,9 +67,56 @@ namespace ctrace
         return "none";
     }
 
+    namespace
+    {
+        const std::regex& tscancodeLinePattern()
+        {
+            static const std::regex pattern(R"(\[(.*):(\d+)\]: \((\w+)\) (.*))");
+            return pattern;
+        }
+
+        [[nodiscard]] Severity severityOf(std::string word)
+        {
+            std::transform(word.begin(), word.end(), word.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            if (word == "error")
+            {
+                return Severity::Error;
+            }
+            if (word == "information")
+            {
+                return Severity::Info;
+            }
+            return Severity::Warning;
+        }
+    } // namespace
+
+    std::vector<Diagnostic> TscancodeToolImplementation::parseDiagnostics(const std::string& output)
+    {
+        std::vector<Diagnostic> diagnostics;
+        std::istringstream stream(output);
+        std::string line;
+        while (std::getline(stream, line))
+        {
+            std::smatch match;
+            if (!std::regex_match(line, match, tscancodeLinePattern()))
+            {
+                continue;
+            }
+            Diagnostic diagnostic;
+            diagnostic.tool = "tscancode";
+            diagnostic.file = match[1];
+            diagnostic.line = static_cast<unsigned>(std::stoul(match[2]));
+            diagnostic.severity = severityOf(match[3]);
+            diagnostic.message = match[4];
+            diagnostics.push_back(std::move(diagnostic));
+        }
+        return diagnostics;
+    }
+
     nlohmann::json TscancodeToolImplementation::sarifFormat(const std::string& buffer) const
     {
-        std::regex diagnostic_regex(R"(\[(.*):(\d+)\]: \((\w+)\) (.*))");
+        const std::regex& diagnostic_regex = tscancodeLinePattern();
 
         nlohmann::json sarif;
         sarif["version"] = "2.1.0";

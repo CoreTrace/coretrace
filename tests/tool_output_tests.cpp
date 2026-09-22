@@ -2,6 +2,7 @@
 //
 // ToolOutput is the explicit sink every tool writes its results and errors to: it records
 // them for the server response and mirrors them to the console.
+#include "Process/Tools/Diagnostic.hpp"
 #include "Process/Tools/ToolOutput.hpp"
 
 #include <iostream>
@@ -57,6 +58,24 @@ int main()
         detached.result("no buffer");
         detached.error("no buffer either");
         report.expect(true, "ToolOutput: works without a capture buffer");
+    }
+
+    // Structured findings are recorded on the sink; a sink that never received any is
+    // "not interpreted", which is distinct from "zero findings".
+    {
+        ctrace::ToolOutput out(nullptr, "cppcheck", /*mirrorToConsole=*/false);
+        report.expect(!out.interpreted() && out.diagnostics().empty(),
+                      "ToolOutput: no diagnostics means not interpreted");
+        out.diagnostics({});
+        report.expect(out.interpreted() && out.diagnostics().empty(),
+                      "ToolOutput: an empty diagnostics report is interpreted with zero findings");
+        out.diagnostics({{"cppcheck", "r", "a.c", 1, 2, ctrace::Severity::Error, "m", ""}});
+        out.diagnostics({{"cppcheck", "s", "b.c", 3, 4, ctrace::Severity::Warning, "n", ""}});
+        report.expect(out.diagnostics().size() == 2 && out.diagnostics()[1].file == "b.c",
+                      "ToolOutput: diagnostics accumulate within one execution");
+        report.expect(!out.failed(), "ToolOutput: no error reported means not failed");
+        out.error("cppcheck exited with exit code 1");
+        report.expect(out.failed(), "ToolOutput: error() marks the execution as failed");
     }
 
     if (report.failures == 0)

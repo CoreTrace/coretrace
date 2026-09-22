@@ -364,6 +364,20 @@ namespace
         result["diagnostics_summary_total"] = {{"info", diagnosticsSummaryTotal.info},
                                                {"warning", diagnosticsSummaryTotal.warning},
                                                {"error", diagnosticsSummaryTotal.error}};
+        json diagnostics = json::array();
+        for (const ctrace::Diagnostic& diagnostic : invoker.diagnostics())
+        {
+            diagnostics.push_back({{"tool", diagnostic.tool},
+                                   {"rule_id", diagnostic.ruleId},
+                                   {"file", diagnostic.file},
+                                   {"line", diagnostic.line},
+                                   {"column", diagnostic.column},
+                                   {"severity", ctrace::severityName(diagnostic.severity)},
+                                   {"message", diagnostic.message},
+                                   {"cwe", diagnostic.cwe}});
+        }
+        result["diagnostics"] = std::move(diagnostics);
+        result["uninterpreted_tools"] = invoker.uninterpretedTools();
         if (output_capture)
         {
             json outputs = json::object();

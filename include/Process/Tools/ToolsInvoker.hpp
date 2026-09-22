@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <functional>
 #include <future>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -195,19 +196,37 @@ namespace ctrace
             runToolList(deduplicateToolNames(tool_names), files);
         }
 
+        /// Every finding collected so far, grouped by tool name (sorted).
+        [[nodiscard]] std::vector<Diagnostic> diagnostics() const
+        {
+            std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
+            std::vector<Diagnostic> all;
+            for (const auto& [_, collected] : m_diagnosticsByTool)
+            {
+                all.insert(all.end(), collected.items.begin(), collected.items.end());
+            }
+            return all;
+        }
+
         [[nodiscard]] DiagnosticSummary diagnosticsSummaryTotal() const
         {
-            std::lock_guard<std::mutex> lock(m_diagnosticsSummaryMutex);
+            return summarize(diagnostics());
+        }
 
-            DiagnosticSummary total{};
-            for (const auto& [_, summary] : m_diagnosticsSummaryByTool)
+        /// Tools that ran without ever reporting structured findings. Their output may hold
+        /// findings the counters do not see; this is distinct from a tool with zero findings.
+        [[nodiscard]] std::vector<std::string> uninterpretedTools() const
+        {
+            std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
+            std::vector<std::string> names;
+            for (const auto& [name, collected] : m_diagnosticsByTool)
             {
-                total.info += summary.info;
-                total.warning += summary.warning;
-                total.error += summary.error;
+                if (!collected.interpreted)
+                {
+                    names.push_back(name);
+                }
             }
-
-            return total;
+            return names;
         }
 
       private:
@@ -232,12 +251,12 @@ namespace ctrace
             {
                 std::lock_guard<std::mutex> lock(*lock_it->second);
                 tool_it->second->execute(file, m_config, output);
-                recordDiagnosticsSummary(tool_name, *tool_it->second);
+                recordDiagnostics(tool_name, output);
                 return;
             }
 
             tool_it->second->execute(file, m_config, output);
-            recordDiagnosticsSummary(tool_name, *tool_it->second);
+            recordDiagnostics(tool_name, output);
         }
 
         void executeBatchTool(const std::string& tool_name, const std::vector<std::string>& files)
@@ -260,12 +279,12 @@ namespace ctrace
             {
                 std::lock_guard<std::mutex> lock(*lock_it->second);
                 tool_it->second->executeBatch(files, m_config, output);
-                recordDiagnosticsSummary(tool_name, *tool_it->second);
+                recordDiagnostics(tool_name, output);
                 return;
             }
 
             tool_it->second->executeBatch(files, m_config, output);
-            recordDiagnosticsSummary(tool_name, *tool_it->second);
+            recordDiagnostics(tool_name, output);
         }
 
         void runToolList(const std::vector<std::string>& tool_names, const std::string& file)
@@ -370,18 +389,33 @@ namespace ctrace
             return deduped;
         }
 
-        void recordDiagnosticsSummary(const std::string& tool_name, const IAnalysisTool& tool)
+        struct CollectedDiagnostics
         {
-            const auto summary = tool.lastDiagnosticsSummary();
-            coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
-                           "Diagnostics summary: info={}, warning={}, error={}\n", summary.info,
-                           summary.warning, summary.error);
+            std::vector<Diagnostic> items;
+            bool interpreted = false;
+        };
 
-            std::lock_guard<std::mutex> lock(m_diagnosticsSummaryMutex);
-            auto& total = m_diagnosticsSummaryByTool[tool_name];
-            total.info += summary.info;
-            total.warning += summary.warning;
-            total.error += summary.error;
+        void recordDiagnostics(const std::string& tool_name, const ToolOutput& output)
+        {
+            if (output.interpreted())
+            {
+                const DiagnosticSummary summary = summarize(output.diagnostics());
+                coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
+                               "Diagnostics summary: info={}, warning={}, error={}\n", summary.info,
+                               summary.warning, summary.error);
+            }
+            else
+            {
+                coretrace::log(coretrace::Level::Info, coretrace::Module(tool_name),
+                               "Diagnostics summary: not available (tool output was not "
+                               "interpreted)\n");
+            }
+
+            std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
+            CollectedDiagnostics& collected = m_diagnosticsByTool[tool_name];
+            collected.interpreted = collected.interpreted || output.interpreted();
+            collected.items.insert(collected.items.end(), output.diagnostics().begin(),
+                                   output.diagnostics().end());
         }
 
         std::unordered_map<std::string, std::unique_ptr<IAnalysisTool>> tools;
@@ -394,8 +428,8 @@ namespace ctrace
         std::shared_ptr<IpcStrategy> m_ipc;
         std::shared_ptr<ctrace::CaptureBuffer> m_output_capture;
         std::unique_ptr<ThreadPool> m_threadPool;
-        mutable std::mutex m_diagnosticsSummaryMutex;
-        std::unordered_map<std::string, DiagnosticSummary> m_diagnosticsSummaryByTool;
+        mutable std::mutex m_diagnosticsMutex;
+        std::map<std::string, CollectedDiagnostics> m_diagnosticsByTool;
     };
 } // namespace ctrace
 

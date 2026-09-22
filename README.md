@@ -113,6 +113,8 @@ curl -X POST http://127.0.0.1:8080/api \
 
 Response notes:
 - `status` is `ok` or `error`.
+- `result.diagnostics` lists every finding in one model (`tool`, `rule_id`, `file`, `line`, `column`, `severity`, `message`, `cwe`), whatever tool produced it; `result.diagnostics_summary_total` counts them by severity.
+- `result.uninterpreted_tools` names the tools whose output CoreTrace could not interpret: their findings are shown in `result.outputs` but are not counted.
 - `result.outputs` groups tool output by tool name.
 - Each output entry has `stream` and `message`. If a tool emits JSON, `message` is returned as a JSON object.
 
