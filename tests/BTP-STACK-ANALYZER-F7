@@ -212,6 +212,10 @@ def command_for(
     command = [
         str(ctrace_bin),
         "--verbose",
+        # The harness checks that runs complete and agree, not that the corpus is clean:
+        # findings must not turn the exit code non-zero (0 clean, 2 findings, 3 incomplete).
+        "--fail-on",
+        "none",
         "--analysis-profile",
         "fast",
         "--smt",
