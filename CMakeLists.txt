@@ -239,6 +239,11 @@ add_test(NAME ctrace_cppcheck_diagnostics_are_counted
     COMMAND ctrace --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck)
 set_tests_properties(ctrace_cppcheck_diagnostics_are_counted PROPERTIES
     PASS_REGULAR_EXPRESSION "\\(cppcheck\\) Diagnostics summary: info=0, warning=0, error=1")
+# cppcheck runs with its warning-class checks enabled: style findings are counted as warnings.
+add_test(NAME ctrace_cppcheck_style_checks_are_enabled
+    COMMAND ctrace --fail-on none --input ${CMAKE_SOURCE_DIR}/tests/dead_code.cc --invoke cppcheck)
+set_tests_properties(ctrace_cppcheck_style_checks_are_enabled PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\(cppcheck\\) Diagnostics summary: info=0, warning=3, error=0")
 add_test(NAME ctrace_uninterpreted_tool_is_reported
     COMMAND ctrace --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke ikos)
 set_tests_properties(ctrace_uninterpreted_tool_is_reported PROPERTIES

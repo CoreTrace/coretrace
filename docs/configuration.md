@@ -244,14 +244,30 @@ Impact: replaces the default lookup. A command that cannot be found or executed 
 with its name and the tool is skipped.
 CLI: not exposed (`config/tool-config.json` only)
 
+- `tools.<name>.args`
+Type: `string|string[]`
+Default: `[]`
+Allowed: any arguments the tool accepts.
+Description: extra command-line arguments for that tool.
+Impact: appended verbatim after the options CoreTrace derives and before the input file, so
+they can override a derived option (for cppcheck, `--disable=style` turns the style checks
+back off, `--suppress=<id>` silences a rule). This is the escape hatch for what the schema
+does not model; project includes and defines belong in `stack_analyzer.include_dirs` and
+`stack_analyzer.defines`, which every tool that understands them receives.
+CLI: not exposed (`config/tool-config.json` only)
+
 ```json
 {
   "tools": {
-    "cppcheck": {"path": "/opt/homebrew/bin/cppcheck"},
+    "cppcheck": {"path": "/opt/homebrew/bin/cppcheck", "args": ["--std=c++20", "--suppress=unusedFunction"]},
     "flawfinder": {"path": "flawfinder-3"}
   }
 }
 ```
+
+Derived cppcheck options: `--enable=warning,style,performance,portability` and
+`--inline-suppr` always; `-I<dir>` for each `stack_analyzer.include_dirs` entry, `-D<macro>`
+for each `stack_analyzer.defines` entry, and `-j N` when `stack_analyzer.jobs` is a number.
 
 `tools.ctrace_stack_analyzer` and `tools.stack_analyzer` keep their legacy meaning: they are
 alternative spellings of the `stack_analyzer` section below. The stack analyzer runs in

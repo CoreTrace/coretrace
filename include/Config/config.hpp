@@ -149,11 +149,13 @@ namespace ctrace
         std::vector<std::string> extra_args; ///< Forwarded verbatim after mapped options.
     };
 
-    /// Where external tools live. A value may be a bare command name, resolved through PATH,
-    /// or an absolute path. Tools absent from the map use their own name as the command.
+    /// Where external tools live and what extra arguments they get. A path may be a bare
+    /// command name, resolved through PATH, or an absolute path; tools absent from the map use
+    /// their own name. `args` are appended verbatim after the options CoreTrace derives.
     struct ToolsConfig
     {
         std::map<std::string, std::string> paths;
+        std::map<std::string, std::vector<std::string>> args;
     };
 
     struct ProgramConfig

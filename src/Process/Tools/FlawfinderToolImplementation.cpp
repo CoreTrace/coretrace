@@ -7,11 +7,14 @@
 namespace ctrace
 {
     std::vector<std::string>
-    FlawfinderToolImplementation::buildArguments(const ctrace::ProgramConfig& /*config*/,
+    FlawfinderToolImplementation::buildArguments(const ctrace::ProgramConfig& config,
                                                  const std::string& file)
     {
         // Always the machine format (flawfinder >= 2.0): CoreTrace renders the text itself.
-        return {"--sarif", file};
+        std::vector<std::string> args = {"--sarif"};
+        appendToolArguments(args, config, "flawfinder");
+        args.push_back(file);
+        return args;
     }
 
     std::optional<std::vector<Diagnostic>>

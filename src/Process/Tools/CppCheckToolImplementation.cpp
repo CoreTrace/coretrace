@@ -4,6 +4,8 @@
 
 #include <coretrace/logger.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <regex>
 #include <sstream>
 
@@ -27,6 +29,9 @@ namespace ctrace
         }
     } // namespace
 
+    /// The command line: output contract, then the checks and the build context the
+    /// configuration already carries for the stack analyzer, then the user's own arguments
+    /// (which can override what precedes, e.g. `--disable=style`), then the file.
     std::vector<std::string>
     CppCheckToolImplementation::buildArguments(const ctrace::ProgramConfig& config,
                                                const std::string& file)
@@ -40,6 +45,32 @@ namespace ctrace
         {
             args.push_back(std::string("--template=") + kOutputTemplate);
         }
+        // cppcheck enables only `error` by default (85 of 320 checks); the warning-class
+        // checks are what a static analysis run is expected to report.
+        args.push_back("--enable=warning,style,performance,portability");
+        args.push_back("--inline-suppr");
+        for (const std::string& dir : config.stack_analyzer.include_dirs)
+        {
+            if (!dir.empty())
+            {
+                args.push_back("-I" + dir);
+            }
+        }
+        for (const std::string& macro : config.stack_analyzer.defines)
+        {
+            if (!macro.empty())
+            {
+                args.push_back("-D" + macro);
+            }
+        }
+        const std::string& jobs = config.stack_analyzer.jobs;
+        if (!jobs.empty() && std::all_of(jobs.begin(), jobs.end(),
+                                         [](unsigned char ch) { return std::isdigit(ch) != 0; }))
+        {
+            args.push_back("-j");
+            args.push_back(jobs);
+        }
+        appendToolArguments(args, config, "cppcheck");
         args.push_back(file);
         return args;
     }

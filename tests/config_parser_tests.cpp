@@ -472,6 +472,24 @@ namespace
         CHECK(legacy.stack_analyzer.mode == "abi");
         CHECK(legacy.tools.paths.at("cppcheck") == "cc-check");
 
+        // Arbitrary per-tool arguments are the escape hatch for what the schema does not model.
+        const auto withArgs = loadOrDie("tool-args.json", R"json(
+{
+  "tools": {
+    "cppcheck": {"path": "cc", "args": ["--disable=style", "--std=c++20"]},
+    "flawfinder": {"args": "--minlevel=3"}
+  }
+}
+)json");
+        CHECK(withArgs.tools.paths.at("cppcheck") == "cc");
+        CHECK((withArgs.tools.args.at("cppcheck") ==
+               std::vector<std::string>{"--disable=style", "--std=c++20"}));
+        CHECK((withArgs.tools.args.at("flawfinder") == std::vector<std::string>{"--minlevel=3"}));
+        CHECK(withArgs.tools.paths.count("flawfinder") == 0);
+        CHECK(cfg.tools.args.count("cppcheck") == 0);
+        CHECK(loadError("tool-args-type.json", R"({"tools": {"cppcheck": {"args": 7}}})") ==
+              "Expected string or array of strings for 'tools.cppcheck.args'.");
+
         CHECK(loadError("tool-unknown.json", R"({"tools": {"nope": {"path": "x"}}})")
                   .find("Unknown key 'nope' in 'tools'") != std::string::npos);
         CHECK(loadError("tool-key.json", R"({"tools": {"cppcheck": {"pat": "x"}}})")
