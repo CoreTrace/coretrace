@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -80,10 +81,10 @@ int main(int argc, char** argv)
         const std::string output =
             "Checking tests/double_free.c ...\n"
             "tests/double_free.c:12:5: error: Memory pointed to by 'ptr' is freed twice. "
-            "[doubleFree]\n"
+            "[doubleFree] [CWE-415]\n"
             "tests/a.cc:4:11: style: Variable 'y' is assigned a value that is never used. "
-            "[unreadVariable]\n"
-            "nofile:0:0: information: Active checkers: 167/856 [checkersReport]\n"
+            "[unreadVariable] [CWE-563]\n"
+            "nofile:0:0: information: Active checkers: 167/856 [checkersReport] [CWE-0]\n"
             "1/2 files checked 50% done\n";
         const auto items = CppCheckToolImplementation::parseDiagnostics(output);
         report.expect(items.size() == 3, "cppcheck: only diagnostic lines are parsed (got " +
@@ -93,8 +94,10 @@ int main(int argc, char** argv)
             report.expect(items[0].tool == "cppcheck" && items[0].ruleId == "doubleFree" &&
                               items[0].file == "tests/double_free.c" && items[0].line == 12 &&
                               items[0].column == 5 && items[0].severity == Severity::Error &&
-                              items[0].message == "Memory pointed to by 'ptr' is freed twice.",
-                          "cppcheck: every field of the template line is mapped");
+                              items[0].message == "Memory pointed to by 'ptr' is freed twice." &&
+                              items[0].cwe == "CWE-415",
+                          "cppcheck: every field of the template line is mapped, CWE included");
+            report.expect(items[2].cwe.empty(), "cppcheck: CWE 0 means no CWE");
             report.expect(items[1].severity == Severity::Warning, "cppcheck: style is a warning");
             report.expect(items[2].severity == Severity::Info, "cppcheck: information is info");
         }
@@ -232,6 +235,73 @@ int main(int argc, char** argv)
         }
         report.expect(renderSarif({})["runs"].is_array() && renderSarif({})["runs"].empty(),
                       "renderSarif: nothing to report is an empty runs array");
+    }
+
+    // One weakness seen by two tools is one SARIF result: same file (however each tool spells
+    // it), same line, same CWE. The most severe report is kept, in its tool's run, and names
+    // the others; every tool that reported keeps its run.
+    {
+        const std::string absolute =
+            (std::filesystem::current_path() / "tests/double_free.c").string();
+        const std::vector<Diagnostic> items = {
+            {"cppcheck", "doubleFree", "tests/double_free.c", 12, 5, Severity::Error,
+             "Memory pointed to by 'ptr' is freed twice.", "CWE-415"},
+            {"ctrace_stack_analyzer", "ResourceLifetime.DoubleRelease", absolute, 12, 5,
+             Severity::Error, "potential double release", "CWE-415"},
+            {"cppcheck", "nullPointerOutOfMemory", "tests/double_free.c", 12, 9, Severity::Warning,
+             "same line, other CWE", "CWE-476"},
+            {"flawfinder", "FF1001", "tests/double_free.c", 13, 5, Severity::Error,
+             "same CWE, other line", "CWE-415"},
+            {"flawfinder", "FF2000", "tests/double_free.c", 20, 1, Severity::Info, "no CWE", ""},
+            {"ctrace_stack_analyzer", "Other", absolute, 20, 1, Severity::Warning, "no CWE", ""},
+        };
+        const nlohmann::json log = renderSarif(items);
+        std::size_t results = 0;
+        for (const auto& run : log["runs"])
+        {
+            results += run["results"].size();
+        }
+        report.expect(log["runs"].size() == 3 && results == 5,
+                      "SARIF duplicates: the double free reported by two tools is one result; "
+                      "another line, another CWE or no CWE are kept (" +
+                          std::to_string(results) + " results)");
+        if (log["runs"].size() == 3)
+        {
+            // Both reports are errors: the tie goes to the first tool by name, cppcheck.
+            const auto& cppcheck = log["runs"][0];
+            const auto& analyzer = log["runs"][1]; // Runs are sorted by tool name.
+            report.expect(analyzer["tool"]["driver"]["name"] == "ctrace_stack_analyzer" &&
+                              analyzer["results"].size() == 1 &&
+                              analyzer["results"][0]["ruleId"] == "Other",
+                          "SARIF duplicates: the tool whose report was merged keeps its run");
+            const auto& merged = cppcheck["results"][0];
+            report.expect(
+                cppcheck["tool"]["driver"]["name"] == "cppcheck" &&
+                    merged["ruleId"] == "doubleFree" &&
+                    merged["properties"]["alsoReportedBy"] ==
+                        nlohmann::json::array({{{"tool", "ctrace_stack_analyzer"},
+                                                {"ruleId", "ResourceLifetime.DoubleRelease"}}}),
+                "SARIF duplicates: the kept result names the other reports");
+        }
+
+        // The most severe report is kept whatever the tool order.
+        std::vector<Diagnostic> severity = {
+            {"atool", "a1", "f.c", 3, 1, Severity::Warning, "weaker", "CWE-20"},
+            {"btool", "b1", "f.c", 3, 1, Severity::Error, "stronger", "CWE-20"},
+        };
+        const nlohmann::json bySeverity = renderSarif(severity);
+        report.expect(bySeverity["runs"].size() == 2 && bySeverity["runs"][0]["results"].empty() &&
+                          bySeverity["runs"][1]["results"].size() == 1 &&
+                          bySeverity["runs"][1]["results"][0]["message"]["text"] == "stronger",
+                      "SARIF duplicates: the most severe report is the one kept");
+
+        // A tool reporting the same CWE twice on a line is not deduplicated against itself.
+        std::vector<Diagnostic> sameTool = {
+            {"atool", "a1", "f.c", 3, 1, Severity::Error, "first", "CWE-20"},
+            {"atool", "a2", "f.c", 3, 9, Severity::Error, "second", "CWE-20"},
+        };
+        report.expect(renderSarif(sameTool)["runs"][0]["results"].size() == 2,
+                      "SARIF duplicates: only reports of different tools are merged");
     }
 
     // A SARIF result suppressed in source is not a finding; a rejected suppression is.

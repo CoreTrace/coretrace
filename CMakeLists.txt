@@ -410,6 +410,11 @@ add_test(NAME ctrace_sarif_report_file_is_the_merged_log
 set_tests_properties(ctrace_sarif_report_file_is_the_merged_log PROPERTIES
     DEPENDS ctrace_sarif_is_merged_per_tool)
 
+# The double free is found by cppcheck and the stack analyzer: one SARIF result names both.
+set(ctrace_dedup_sarif ${CMAKE_BINARY_DIR}/ctrace-dedup.sarif)
+add_test(NAME ctrace_sarif_merges_cross_tool_duplicates
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer --config ${CMAKE_SOURCE_DIR}/config/tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_dedup_sarif} > /dev/null && test $(grep -c 'coretrace/v1' ${ctrace_dedup_sarif}) -eq 1 && grep -q 'alsoReportedBy' ${ctrace_dedup_sarif}")
+
 # Python sources go to the Python analyzer only; the C/C++ tools never see them.
 add_test(NAME ctrace_python_file_skips_c_tools
     COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
