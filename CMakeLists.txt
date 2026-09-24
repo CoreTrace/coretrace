@@ -141,6 +141,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
+    # glibc is the system's: the archive runs on any glibc at least as old as the build
+    # machine's. libstdc++ and libgcc_s are shipped, as the compiler may be newer than the
+    # system's (GCC 13 on Ubuntu 22.04 for the release) and they are backward compatible.
     install(RUNTIME_DEPENDENCY_SET ctrace_deps
         PRE_EXCLUDE_REGEXES
             "^libc\\.so"
@@ -149,8 +152,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             "^librt\\.so"
             "^libpthread\\.so"
             "^ld-linux"
-            "^libstdc\\+\\+"
-            "^libgcc_s"
         DIRECTORIES
             "/usr/lib/llvm-20/lib"
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
