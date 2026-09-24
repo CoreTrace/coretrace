@@ -11,6 +11,7 @@
 #include <coretrace/logger.hpp>
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -215,24 +216,39 @@ namespace ctrace
                   bool toConsole) const;
     };
 
-    /// coretrace-python-analyzer (github.com/CoreTrace/coretrace-python-analyzer), run on one
-    /// Python file at a time. Its exit code carries a verdict: 0 clean, 1 findings, 2 error.
+    /// coretrace-python-analyzer (github.com/CoreTrace/coretrace-python-analyzer). It analyzes a
+    /// whole project, so that a flaw crossing modules is found: it runs once per project root of
+    /// the Python inputs, and only the inputs' findings are kept. Its exit code carries a
+    /// verdict: 0 clean, 1 findings, 2 error.
     class PythonAnalyzerToolImplementation : public AnalysisToolBase
     {
       public:
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
-        /// Reads the analyzer's SARIF for `file`. It writes locations relative to the analyzed
-        /// file's directory; they are rebased onto `file`'s directory as given, so paths read
-        /// the same as every other tool's. Nothing when the output is not SARIF.
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& projectRoot);
+        /// The directory the analyzer names modules from (app/helpers.py is app.helpers): the
+        /// nearest directory above `file` that holds a project marker (pyproject.toml,
+        /// setup.py, setup.cfg, .git), else the file's own directory.
+        [[nodiscard]] static std::filesystem::path projectRoot(const std::string& file);
+        /// Reads the analyzer's SARIF for the project at `root`: the findings located in one of
+        /// `inputs`, spelled as the input was. Nothing when the output is not SARIF.
         [[nodiscard]] static std::optional<std::vector<Diagnostic>>
-        parseDiagnostics(const std::string& output, const std::string& file);
+        parseDiagnostics(const std::string& output, const std::filesystem::path& root,
+                         const std::vector<std::string>& inputs);
         [[nodiscard]] bool analyzes(ctrace_defs::LanguageType language) const override
         {
             return language == ctrace_defs::LanguageType::Python;
         }
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override;
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        void executeBatch(const std::vector<std::string>& files,
+                          const ctrace::ProgramConfig& config, ToolOutput& output) const override;
         std::string name() const override;
     };
 

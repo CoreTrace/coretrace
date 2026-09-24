@@ -244,7 +244,10 @@ name resolved through `PATH`. Give a tool an explicit location only when you nee
 build.
 
 Each input file only reaches the tools of its language: `.py` files go to
-`coretrace-python-analyzer`, every other file to the C/C++ tools.
+`coretrace-python-analyzer`, every other file to the C/C++ tools. `coretrace-python-analyzer`
+runs once per Python project (the nearest directory above an input that holds
+`pyproject.toml`, `setup.py`, `setup.cfg` or `.git`, else the input's directory) and analyzes
+all of it, so flows across modules are found; only findings located in an input are reported.
 
 - `tools.<name>.path`
 Type: `string`

@@ -268,34 +268,58 @@ int main(int argc, char** argv)
         }
     }
 
-    // coretrace-python-analyzer, through a stand-in executable with the real tool's contract.
+    // coretrace-python-analyzer reports on the whole project; only the inputs' findings are
+    // kept, located as the user spelled the inputs.
+    {
+        const std::string sarif = R"json({"version": "2.1.0", "runs": [{"results": [
+          {"ruleId": "command-injection", "level": "error", "message": {"text": "listed"},
+           "locations": [{"physicalLocation": {
+             "artifactLocation": {"uri": "app/main.py", "uriBaseId": "SRCROOT"},
+             "region": {"startLine": 7, "startColumn": 5}}}]},
+          {"ruleId": "dangerous-eval", "level": "error", "message": {"text": "not listed"},
+           "locations": [{"physicalLocation": {
+             "artifactLocation": {"uri": "app/other.py", "uriBaseId": "SRCROOT"},
+             "region": {"startLine": 4}}}]}]}]})json";
+        const auto kept = PythonAnalyzerToolImplementation::parseDiagnostics(
+            sarif, "/work/proj", {"/work/proj/app/./main.py"});
+        report.expect(kept.has_value() && kept->size() == 1 && (*kept)[0].message == "listed" &&
+                          (*kept)[0].file == "/work/proj/app/./main.py" && (*kept)[0].line == 7,
+                      "coretrace-python-analyzer: only the inputs' findings, spelled as given");
+        report.expect(
+            !PythonAnalyzerToolImplementation::parseDiagnostics("oops", "/w", {}).has_value(),
+            "coretrace-python-analyzer: output that is not SARIF is not interpreted");
+    }
+
+    // Through a stand-in executable with the real tool's contract (it only accepts a project
+    // directory, like the real one in project mode).
     {
         const std::string fake = sourceRoot + "/tests/fake-python-analyzer.sh";
+        const std::string main = sourceRoot + "/tests/python/project/app/main.py";
         const PythonAnalyzerToolImplementation python;
 
         ProgramConfig config;
         config.tools.paths["coretrace-python-analyzer"] = fake;
         ToolOutput findings(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
-        python.execute("pkg/app.py", config, findings);
+        python.executeBatch({main}, config, findings);
         report.expect(!findings.failed() && findings.interpreted(),
                       "coretrace-python-analyzer: exit 1 means findings, not a failed run");
         report.expect(findings.diagnostics().size() == 1 &&
                           findings.diagnostics()[0].tool == "coretrace-python-analyzer" &&
-                          findings.diagnostics()[0].ruleId == "dangerous-eval" &&
+                          findings.diagnostics()[0].ruleId == "command-injection" &&
                           findings.diagnostics()[0].severity == Severity::Error &&
-                          findings.diagnostics()[0].file == "pkg/app.py" &&
-                          findings.diagnostics()[0].line == 6,
-                      "coretrace-python-analyzer: one finding, the suppressed one is not counted, "
-                      "located in the analyzed file as it was given");
+                          findings.diagnostics()[0].file == main &&
+                          findings.diagnostics()[0].line == 7,
+                      "coretrace-python-analyzer: the cross-module finding of the input only; "
+                      "the unlisted file and the suppressed finding are not counted");
 
         config.tools.args["coretrace-python-analyzer"] = {"--fake-exit=2"};
         ToolOutput broken(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
-        python.execute("pkg/app.py", config, broken);
+        python.executeBatch({main}, config, broken);
         report.expect(broken.failed(), "coretrace-python-analyzer: exit 2 is a failed run");
 
         config.tools.args["coretrace-python-analyzer"] = {"--fake-exit=0"};
         ToolOutput clean(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
-        python.execute("pkg/app.py", config, clean);
+        python.executeBatch({main}, config, clean);
         report.expect(!clean.failed() && clean.interpreted(),
                       "coretrace-python-analyzer: exit 0 is a completed run");
     }
