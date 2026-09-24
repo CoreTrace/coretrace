@@ -436,6 +436,10 @@ if(ENABLE_PYTHON_ANALYZER)
     add_test(NAME ctrace_python_analyzer_standalone_runs_anywhere
         COMMAND sh ${CMAKE_SOURCE_DIR}/tests/python/run-relocated.sh $<TARGET_FILE:ctrace>
             ${CORETRACE_PYTHON_ANALYZER_DIR} ${CMAKE_BINARY_DIR}/relocated-python-analyzer)
+    # What `cmake --install` produces is what the release archive ships.
+    set(ctrace_install_check ${CMAKE_BINARY_DIR}/install-check)
+    add_test(NAME ctrace_install_ships_python_analyzer
+        COMMAND sh -c "rm -rf '${ctrace_install_check}' && '${CMAKE_COMMAND}' --install '${CMAKE_BINARY_DIR}' --prefix '${ctrace_install_check}' > /dev/null && sh '${CMAKE_SOURCE_DIR}/tests/python/check-installed.sh' '${ctrace_install_check}' '${ctrace_install_check}-work'")
 endif()
 
 # Applied last so every executable we own exists by now.
