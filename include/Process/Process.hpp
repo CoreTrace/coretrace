@@ -2,6 +2,7 @@
 #ifndef PROCESS_HPP
 #define PROCESS_HPP
 
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,7 +16,25 @@ struct ProcessResult
 
     [[nodiscard]] bool succeeded() const noexcept
     {
-        return signal == 0 && exitCode == 0;
+        return completedWith({0});
+    }
+
+    /// Whether the child ran to completion, for a tool whose exit code also carries a verdict
+    /// (e.g. 1 for "findings"): it exited normally with one of `completedCodes`.
+    [[nodiscard]] bool completedWith(std::initializer_list<int> completedCodes) const noexcept
+    {
+        if (signal != 0)
+        {
+            return false;
+        }
+        for (const int code : completedCodes)
+        {
+            if (exitCode == code)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     [[nodiscard]] std::string describeFailure(std::string_view toolName) const

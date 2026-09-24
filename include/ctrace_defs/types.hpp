@@ -18,6 +18,7 @@ namespace ctrace_defs
     {
         C = 0,
         CPP = 1,
+        Python = 2,
     };
 
     inline const std::vector<std::string> IPC_TYPES = {

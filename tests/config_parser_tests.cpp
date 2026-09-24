@@ -712,6 +712,49 @@ namespace
         CHECK(explicitModel.config->stack_analyzer.resource_model == "mine.txt");
     }
 
+    // Bundled tools ship next to the binary, like the models: <prefix>/libexec/coretrace/<tool>/
+    // after install, <build>/libexec/coretrace/<tool>/ in a build tree. A configured path wins,
+    // and a tool that is not bundled keeps being resolved through PATH.
+    void testBundledToolsFollowTheExecutable()
+    {
+        const std::string tool = "coretrace-python-analyzer";
+        const std::string relative = "libexec/coretrace/" + tool + "/" + tool;
+
+        const auto makeExecutable = [](const std::filesystem::path& path)
+        {
+            std::filesystem::permissions(path, std::filesystem::perms::owner_exec,
+                                         std::filesystem::perm_options::add);
+        };
+
+        const auto installed = makeLayout("tools-installed", {relative});
+        ctrace::ProgramConfig notExecutable;
+        ctrace::applyBundledTools(notExecutable, installed / "bin/ctrace");
+        CHECK(notExecutable.tools.paths.empty());
+        makeExecutable(installed / relative);
+
+        ctrace::ProgramConfig fromInstall;
+        ctrace::applyBundledTools(fromInstall, installed / "bin/ctrace");
+        CHECK(fromInstall.tools.paths.count(tool) == 1);
+        CHECK(fromInstall.tools.paths[tool] == (installed / relative).lexically_normal().string());
+        CHECK(fromInstall.tools.paths.count("cppcheck") == 0);
+
+        const auto buildTree = makeLayout("tools-build-tree", {"build/" + relative});
+        makeExecutable(buildTree / "build" / relative);
+        ctrace::ProgramConfig fromBuild;
+        ctrace::applyBundledTools(fromBuild, buildTree / "build/ctrace");
+        CHECK(fromBuild.tools.paths[tool] ==
+              (buildTree / "build" / relative).lexically_normal().string());
+
+        ctrace::ProgramConfig configured;
+        configured.tools.paths[tool] = "/opt/mine/" + tool;
+        ctrace::applyBundledTools(configured, installed / "bin/ctrace");
+        CHECK(configured.tools.paths[tool] == "/opt/mine/" + tool);
+
+        ctrace::ProgramConfig bare;
+        ctrace::applyBundledTools(bare, makeLayout("tools-bare", {}) / "bin/ctrace");
+        CHECK(bare.tools.paths.empty());
+    }
+
     // --fail-on is the gate policy; it is validated like every other enumerated value.
     void testFailOnPolicy()
     {
@@ -763,6 +806,7 @@ int main()
     testDefaultModelsDirectoryFollowsTheExecutable();
     testDefaultModelsFillOnlyEmptyFields();
     testBuildConfigAppliesDefaultModels();
+    testBundledToolsFollowTheExecutable();
     testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;
     return 0;

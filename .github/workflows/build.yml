@@ -44,7 +44,8 @@ jobs:
             curl \
             ca-certificates \
             gnupg \
-            cppcheck
+            cppcheck \
+            patchelf
           sudo ./scripts/ci/install-llvm-apt.sh 20
           echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
@@ -58,6 +59,19 @@ jobs:
           echo "Clang_DIR=$(brew --prefix llvm@20)/lib/cmake/clang" >> "$GITHUB_ENV"
           echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
 
+      # coretrace-python-analyzer is compiled into a standalone executable with Nuitka, so the
+      # tests exercise the real bundled tool (patchelf, above, is Nuitka's Linux requirement).
+      - name: Set up Python for the bundled analyzer
+        id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Nuitka
+        run: |
+          set -euo pipefail
+          "${{ steps.python.outputs.python-path }}" -m pip install nuitka==4.2.2
+
       - name: Configure CMake
         run: |
           set -euo pipefail
@@ -65,7 +79,9 @@ jobs:
             -DUSE_THREAD_SANITIZER=OFF \
             -DUSE_ADDRESS_SANITIZER=OFF \
             -DLLVM_DIR="${LLVM_DIR}" \
-            -DClang_DIR="${Clang_DIR}"
+            -DClang_DIR="${Clang_DIR}" \
+            -DENABLE_PYTHON_ANALYZER=ON \
+            -DPython3_EXECUTABLE="${{ steps.python.outputs.python-path }}"
 
       - name: Build
         run: |

@@ -40,7 +40,7 @@ CLI: `--dyn`
 - `analysis.invoke`
 Type: `string|string[]`
 Default: `[]`
-Allowed: `flawfinder|ikos|cppcheck|tscancode|ctrace_stack_analyzer`
+Allowed: `flawfinder|ikos|cppcheck|tscancode|ctrace_stack_analyzer|coretrace-python-analyzer`
 Description: explicit tool selection.
 Impact: runs only selected tools through specific-tool path.
 CLI: `--invoke`
@@ -237,12 +237,19 @@ can reach the port the ability to run analyses on this machine.
 
 ## tools
 
-External tools are invoked by name and resolved through `PATH`. Give a tool an explicit
-location only when it is not on `PATH` or when you need a specific build.
+External tools are looked up in this order: `tools.<name>.path` when set; then the copy
+shipped with `ctrace`, an executable at `<prefix>/libexec/coretrace/<name>/<name>` next to
+`bin/ctrace` (or `<build>/libexec/coretrace/<name>/<name>` in a build tree); then the tool's
+name resolved through `PATH`. Give a tool an explicit location only when you need a specific
+build.
+
+Each input file only reaches the tools of its language: `.py` files go to
+`coretrace-python-analyzer`, every other file to the C/C++ tools.
 
 - `tools.<name>.path`
 Type: `string`
-Default: the tool's own name (`cppcheck`, `ikos`, `tscancode`, `flawfinder`)
+Default: the bundled copy when there is one, else the tool's own name (`cppcheck`, `ikos`,
+`tscancode`, `flawfinder`, `coretrace-python-analyzer`)
 Allowed: a command name resolved through `PATH`, or an absolute path.
 Description: the command to execute for that tool.
 Impact: replaces the default lookup. A command that cannot be found or executed is reported

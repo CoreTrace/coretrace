@@ -313,22 +313,64 @@ namespace ctrace
                    std::find(config.analysis.invoke.begin(), config.analysis.invoke.end(),
                              "ctrace_stack_analyzer") != config.analysis.invoke.end();
         }
+
+        /// Where a file shipped with the binary is looked for, in order: under the install
+        /// prefix (`<exe dir>/..`), then in the build tree (`<exe dir>`).
+        [[nodiscard]] std::array<std::filesystem::path, 2>
+        nextToExecutable(const std::filesystem::path& executable,
+                         const std::filesystem::path& relative)
+        {
+            const std::filesystem::path exeDir = executable.parent_path();
+            return {(exeDir / ".." / relative).lexically_normal(),
+                    (exeDir / relative).lexically_normal()};
+        }
+
+        [[nodiscard]] bool isExecutableFile(const std::filesystem::path& path)
+        {
+            using std::filesystem::perms;
+            std::error_code err;
+            const auto status = std::filesystem::status(path, err);
+            return !err && std::filesystem::is_regular_file(status) &&
+                   (status.permissions() &
+                    (perms::owner_exec | perms::group_exec | perms::others_exec)) != perms::none;
+        }
     } // namespace
 
     CT_NODISCARD std::filesystem::path
     defaultModelsDirectory(const std::filesystem::path& executable)
     {
-        const std::filesystem::path exeDir = executable.parent_path();
-        for (const auto& candidate :
-             {exeDir / ".." / "config" / "models", exeDir / "config" / "models"})
+        for (const auto& candidate : nextToExecutable(executable, "config/models"))
         {
             std::error_code err;
             if (std::filesystem::is_directory(candidate, err))
             {
-                return candidate.lexically_normal();
+                return candidate;
             }
         }
         return {};
+    }
+
+    void applyBundledTools(ProgramConfig& config, const std::filesystem::path& executable)
+    {
+        for (const std::string_view toolName : SUPPORTED_TOOLS)
+        {
+            const std::string tool(toolName);
+            const auto configured = config.tools.paths.find(tool);
+            if (tool == "ctrace_stack_analyzer" ||
+                (configured != config.tools.paths.end() && !configured->second.empty()))
+            {
+                continue; // In-process, or located by the configuration.
+            }
+            for (const auto& candidate : nextToExecutable(
+                     executable, std::filesystem::path("libexec/coretrace") / tool / tool))
+            {
+                if (isExecutableFile(candidate))
+                {
+                    config.tools.paths[tool] = candidate.string();
+                    break;
+                }
+            }
+        }
     }
 
     void applyDefaultModels(ProgramConfig& config, const std::filesystem::path& modelsDir,
@@ -433,8 +475,9 @@ namespace ctrace
         {
             config.config_file = valueOf(app, "--config");
         }
-        applyDefaultModels(config, defaultModelsDirectory(executablePath(argv[0])),
-                           result.warnings);
+        const std::filesystem::path executable = executablePath(argv[0]);
+        applyDefaultModels(config, defaultModelsDirectory(executable), result.warnings);
+        applyBundledTools(config, executable);
         if (wasGiven(app, "--async"))
         {
             result.output += "Asynchronous execution enabled.\n";
