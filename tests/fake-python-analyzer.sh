@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Stands in for coretrace-python-analyzer in project mode, on tests/python/project: it takes
 # the project directory, prints the SARIF the real tool writes for that project (paths
-# relative to the directory, a cross-module finding in app/main.py, one in app/other.py, one
-# suppressed in source) and exits with --fake-exit=<code>, 1 by default, which is how the
+# relative to the directory, a cross-module finding in app/main.py, one in app/other.py, a
+# vulnerable pin in requirements.txt, one suppressed in source) and exits with --fake-exit=<code>, 1 by default, which is how the
 # real tool reports findings.
 code=1
 for arg in "$@"; do
@@ -39,6 +39,14 @@ while IFS= read -r line; do printf '%s\n' "$line"; done <<'SARIF'
           "locations": [{"physicalLocation": {
             "artifactLocation": {"uri": "app/other.py", "uriBaseId": "SRCROOT"},
             "region": {"startLine": 4, "startColumn": 12}}}]
+        },
+        {
+          "ruleId": "vulnerable-dependency",
+          "level": "error",
+          "message": {"text": "CVE-2020-1747: pyyaml <5.4 is required by pyyaml==5.3: yaml.load and full_load can execute arbitrary code from untrusted documents"},
+          "locations": [{"physicalLocation": {
+            "artifactLocation": {"uri": "requirements.txt", "uriBaseId": "SRCROOT"},
+            "region": {"startLine": 2, "startColumn": 1}}}]
         },
         {
           "ruleId": "dangerous-eval",

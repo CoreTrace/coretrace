@@ -369,8 +369,10 @@ int main(int argc, char** argv)
         const json response = bundled.handle_request(request);
         const json result = response.value("result", json::object());
         const json diagnostics = result.value("diagnostics", json::array());
-        report.expect(response.value("status", "") == "ok" && diagnostics.size() == 1 &&
+        // The input's finding, and the project's vulnerable pin in requirements.txt.
+        report.expect(response.value("status", "") == "ok" && diagnostics.size() == 2 &&
                           diagnostics[0].value("rule_id", "") == "command-injection" &&
+                          diagnostics[1].value("rule_id", "") == "vulnerable-dependency" &&
                           result.value("gate", json::object()).value("exit_code", -1) == 2,
                       "shipped defaults: the bundled Python analyzer is found next to the "
                       "executable (" +

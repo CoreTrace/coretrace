@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -288,6 +289,33 @@ int main(int argc, char** argv)
         report.expect(
             !PythonAnalyzerToolImplementation::parseDiagnostics("oops", "/w", {}).has_value(),
             "coretrace-python-analyzer: output that is not SARIF is not interpreted");
+
+        // A finding outside the Python sources (a vulnerable pin in requirements.txt) is about
+        // the project, not a file: it is always kept, relative to the working directory when
+        // it lies below it.
+        const std::string manifest = R"json({"version": "2.1.0", "runs": [{"results": [
+          {"ruleId": "vulnerable-dependency", "level": "error", "message": {"text": "pin"},
+           "locations": [{"physicalLocation": {
+             "artifactLocation": {"uri": "requirements.txt", "uriBaseId": "SRCROOT"},
+             "region": {"startLine": 2, "startColumn": 1}}}]},
+          {"ruleId": "dangerous-eval", "level": "error", "message": {"text": "unlisted"},
+           "locations": [{"physicalLocation": {
+             "artifactLocation": {"uri": "app/other.py", "uriBaseId": "SRCROOT"},
+             "region": {"startLine": 4}}}]}]}]})json";
+        const std::filesystem::path below = std::filesystem::current_path() / "proj";
+        const auto project = PythonAnalyzerToolImplementation::parseDiagnostics(
+            manifest, below, {(below / "app/main.py").string()});
+        report.expect(project.has_value() && project->size() == 1 &&
+                          (*project)[0].ruleId == "vulnerable-dependency" &&
+                          (*project)[0].file == "proj/requirements.txt",
+                      "coretrace-python-analyzer: project findings are kept, unlisted Python "
+                      "files are not");
+        const auto elsewhere = PythonAnalyzerToolImplementation::parseDiagnostics(
+            manifest, "/elsewhere/proj", {"/elsewhere/proj/app/main.py"});
+        report.expect(elsewhere.has_value() && elsewhere->size() == 1 &&
+                          (*elsewhere)[0].file == "/elsewhere/proj/requirements.txt",
+                      "coretrace-python-analyzer: a project outside the working directory is "
+                      "spelled absolute");
     }
 
     // Through a stand-in executable with the real tool's contract (it only accepts a project
@@ -303,14 +331,16 @@ int main(int argc, char** argv)
         python.executeBatch({main}, config, findings);
         report.expect(!findings.failed() && findings.interpreted(),
                       "coretrace-python-analyzer: exit 1 means findings, not a failed run");
-        report.expect(findings.diagnostics().size() == 1 &&
-                          findings.diagnostics()[0].tool == "coretrace-python-analyzer" &&
-                          findings.diagnostics()[0].ruleId == "command-injection" &&
-                          findings.diagnostics()[0].severity == Severity::Error &&
-                          findings.diagnostics()[0].file == main &&
-                          findings.diagnostics()[0].line == 7,
-                      "coretrace-python-analyzer: the cross-module finding of the input only; "
-                      "the unlisted file and the suppressed finding are not counted");
+        const auto& found = findings.diagnostics();
+        report.expect(found.size() == 2 && found[0].tool == "coretrace-python-analyzer" &&
+                          found[0].ruleId == "command-injection" &&
+                          found[0].severity == Severity::Error && found[0].file == main &&
+                          found[0].line == 7 && found[1].ruleId == "vulnerable-dependency" &&
+                          found[1].line == 2 &&
+                          found[1].file.ends_with("tests/python/project/requirements.txt"),
+                      "coretrace-python-analyzer: the input's cross-module finding and the "
+                      "project's vulnerable pin; the unlisted file and the suppressed finding "
+                      "are not counted");
 
         config.tools.args["coretrace-python-analyzer"] = {"--fake-exit=2"};
         ToolOutput broken(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);

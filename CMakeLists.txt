@@ -426,10 +426,10 @@ add_test(NAME ctrace_python_analyzer_summary
     COMMAND ctrace --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json
         --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke coretrace-python-analyzer)
 set_tests_properties(ctrace_python_analyzer_summary PROPERTIES
-    PASS_REGULAR_EXPRESSION "\\(coretrace-python-analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
+    PASS_REGULAR_EXPRESSION "\\(coretrace-python-analyzer\\) Diagnostics summary: info=0, warning=0, error=2")
 # Two inputs of one project: a single analyzer run, and both inputs' findings.
 add_test(NAME ctrace_python_analyzer_runs_once_per_project
-    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py,${CMAKE_SOURCE_DIR}/tests/python/project/app/other.py --invoke coretrace-python-analyzer 2>&1); printf '%s\\n' \"$out\"; test $(printf '%s\\n' \"$out\" | grep -c 'Running coretrace-python-analyzer on') -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Diagnostics summary: info=0, warning=0, error=2'")
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py,${CMAKE_SOURCE_DIR}/tests/python/project/app/other.py --invoke coretrace-python-analyzer 2>&1); printf '%s\\n' \"$out\"; test $(printf '%s\\n' \"$out\" | grep -c 'Running coretrace-python-analyzer on') -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Diagnostics summary: info=0, warning=0, error=3'")
 
 # A bundled tool is found next to ctrace, from a copy of the release layout run elsewhere with
 # an empty environment. The stand-in covers the lookup everywhere; the real standalone
