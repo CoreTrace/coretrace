@@ -2,6 +2,7 @@
 #include "Process/Ipc/ApiHandler.hpp"
 
 #include "App/ExitPolicy.hpp"
+#include "App/ShippedDefaults.hpp"
 #include "Process/Tools/ReportFile.hpp"
 #include "Process/Tools/Sarif.hpp"
 #include "App/Files.hpp"
@@ -482,6 +483,7 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
         baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
         return baseResponse;
     }
+    ctrace::applyShippedDefaults(config, executable_, warnings);
     for (const std::string& warning : warnings)
     {
         logger_.info("Warning: " + warning);

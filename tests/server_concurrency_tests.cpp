@@ -243,12 +243,14 @@ namespace
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc != 3)
     {
-        std::cerr << "Usage: ctrace_server_concurrency_tests <repo-root>\n";
+        std::cerr << "Usage: ctrace_server_concurrency_tests <repo-root> <build-dir>\n";
         return 2;
     }
     const std::filesystem::path repoRoot = argv[1];
+    // The server applies what ships next to its executable, like the CLI.
+    const std::filesystem::path executable = std::filesystem::path(argv[2]) / "ctrace";
 
     coretrace::enable_logging();
     coretrace::set_min_level(coretrace::Level::Warn);
@@ -264,7 +266,7 @@ int main(int argc, char** argv)
     testParamsToConfig(report);
 
     ConsoleLogger logger;
-    ApiHandler handler(logger);
+    ApiHandler handler(logger, executable);
 
     constexpr int kRounds = 3;
     constexpr int kConcurrentRequests = 4;
@@ -328,6 +330,51 @@ int main(int argc, char** argv)
         report.expect(!document.is_discarded() && document.is_object() &&
                           document.contains("$schema") && !document.contains("diagnosticsSummary"),
                       "sarif_format: the report file is the merged SARIF log");
+    }
+
+    // A request without a config file gets the defaults shipped with the binary, as the CLI
+    // does: the stack analyzer models found next to the executable...
+    {
+        json request = makeRequest(repoRoot, reportDir / "no-config.json", 200);
+        request["params"].erase("config");
+        const json response = handler.handle_request(request);
+        const json result = response.value("result", json::object());
+        const json total = result.value("diagnostics_summary_total", json::object());
+        report.expect(response.value("status", "") == "ok" && total.value("error", -1) == 1,
+                      "shipped defaults: without a config file, the default models still "
+                      "detect the double free (" +
+                          total.dump() + ")");
+    }
+
+    // ...and the external tools bundled in libexec/coretrace next to it.
+    {
+        const auto layout = reportDir / "bundled";
+        const auto toolDir = layout / "libexec/coretrace/coretrace-python-analyzer";
+        std::error_code fsErr;
+        std::filesystem::create_directories(toolDir, fsErr);
+        std::filesystem::copy_file(repoRoot / "tests/fake-python-analyzer.sh",
+                                   toolDir / "coretrace-python-analyzer",
+                                   std::filesystem::copy_options::overwrite_existing, fsErr);
+        ApiHandler bundled(logger, layout / "bin/ctrace");
+
+        json request;
+        request["proto"] = "coretrace-1.0";
+        request["id"] = 201;
+        request["type"] = "request";
+        request["method"] = "run_analysis";
+        request["params"] = {
+            {"input", json::array({(repoRoot / "tests/python/project/app/main.py").string()})},
+            {"invoke", json::array({"coretrace-python-analyzer"})},
+        };
+        const json response = bundled.handle_request(request);
+        const json result = response.value("result", json::object());
+        const json diagnostics = result.value("diagnostics", json::array());
+        report.expect(response.value("status", "") == "ok" && diagnostics.size() == 1 &&
+                          diagnostics[0].value("rule_id", "") == "command-injection" &&
+                          result.value("gate", json::object()).value("exit_code", -1) == 2,
+                      "shipped defaults: the bundled Python analyzer is found next to the "
+                      "executable (" +
+                          result.value("gate", json::object()).dump() + ")");
     }
 
     if (report.failures == 0)

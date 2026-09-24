@@ -191,6 +191,10 @@ curl -i -X POST http://127.0.0.1:8080/shutdown \
 The server responds with `202 Accepted` and stops accepting new requests while allowing in-flight requests to finish
 (up to `--shutdown-timeout-ms` if configured).
 
+Each `run_analysis` request gets the same shipped defaults as the CLI: the stack analyzer
+models and the bundled tools found next to the server's `ctrace` binary fill whatever the
+request and its `config` file leave empty.
+
 ### Mangle/Demangle API
 
 ```c++

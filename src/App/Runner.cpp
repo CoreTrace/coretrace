@@ -44,7 +44,8 @@ namespace ctrace
         return {};
     }
 
-    CT_NODISCARD int run_server(const ProgramConfig& config)
+    CT_NODISCARD int run_server(const ProgramConfig& config,
+                                const std::filesystem::path& executable)
     {
         configure_server_logging();
         if (const std::string error = validateServerConfig(config.server); !error.empty())
@@ -55,7 +56,7 @@ namespace ctrace
         coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n", config.server.host,
                        std::to_string(config.server.port));
         ConsoleLogger logger;
-        ApiHandler apiHandler(logger);
+        ApiHandler apiHandler(logger, executable);
         HttpServer server(apiHandler, logger, config.server);
         server.run(config.server.host, config.server.port);
         return EXIT_SUCCESS;

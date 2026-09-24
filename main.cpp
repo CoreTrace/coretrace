@@ -6,11 +6,12 @@
 
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 
 namespace
 {
-    int run(const ctrace::ProgramConfig& config)
+    int run(const ctrace::ProgramConfig& config, const std::filesystem::path& executable)
     {
         coretrace::enable_logging();
         coretrace::set_prefix("== CoreTrace ==");
@@ -21,7 +22,7 @@ namespace
 
         if (config.runtime.ipc == "serve")
         {
-            return ctrace::run_server(config);
+            return ctrace::run_server(config, executable);
         }
         return ctrace::run_cli_analysis(config);
     }
@@ -50,7 +51,7 @@ int main(int argc, char* argv[])
     // Last resort: a failure nobody handled is reported, not a process abort.
     try
     {
-        return run(*loaded.config);
+        return run(*loaded.config, loaded.executable);
     }
     catch (const std::exception& error)
     {

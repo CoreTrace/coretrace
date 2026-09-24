@@ -34,7 +34,8 @@ namespace
     {
       public:
         explicit ServerFixture(const ctrace::ServerConfig& config)
-            : handler_(logger_), server_(handler_, logger_, config), config_(config)
+            : handler_(logger_, /*executable=*/{}), server_(handler_, logger_, config),
+              config_(config)
         {
             thread_ = std::thread(
                 [this]

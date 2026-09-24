@@ -7,6 +7,9 @@
 #include <coretrace/logger.hpp>
 #include <nlohmann/json.hpp>
 
+#include <filesystem>
+#include <utility>
+
 #include <string>
 
 class ILogger
@@ -52,7 +55,12 @@ class ApiHandler
         std::string message;
     };
 
-    explicit ApiHandler(ILogger& logger) : logger_(logger) {}
+    /// `executable` is the running ctrace binary: each request gets what ships next to it
+    /// (default models, bundled tools), as the CLI does. Empty when unknown.
+    ApiHandler(ILogger& logger, std::filesystem::path executable)
+        : logger_(logger), executable_(std::move(executable))
+    {
+    }
 
     [[nodiscard]] nlohmann::json handle_request(const nlohmann::json& request);
 
@@ -67,6 +75,7 @@ class ApiHandler
                                                      const nlohmann::json& params);
 
     ILogger& logger_;
+    std::filesystem::path executable_;
 };
 
 #endif // PROCESS_IPC_API_HANDLER_HPP

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "App/Config.hpp"
+#include "App/ShippedDefaults.hpp"
 #include "App/ToolConfig.hpp"
 
 #include <cstdlib>
@@ -753,6 +754,16 @@ namespace
         ctrace::ProgramConfig bare;
         ctrace::applyBundledTools(bare, makeLayout("tools-bare", {}) / "bin/ctrace");
         CHECK(bare.tools.paths.empty());
+
+        // An unknown executable location ships nothing: the lookup never falls back to the
+        // working directory, where `../libexec` could be anything.
+        ctrace::ProgramConfig unknown;
+        unknown.analysis.invoke = {"ctrace_stack_analyzer"};
+        std::vector<std::string> unknownWarnings;
+        ctrace::applyShippedDefaults(unknown, {}, unknownWarnings);
+        CHECK(unknown.tools.paths.empty());
+        CHECK(unknown.stack_analyzer.resource_model.empty());
+        CHECK(unknownWarnings.size() == 3);
     }
 
     // --fail-on is the gate policy; it is validated like every other enumerated value.
