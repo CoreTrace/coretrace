@@ -36,7 +36,8 @@ cmake .. -DENABLE_PYTHON_ANALYZER=ON -DPython3_EXECUTABLE=/path/to/python3
 Each input goes to the tools of its language: `.py` files to `coretrace-python-analyzer`, C
 and C++ files to the others. The Python analyzer checks the whole project a file belongs to,
 so it follows data across modules, but it only reports findings located in the files given to
-`--input`. The project root is the nearest directory above the file that holds
+`--input`, plus those about the project itself, such as a vulnerable version pinned in
+`requirements.txt`. The project root is the nearest directory above the file that holds
 `pyproject.toml`, `setup.py`, `setup.cfg` or `.git`, else the file's own directory.
 
 ### CODE STYLE (clang-format)

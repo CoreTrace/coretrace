@@ -218,7 +218,8 @@ namespace ctrace
 
     /// coretrace-python-analyzer (github.com/CoreTrace/coretrace-python-analyzer). It analyzes a
     /// whole project, so that a flaw crossing modules is found: it runs once per project root of
-    /// the Python inputs, and only the inputs' findings are kept. Its exit code carries a
+    /// the Python inputs, and only the findings of the inputs and of the project itself (its
+    /// dependency manifests) are kept. Its exit code carries a
     /// verdict: 0 clean, 1 findings, 2 error.
     class PythonAnalyzerToolImplementation : public AnalysisToolBase
     {
@@ -230,7 +231,10 @@ namespace ctrace
         /// setup.py, setup.cfg, .git), else the file's own directory.
         [[nodiscard]] static std::filesystem::path projectRoot(const std::string& file);
         /// Reads the analyzer's SARIF for the project at `root`: the findings located in one of
-        /// `inputs`, spelled as the input was. Nothing when the output is not SARIF.
+        /// `inputs`, spelled as the input was, and those about the project itself (outside any
+        /// Python file, such as a vulnerable pin in requirements.txt), spelled relative to the
+        /// working directory when below it. Findings in other Python files are dropped.
+        /// Nothing when the output is not SARIF.
         [[nodiscard]] static std::optional<std::vector<Diagnostic>>
         parseDiagnostics(const std::string& output, const std::filesystem::path& root,
                          const std::vector<std::string>& inputs);

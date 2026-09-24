@@ -79,17 +79,30 @@ namespace ctrace
         {
             inputByIdentity.emplace(identityOf(input), input);
         }
+        const fs::path workingDirectory = identityOf(fs::current_path());
         std::vector<Diagnostic> kept;
         for (Diagnostic& diagnostic : *diagnostics)
         {
+            if (diagnostic.file.empty())
+            {
+                continue;
+            }
             // The analyzer locates findings relative to the project root it was given.
-            const fs::path located = fs::path(diagnostic.file).is_relative()
-                                         ? root / diagnostic.file
-                                         : fs::path(diagnostic.file);
-            if (const auto input = inputByIdentity.find(identityOf(located));
-                !diagnostic.file.empty() && input != inputByIdentity.end())
+            const fs::path located =
+                identityOf(fs::path(diagnostic.file).is_relative() ? root / diagnostic.file
+                                                                   : fs::path(diagnostic.file));
+            if (const auto input = inputByIdentity.find(located); input != inputByIdentity.end())
             {
                 diagnostic.file = input->second;
+                kept.push_back(std::move(diagnostic));
+            }
+            else if (located.extension() != ".py")
+            {
+                // Not in a Python source: a finding about the project itself, such as a
+                // vulnerable pin in requirements.txt. It concerns every input of the project.
+                const fs::path relative = located.lexically_relative(workingDirectory);
+                const bool below = !relative.empty() && *relative.begin() != "..";
+                diagnostic.file = (below ? relative : located).string();
                 kept.push_back(std::move(diagnostic));
             }
         }

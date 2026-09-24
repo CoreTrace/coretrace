@@ -37,6 +37,9 @@ if printf '%s\n' "$output" | grep -q 'app/other.py'; then
     fail "app/other.py is not an input: its findings must not be reported"
 fi
 printf '%s\n' "$output" |
-    grep -q '(coretrace-python-analyzer) Diagnostics summary: info=0, warning=0, error=1' ||
-    fail "only the input's active finding must be counted"
+    grep -q '^project/requirements.txt:2:1: error: CVE-2020-1747: .*\[coretrace-python-analyzer/vulnerable-dependency\]$' ||
+    fail "the project's vulnerable pin in project/requirements.txt:2:1 is not reported"
+printf '%s\n' "$output" |
+    grep -q '(coretrace-python-analyzer) Diagnostics summary: info=0, warning=0, error=2' ||
+    fail "only the input's active finding and the project's pin must be counted"
 echo "PASS: coretrace-python-analyzer runs from $prefix without PATH or Python"

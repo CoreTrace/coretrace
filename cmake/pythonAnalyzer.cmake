@@ -11,7 +11,7 @@
 # Linux only with a glibc at least as recent as the build machine's.
 include(ExternalProject)
 
-set(CORETRACE_PYTHON_ANALYZER_TAG "v0.4.0" CACHE STRING
+set(CORETRACE_PYTHON_ANALYZER_TAG "v0.6.0" CACHE STRING
     "coretrace-python-analyzer tag to build")
 set(CORETRACE_PYTHON_ANALYZER_SOURCE_DIR "" CACHE PATH
     "Local coretrace-python-analyzer checkout to build instead of downloading the tag")
