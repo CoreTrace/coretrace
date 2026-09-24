@@ -22,8 +22,13 @@ make -j4
 into a standalone executable with [Nuitka](https://nuitka.net), staged in
 `build/libexec/coretrace/` and installed to `<prefix>/libexec/coretrace/`. It embeds its own
 Python runtime: people running `ctrace` need neither Python nor any package. The Linux release
-archives ship it this way; each archive is checked on a bare Ubuntu without Python before it
-is published. Building it needs
+archives ship it this way.
+
+The Linux release archives (amd64, arm64) run on any distribution with glibc 2.35 or newer:
+Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10. They are built on Ubuntu 22.04 and carry their
+own libstdc++, so nothing else is required. Each archive is unpacked and run on bare Ubuntu
+22.04, Debian 12 and Ubuntu 24.04 images, with no compiler, LLVM or Python, before it is
+published. Building it needs
 Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and `patchelf` on
 Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
 the pinned tag.
