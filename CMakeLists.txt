@@ -25,6 +25,7 @@ option(USE_ADDRESS_SANITIZER "Activer AddressSanitizer (Memory)" OFF)
 
 set(SOURCES
     src/App/Config.cpp
+    src/App/ShippedDefaults.cpp
     src/App/ToolConfig.cpp
     src/App/Files.cpp
     src/App/Runner.cpp
@@ -176,6 +177,7 @@ add_executable(ctrace_config_tests
     tests/config_parser_tests.cpp
     src/App/ToolConfig.cpp
     src/App/Config.cpp
+    src/App/ShippedDefaults.cpp
     src/ctrace_tools/strings.cpp
 )
 
@@ -286,6 +288,7 @@ add_executable(ctrace_server_concurrency_tests
     tests/server_concurrency_tests.cpp
     src/App/Runner.cpp
     src/Process/Ipc/ApiHandler.cpp
+    src/App/ShippedDefaults.cpp
     src/Process/Ipc/GracefulShutdown.cpp
     src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
@@ -306,12 +309,13 @@ target_link_libraries(ctrace_server_concurrency_tests
             httplib::httplib)
 
 add_test(NAME ctrace_server_concurrency_tests
-    COMMAND ctrace_server_concurrency_tests ${CMAKE_SOURCE_DIR})
+    COMMAND ctrace_server_concurrency_tests ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(ctrace_server_http_tests
     tests/server_http_tests.cpp
     src/App/Runner.cpp
     src/Process/Ipc/ApiHandler.cpp
+    src/App/ShippedDefaults.cpp
     src/Process/Ipc/GracefulShutdown.cpp
     src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp

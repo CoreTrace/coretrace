@@ -5,6 +5,7 @@
 #include "Config/config.hpp"
 #include "attributes.hpp"
 
+#include <filesystem>
 #include <string>
 
 namespace ctrace
@@ -20,7 +21,9 @@ namespace ctrace
     /// must at least carry a shutdown token: it forces the operator to acknowledge exposure.
     CT_NODISCARD std::string validateServerConfig(const ServerConfig& config);
 
-    CT_NODISCARD int run_server(const ProgramConfig& config);
+    /// Serves the HTTP API; each request gets what ships next to `executable`, like the CLI.
+    CT_NODISCARD int run_server(const ProgramConfig& config,
+                                const std::filesystem::path& executable);
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config);
 } // namespace ctrace
 
