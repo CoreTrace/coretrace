@@ -2,6 +2,7 @@
 //
 // Each tool reports its own identity and builds its command line from the configuration.
 #include "Process/Tools/AnalysisTools.hpp"
+#include "ctrace_tools/languageType.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -153,6 +154,39 @@ int main()
             !contains(CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c"),
                       "--disable=style"),
             "pass-through arguments are per tool and off by default");
+    }
+
+    // Each file goes to the tools of its language: .py is Python, never C++ by default.
+    {
+        using ctrace_defs::LanguageType;
+        using ctrace_tools::detectLanguage;
+        report.expect(detectLanguage("pkg/app.py") == LanguageType::Python,
+                      "detectLanguage: .py is Python");
+        report.expect(detectLanguage("a.c") == LanguageType::C &&
+                          detectLanguage("a.cc") == LanguageType::CPP &&
+                          detectLanguage("a.hpp") == LanguageType::CPP,
+                      "detectLanguage: C and C++ extensions are unchanged");
+
+        const PythonAnalyzerToolImplementation python;
+        const CppCheckToolImplementation cppcheck;
+        report.expect(python.analyzes(LanguageType::Python) && !python.analyzes(LanguageType::C) &&
+                          !python.analyzes(LanguageType::CPP),
+                      "coretrace-python-analyzer analyzes Python only");
+        report.expect(cppcheck.analyzes(LanguageType::C) && cppcheck.analyzes(LanguageType::CPP) &&
+                          !cppcheck.analyzes(LanguageType::Python),
+                      "the C/C++ tools do not analyze Python");
+    }
+
+    // coretrace-python-analyzer: SARIF on stdout, then the user's arguments, then the file.
+    {
+        ctrace::ProgramConfig config = configWithSarif(false);
+        const auto args = PythonAnalyzerToolImplementation::buildArguments(config, "app.py");
+        report.expect((args == std::vector<std::string>{"--check", "--format", "sarif", "app.py"}),
+                      "coretrace-python-analyzer: --check --format sarif <file>");
+        config.tools.args["coretrace-python-analyzer"] = {"--no-bundled-plugins"};
+        const auto extra = PythonAnalyzerToolImplementation::buildArguments(config, "app.py");
+        report.expect(contains(extra, "--no-bundled-plugins") && extra.back() == "app.py",
+                      "coretrace-python-analyzer: pass-through arguments precede the file");
     }
 
     // Tools are named, not located: PATH resolves them unless the configuration says otherwise.

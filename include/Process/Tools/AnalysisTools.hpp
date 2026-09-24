@@ -103,17 +103,19 @@ namespace ctrace
     }
 
     /// Runs an external tool to completion. A tool that cannot be started is reported on the
-    /// sink and yields nothing. A non-zero exit is reported too, but the output is still
-    /// returned: partial findings are not lost because the tool ended badly.
+    /// sink and yields nothing. An exit code outside `completedCodes` (by default only 0) is
+    /// reported too, but the output is still returned: partial findings are not lost because
+    /// the tool ended badly.
     [[nodiscard]] inline std::optional<ProcessResult>
     runExternalTool(const ProgramConfig& config, const IAnalysisTool& tool,
-                    const std::vector<std::string>& args, ToolOutput& output)
+                    const std::vector<std::string>& args, ToolOutput& output,
+                    std::initializer_list<int> completedCodes = {0})
     {
         try
         {
             auto process = ProcessFactory::createProcess(toolCommand(config, tool), args);
             const ProcessResult run = process->execute();
-            if (!run.succeeded())
+            if (!run.completedWith(completedCodes))
             {
                 output.error(run.describeFailure(tool.name()));
             }
@@ -211,6 +213,27 @@ namespace ctrace
       private:
         void emit(const ctrace::ProgramConfig& config, ToolOutput& output, const std::string& text,
                   bool toConsole) const;
+    };
+
+    /// coretrace-python-analyzer (github.com/CoreTrace/coretrace-python-analyzer), run on one
+    /// Python file at a time. Its exit code carries a verdict: 0 clean, 1 findings, 2 error.
+    class PythonAnalyzerToolImplementation : public AnalysisToolBase
+    {
+      public:
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
+        /// Reads the analyzer's SARIF for `file`. It writes locations relative to the analyzed
+        /// file's directory; they are rebased onto `file`'s directory as given, so paths read
+        /// the same as every other tool's. Nothing when the output is not SARIF.
+        [[nodiscard]] static std::optional<std::vector<Diagnostic>>
+        parseDiagnostics(const std::string& output, const std::string& file);
+        [[nodiscard]] bool analyzes(ctrace_defs::LanguageType language) const override
+        {
+            return language == ctrace_defs::LanguageType::Python;
+        }
+        void execute(const std::string& file, const ctrace::ProgramConfig& config,
+                     ToolOutput& output) const override;
+        std::string name() const override;
     };
 
     class TscancodeToolImplementation : public AnalysisToolBase

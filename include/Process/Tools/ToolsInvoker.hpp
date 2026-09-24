@@ -126,11 +126,18 @@ namespace ctrace
             registerTool("ikos", std::make_unique<IkosToolImplementation>());
             registerTool("ctrace_stack_analyzer",
                          std::make_unique<StackAnalyzerToolImplementation>());
+            registerTool("coretrace-python-analyzer",
+                         std::make_unique<PythonAnalyzerToolImplementation>());
             registerTool("dyn_tools_1", std::make_unique<DynTool1>());
             registerTool("dyn_tools_2", std::make_unique<DynTool2>());
             registerTool("dyn_tools_3", std::make_unique<DynTool3>());
 
-            static_tools = {"cppcheck", "flawfinder", "tscancode", "ikos", "ctrace_stack_analyzer"};
+            static_tools = {"cppcheck",
+                            "flawfinder",
+                            "tscancode",
+                            "ikos",
+                            "ctrace_stack_analyzer",
+                            "coretrace-python-analyzer"};
             dynamic_tools = {"dyn_tools_1", "dyn_tools_2", "dyn_tools_3"};
 
             if (m_config.runtime.ipc == "standardIO")
@@ -251,13 +258,14 @@ namespace ctrace
             return names;
         }
 
-      private:
+        /// Adds or replaces the tool run under `name`. Must be called before any run.
         void registerTool(const std::string& name, std::unique_ptr<IAnalysisTool> tool)
         {
             toolLocks[name] = std::make_shared<std::mutex>();
             tools[name] = std::move(tool);
         }
 
+      private:
         void executeTool(const std::string& tool_name, const std::string& file)
         {
             auto tool_it = tools.find(tool_name);
@@ -309,8 +317,10 @@ namespace ctrace
             recordDiagnostics(tool_name, output);
         }
 
-        void runToolList(const std::vector<std::string>& tool_names, const std::string& file)
+        /// Runs, on `file`, the tools of `tool_names` that analyze its language.
+        void runToolList(const std::vector<std::string>& all_tool_names, const std::string& file)
         {
+            const std::vector<std::string> tool_names = toolsAnalyzing(all_tool_names, file);
             if (tool_names.empty())
             {
                 return;
@@ -387,8 +397,41 @@ namespace ctrace
 
             for (const auto& tool_name : batchTools)
             {
-                executeBatchTool(tool_name, files);
+                executeBatchTool(tool_name, filesAnalyzedBy(*tools.at(tool_name), files));
             }
+        }
+
+        /// The tools of `tool_names` that analyze `file`'s language; unknown names are kept,
+        /// so that executeTool reports them.
+        [[nodiscard]] std::vector<std::string>
+        toolsAnalyzing(const std::vector<std::string>& tool_names, const std::string& file) const
+        {
+            const ctrace_defs::LanguageType language = ctrace_tools::detectLanguage(file);
+            std::vector<std::string> selected;
+            for (const auto& tool_name : tool_names)
+            {
+                const auto tool_it = tools.find(tool_name);
+                if (tool_it == tools.end() || tool_it->second->analyzes(language))
+                {
+                    selected.push_back(tool_name);
+                }
+            }
+            return selected;
+        }
+
+        /// The files of `files` whose language `tool` analyzes.
+        [[nodiscard]] static std::vector<std::string>
+        filesAnalyzedBy(const IAnalysisTool& tool, const std::vector<std::string>& files)
+        {
+            std::vector<std::string> selected;
+            for (const auto& file : files)
+            {
+                if (tool.analyzes(ctrace_tools::detectLanguage(file)))
+                {
+                    selected.push_back(file);
+                }
+            }
+            return selected;
         }
 
         static std::vector<std::string>

@@ -48,6 +48,27 @@ namespace ctrace
             return {};
         }
 
+        /// SARIF 2.1.0 §3.27.23: a result is suppressed when one of its suppressions is
+        /// accepted, explicitly or by omitting the status; under review or rejected ones
+        /// leave it active.
+        [[nodiscard]] bool isSuppressed(const nlohmann::json& result)
+        {
+            const auto suppressions = result.find("suppressions");
+            if (suppressions == result.end() || !suppressions->is_array())
+            {
+                return false;
+            }
+            for (const nlohmann::json& suppression : *suppressions)
+            {
+                if (suppression.is_object() &&
+                    suppression.value("status", "accepted") == "accepted")
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void readLocation(const nlohmann::json& result, Diagnostic& diagnostic)
         {
             const auto locations = result.find("locations");
@@ -82,6 +103,10 @@ namespace ctrace
             }
             for (const nlohmann::json& result : *results)
             {
+                if (isSuppressed(result))
+                {
+                    continue;
+                }
                 Diagnostic diagnostic;
                 diagnostic.tool = tool;
                 diagnostic.ruleId = result.value("ruleId", "");

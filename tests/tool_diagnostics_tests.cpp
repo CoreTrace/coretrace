@@ -31,10 +31,16 @@ namespace
     };
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
     using namespace ctrace;
     TestReport report;
+    if (argc != 2)
+    {
+        std::cerr << "Usage: ctrace_tool_diagnostics_tests <repo-root>\n";
+        return 2;
+    }
+    const std::string sourceRoot = argv[1];
 
     // Summaries are derived from the diagnostics, never reported on their own.
     {
@@ -226,6 +232,72 @@ int main()
         }
         report.expect(renderSarif({})["runs"].is_array() && renderSarif({})["runs"].empty(),
                       "renderSarif: nothing to report is an empty runs array");
+    }
+
+    // A SARIF result suppressed in source is not a finding; a rejected suppression is.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"json({
+          "version": "2.1.0",
+          "runs": [{
+            "results": [
+              {"ruleId": "r1", "level": "error", "message": {"text": "kept"},
+               "locations": [{"physicalLocation": {
+                 "artifactLocation": {"uri": "pkg/a.py", "uriBaseId": "SRCROOT"},
+                 "region": {"startLine": 3}}}]},
+              {"ruleId": "r1", "level": "error", "message": {"text": "suppressed"},
+               "suppressions": [{"kind": "inSource"}]},
+              {"ruleId": "r2", "level": "warning", "message": {"text": "under review"},
+               "suppressions": [{"kind": "external", "status": "underReview"}]},
+              {"ruleId": "r3", "level": "note", "message": {"text": "rejected"},
+               "suppressions": [{"kind": "external", "status": "rejected"}]},
+              {"ruleId": "r4", "level": "note", "message": {"text": "accepted"},
+               "suppressions": [{"kind": "external", "status": "accepted"}]}
+            ]
+          }]
+        })json");
+        const auto parsed = diagnosticsFromSarif(log, "tool");
+        report.expect(
+            parsed.has_value() && parsed->size() == 3,
+            "SARIF: accepted suppressions drop a result, pending or rejected ones do not");
+        if (parsed && parsed->size() == 3)
+        {
+            report.expect((*parsed)[0].message == "kept" && (*parsed)[0].file == "pkg/a.py",
+                          "SARIF: the uri is kept as written");
+            report.expect((*parsed)[1].ruleId == "r2" && (*parsed)[2].ruleId == "r3",
+                          "SARIF: under-review and rejected suppressions still count");
+        }
+    }
+
+    // coretrace-python-analyzer, through a stand-in executable with the real tool's contract.
+    {
+        const std::string fake = sourceRoot + "/tests/fake-python-analyzer.sh";
+        const PythonAnalyzerToolImplementation python;
+
+        ProgramConfig config;
+        config.tools.paths["coretrace-python-analyzer"] = fake;
+        ToolOutput findings(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
+        python.execute("pkg/app.py", config, findings);
+        report.expect(!findings.failed() && findings.interpreted(),
+                      "coretrace-python-analyzer: exit 1 means findings, not a failed run");
+        report.expect(findings.diagnostics().size() == 1 &&
+                          findings.diagnostics()[0].tool == "coretrace-python-analyzer" &&
+                          findings.diagnostics()[0].ruleId == "dangerous-eval" &&
+                          findings.diagnostics()[0].severity == Severity::Error &&
+                          findings.diagnostics()[0].file == "pkg/app.py" &&
+                          findings.diagnostics()[0].line == 6,
+                      "coretrace-python-analyzer: one finding, the suppressed one is not counted, "
+                      "located in the analyzed file as it was given");
+
+        config.tools.args["coretrace-python-analyzer"] = {"--fake-exit=2"};
+        ToolOutput broken(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
+        python.execute("pkg/app.py", config, broken);
+        report.expect(broken.failed(), "coretrace-python-analyzer: exit 2 is a failed run");
+
+        config.tools.args["coretrace-python-analyzer"] = {"--fake-exit=0"};
+        ToolOutput clean(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
+        python.execute("pkg/app.py", config, clean);
+        report.expect(!clean.failed() && clean.interpreted(),
+                      "coretrace-python-analyzer: exit 0 is a completed run");
     }
 
     if (report.failures == 0)

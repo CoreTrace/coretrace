@@ -9,8 +9,13 @@
 
 namespace ctrace
 {
-    inline constexpr std::array<std::string_view, 5> SUPPORTED_TOOLS = {
-        "flawfinder", "ikos", "cppcheck", "tscancode", "ctrace_stack_analyzer",
+    inline constexpr std::array<std::string_view, 6> SUPPORTED_TOOLS = {
+        "flawfinder",
+        "ikos",
+        "cppcheck",
+        "tscancode",
+        "ctrace_stack_analyzer",
+        "coretrace-python-analyzer",
     };
 
     inline bool isSupportedToolName(std::string_view name)

@@ -18,6 +18,22 @@ cmake ..                        \
 make -j4
 ```
 
+`-DENABLE_PYTHON_ANALYZER=ON` also builds [coretrace-python-analyzer](https://github.com/CoreTrace/coretrace-python-analyzer)
+into a standalone executable with [Nuitka](https://nuitka.net), staged in
+`build/libexec/coretrace/` and installed to `<prefix>/libexec/coretrace/`. It embeds its own
+Python runtime: people running `ctrace` need neither Python nor any package. Building it needs
+Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and `patchelf` on
+Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
+the pinned tag.
+
+```bash
+cmake .. -DENABLE_PYTHON_ANALYZER=ON -DPython3_EXECUTABLE=/path/to/python3
+./ctrace --input app.py,src/main.c --invoke coretrace-python-analyzer,cppcheck
+```
+
+Each input goes to the tools of its language: `.py` files to `coretrace-python-analyzer`, C
+and C++ files to the others.
+
 ### CODE STYLE (clang-format)
 
 - Version cible : `clang-format` 17 (utilisée dans la CI).

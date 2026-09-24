@@ -36,6 +36,7 @@ set(SOURCES
     src/ctrace_tools/strings.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
@@ -102,6 +103,12 @@ option(ENABLE_FLAWFINDER "Enable flawfinder external project integration" OFF)
 
 if (ENABLE_FLAWFINDER)
     include(${CMAKE_SOURCE_DIR}/cmake/flawfinder.cmake)
+endif()
+
+option(ENABLE_PYTHON_ANALYZER
+    "Build coretrace-python-analyzer as a standalone executable (Nuitka) shipped with ctrace" OFF)
+if(ENABLE_PYTHON_ANALYZER)
+    include(${CMAKE_SOURCE_DIR}/cmake/pythonAnalyzer.cmake)
 endif()
 # include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
 
@@ -188,6 +195,7 @@ add_executable(ctrace_tool_arguments_tests
     tests/tool_arguments_tests.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
@@ -209,6 +217,7 @@ add_executable(ctrace_tool_diagnostics_tests
     tests/tool_diagnostics_tests.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
@@ -216,7 +225,26 @@ add_executable(ctrace_tool_diagnostics_tests
     src/ctrace_tools/strings.cpp
 )
 target_link_libraries(ctrace_tool_diagnostics_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
-add_test(NAME ctrace_tool_diagnostics_tests COMMAND ctrace_tool_diagnostics_tests)
+add_test(NAME ctrace_tool_diagnostics_tests
+    COMMAND ctrace_tool_diagnostics_tests ${CMAKE_SOURCE_DIR})
+
+# Each file reaches only the tools of its language.
+add_executable(ctrace_tool_routing_tests
+    tests/tool_routing_tests.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
+    src/Process/Tools/StackAnalyzerToolImplementation.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/App/ToolConfig.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+target_link_libraries(ctrace_tool_routing_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib)
+add_test(NAME ctrace_tool_routing_tests COMMAND ctrace_tool_routing_tests)
 
 add_executable(ctrace_exit_policy_tests tests/exit_policy_tests.cpp)
 add_test(NAME ctrace_exit_policy_tests COMMAND ctrace_exit_policy_tests)
@@ -264,6 +292,7 @@ add_executable(ctrace_server_concurrency_tests
     src/App/ToolConfig.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -289,6 +318,7 @@ add_executable(ctrace_server_http_tests
     src/App/ToolConfig.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -328,6 +358,7 @@ add_executable(ctrace_stack_analyzer_bridge_tests
     tests/stack_analyzer_bridge_tests.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -374,6 +405,38 @@ add_test(NAME ctrace_sarif_report_file_is_the_merged_log
     COMMAND sh -c "grep -q '\"\$schema\"' ${ctrace_merged_sarif} && grep -q '\"name\": \"cppcheck\"' ${ctrace_merged_sarif} && grep -q '\"name\": \"ctrace_stack_analyzer\"' ${ctrace_merged_sarif} && ! grep -q 'diagnosticsSummary' ${ctrace_merged_sarif}")
 set_tests_properties(ctrace_sarif_report_file_is_the_merged_log PROPERTIES
     DEPENDS ctrace_sarif_is_merged_per_tool)
+
+# Python sources go to the Python analyzer only; the C/C++ tools never see them.
+add_test(NAME ctrace_python_file_skips_c_tools
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/vulnerable.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
+set_tests_properties(ctrace_python_file_skips_c_tools PROPERTIES
+    FAIL_REGULAR_EXPRESSION "Running cppcheck on|Running CoreTrace Stack Analyzer on")
+
+# End to end through the CLI with a stand-in for the analyzer (the real one needs Nuitka, see
+# ENABLE_PYTHON_ANALYZER): findings are read from its SARIF and counted.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-python-analyzer.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-python-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-python-analyzer.sh\"}}}\n")
+add_test(NAME ctrace_python_analyzer_findings_are_counted
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/vulnerable.py,${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke coretrace-python-analyzer; test $? -eq 2")
+set_tests_properties(ctrace_python_analyzer_findings_are_counted PROPERTIES
+    FAIL_REGULAR_EXPRESSION "Running coretrace-python-analyzer on [^\n]*double_free")
+add_test(NAME ctrace_python_analyzer_summary
+    COMMAND ctrace --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json
+        --input ${CMAKE_SOURCE_DIR}/tests/python/vulnerable.py --invoke coretrace-python-analyzer)
+set_tests_properties(ctrace_python_analyzer_summary PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\(coretrace-python-analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
+
+# A bundled tool is found next to ctrace, from a copy of the release layout run elsewhere with
+# an empty environment. The stand-in covers the lookup everywhere; the real standalone
+# analyzer covers "no Python needed" when it is built.
+add_test(NAME ctrace_bundled_tool_is_found_next_to_ctrace
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/python/run-relocated.sh $<TARGET_FILE:ctrace>
+        ${CMAKE_SOURCE_DIR}/tests/fake-python-analyzer.sh ${CMAKE_BINARY_DIR}/relocated-fake)
+if(ENABLE_PYTHON_ANALYZER)
+    add_test(NAME ctrace_python_analyzer_standalone_runs_anywhere
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/python/run-relocated.sh $<TARGET_FILE:ctrace>
+            ${CORETRACE_PYTHON_ANALYZER_DIR} ${CMAKE_BINARY_DIR}/relocated-python-analyzer)
+endif()
 
 # Applied last so every executable we own exists by now.
 foreach(coretrace_target

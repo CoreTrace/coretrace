@@ -11,6 +11,7 @@
 #include "Config/config.hpp"
 #include "Process/Tools/Diagnostic.hpp"
 #include "Process/Tools/ToolOutput.hpp"
+#include "ctrace_defs/types.hpp"
 
 class IpcStrategy;
 
@@ -71,6 +72,14 @@ namespace ctrace
             {
                 execute(file, config, output);
             }
+        }
+
+        /// Whether the tool analyzes sources of `language`. The invoker hands a tool only the
+        /// files it analyzes. Every tool so far is a C/C++ analyzer.
+        [[nodiscard]] virtual bool analyzes(ctrace_defs::LanguageType language) const
+        {
+            return language == ctrace_defs::LanguageType::C ||
+                   language == ctrace_defs::LanguageType::CPP;
         }
 
         /**

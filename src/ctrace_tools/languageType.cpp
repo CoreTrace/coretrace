@@ -6,6 +6,11 @@ namespace ctrace_tools
     // Fonction pour détecter le type de langage à partir d'une extension de fichier
     [[nodiscard]] ctrace_defs::LanguageType detectLanguage(std::string_view filename) noexcept
     {
+        if (filename.ends_with(".py"))
+        {
+            return ctrace_defs::LanguageType::Python;
+        }
+
         // Liste des extensions typiques
         constexpr std::string_view cExtensions[] = {".c", ".h"};
         constexpr std::string_view cppExtensions[] = {".cpp", ".hpp", ".cxx", ".cc", ".hxx"};
