@@ -5,6 +5,8 @@
 #include "ctrace_tools/languageType.hpp"
 
 #include <algorithm>
+#include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -177,16 +179,46 @@ int main()
                       "the C/C++ tools do not analyze Python");
     }
 
-    // coretrace-python-analyzer: SARIF on stdout, then the user's arguments, then the file.
+    // coretrace-python-analyzer checks a whole project: SARIF on stdout, then the user's
+    // arguments, then the project root. It runs once for all the Python inputs.
     {
         ctrace::ProgramConfig config = configWithSarif(false);
-        const auto args = PythonAnalyzerToolImplementation::buildArguments(config, "app.py");
-        report.expect((args == std::vector<std::string>{"--check", "--format", "sarif", "app.py"}),
-                      "coretrace-python-analyzer: --check --format sarif <file>");
+        const auto args = PythonAnalyzerToolImplementation::buildArguments(config, "proj");
+        report.expect((args == std::vector<std::string>{"--check", "--format", "sarif", "proj"}),
+                      "coretrace-python-analyzer: --check --format sarif <project root>");
         config.tools.args["coretrace-python-analyzer"] = {"--no-bundled-plugins"};
-        const auto extra = PythonAnalyzerToolImplementation::buildArguments(config, "app.py");
-        report.expect(contains(extra, "--no-bundled-plugins") && extra.back() == "app.py",
-                      "coretrace-python-analyzer: pass-through arguments precede the file");
+        const auto extra = PythonAnalyzerToolImplementation::buildArguments(config, "proj");
+        report.expect(contains(extra, "--no-bundled-plugins") && extra.back() == "proj",
+                      "coretrace-python-analyzer: pass-through arguments precede the root");
+        report.expect(PythonAnalyzerToolImplementation().supportsBatchExecution(),
+                      "coretrace-python-analyzer: one run for all the Python inputs");
+    }
+
+    // The project root is what the analyzer names modules from (app/helpers.py is app.helpers):
+    // the nearest directory holding a project marker, else the file's own directory.
+    {
+        namespace fs = std::filesystem;
+        const fs::path base = fs::temp_directory_path() / "ctrace-python-project-root";
+        std::error_code err;
+        fs::remove_all(base, err);
+        fs::create_directories(base / "proj/app/sub", err);
+        fs::create_directories(base / "loose", err);
+        std::ofstream(base / "proj/pyproject.toml") << "[project]\n";
+        const fs::path proj = fs::canonical(base / "proj");
+        const fs::path loose = fs::canonical(base / "loose");
+
+        report.expect(
+            PythonAnalyzerToolImplementation::projectRoot((proj / "app/sub/m.py").string()) == proj,
+            "project root: the nearest directory with pyproject.toml");
+        fs::create_directories(base / "gitrepo/.git", err);
+        fs::create_directories(base / "gitrepo/src", err);
+        const fs::path gitrepo = fs::canonical(base / "gitrepo");
+        report.expect(PythonAnalyzerToolImplementation::projectRoot(
+                          (gitrepo / "src/m.py").string()) == gitrepo,
+                      "project root: a repository root counts as a project root");
+        report.expect(PythonAnalyzerToolImplementation::projectRoot((loose / "m.py").string()) ==
+                          loose,
+                      "project root: without a marker, the file's own directory");
     }
 
     // Tools are named, not located: PATH resolves them unless the configuration says otherwise.

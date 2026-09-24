@@ -408,7 +408,7 @@ set_tests_properties(ctrace_sarif_report_file_is_the_merged_log PROPERTIES
 
 # Python sources go to the Python analyzer only; the C/C++ tools never see them.
 add_test(NAME ctrace_python_file_skips_c_tools
-    COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/vulnerable.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
 set_tests_properties(ctrace_python_file_skips_c_tools PROPERTIES
     FAIL_REGULAR_EXPRESSION "Running cppcheck on|Running CoreTrace Stack Analyzer on")
 
@@ -417,14 +417,15 @@ set_tests_properties(ctrace_python_file_skips_c_tools PROPERTIES
 file(WRITE ${CMAKE_BINARY_DIR}/fake-python-analyzer.json
     "{\"schema_version\": 1, \"tools\": {\"coretrace-python-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-python-analyzer.sh\"}}}\n")
 add_test(NAME ctrace_python_analyzer_findings_are_counted
-    COMMAND sh -c "$<TARGET_FILE:ctrace> --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/vulnerable.py,${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke coretrace-python-analyzer; test $? -eq 2")
-set_tests_properties(ctrace_python_analyzer_findings_are_counted PROPERTIES
-    FAIL_REGULAR_EXPRESSION "Running coretrace-python-analyzer on [^\n]*double_free")
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py,${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke coretrace-python-analyzer 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q 'Running coretrace-python-analyzer on .* for 1 input file(s)' && test $(printf '%s\\n' \"$out\" | grep -c 'Running coretrace-python-analyzer on') -eq 1")
 add_test(NAME ctrace_python_analyzer_summary
     COMMAND ctrace --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json
-        --input ${CMAKE_SOURCE_DIR}/tests/python/vulnerable.py --invoke coretrace-python-analyzer)
+        --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke coretrace-python-analyzer)
 set_tests_properties(ctrace_python_analyzer_summary PROPERTIES
     PASS_REGULAR_EXPRESSION "\\(coretrace-python-analyzer\\) Diagnostics summary: info=0, warning=0, error=1")
+# Two inputs of one project: a single analyzer run, and both inputs' findings.
+add_test(NAME ctrace_python_analyzer_runs_once_per_project
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py,${CMAKE_SOURCE_DIR}/tests/python/project/app/other.py --invoke coretrace-python-analyzer 2>&1); printf '%s\\n' \"$out\"; test $(printf '%s\\n' \"$out\" | grep -c 'Running coretrace-python-analyzer on') -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Diagnostics summary: info=0, warning=0, error=2'")
 
 # A bundled tool is found next to ctrace, from a copy of the release layout run elsewhere with
 # an empty environment. The stand-in covers the lookup everywhere; the real standalone
