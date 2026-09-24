@@ -268,9 +268,11 @@ namespace ctrace
     class CppCheckToolImplementation : public AnalysisToolBase
     {
       public:
-        /// The text output contract: one line per finding, on every cppcheck version.
+        /// The text output contract: one line per finding, on every cppcheck version. The CWE
+        /// (0 when the check has none) lets a finding be recognized when another tool reports
+        /// the same weakness.
         static constexpr const char* kOutputTemplate =
-            "{file}:{line}:{column}: {severity}: {message} [{id}]";
+            "{file}:{line}:{column}: {severity}: {message} [{id}] [CWE-{cwe}]";
 
         [[nodiscard]] static std::vector<std::string>
         buildArguments(const ctrace::ProgramConfig& config, const std::string& file);

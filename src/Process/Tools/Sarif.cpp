@@ -3,11 +3,16 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <regex>
 #include <set>
 #include <string_view>
+#include <system_error>
+#include <tuple>
+#include <utility>
 
 namespace ctrace
 {
@@ -202,12 +207,77 @@ namespace ctrace
         }
     } // namespace
 
+    namespace
+    {
+        [[nodiscard]] constexpr int rankOf(Severity severity) noexcept
+        {
+            return static_cast<int>(severity);
+        }
+
+        /// The reports of other tools that a kept result stands for.
+        using Duplicates = std::map<const Diagnostic*, std::vector<const Diagnostic*>>;
+
+        /// Groups the reports of one weakness (same file, however spelled, same line, same CWE)
+        /// made by different tools. In each group the most severe report is kept (the first
+        /// tool by name on a tie); the others are listed against it and left out. Reports
+        /// without a file, a line or a CWE cannot be matched and are all kept.
+        [[nodiscard]] Duplicates findDuplicates(const std::vector<Diagnostic>& diagnostics,
+                                                std::set<const Diagnostic*>& merged)
+        {
+            std::map<std::tuple<std::string, unsigned, std::string>, std::vector<const Diagnostic*>>
+                byFlaw;
+            for (const Diagnostic& diagnostic : diagnostics)
+            {
+                if (diagnostic.file.empty() || diagnostic.line == 0 || diagnostic.cwe.empty())
+                {
+                    continue;
+                }
+                std::error_code err;
+                const std::filesystem::path absolute =
+                    std::filesystem::absolute(diagnostic.file, err);
+                const std::string file = (err ? std::filesystem::path(diagnostic.file) : absolute)
+                                             .lexically_normal()
+                                             .string();
+                byFlaw[{file, diagnostic.line, diagnostic.cwe}].push_back(&diagnostic);
+            }
+
+            Duplicates duplicates;
+            for (const auto& [flaw, reports] : byFlaw)
+            {
+                const Diagnostic* kept =
+                    *std::min_element(reports.begin(), reports.end(),
+                                      [](const Diagnostic* a, const Diagnostic* b)
+                                      {
+                                          return std::make_pair(-rankOf(a->severity), a->tool) <
+                                                 std::make_pair(-rankOf(b->severity), b->tool);
+                                      });
+                for (const Diagnostic* report : reports)
+                {
+                    if (report->tool != kept->tool)
+                    {
+                        duplicates[kept].push_back(report);
+                        merged.insert(report);
+                    }
+                }
+            }
+            return duplicates;
+        }
+    } // namespace
+
     nlohmann::json renderSarif(const std::vector<Diagnostic>& diagnostics)
     {
+        std::set<const Diagnostic*> merged;
+        const Duplicates duplicates = findDuplicates(diagnostics, merged);
+
         std::map<std::string, std::vector<const Diagnostic*>> byTool;
         for (const Diagnostic& diagnostic : diagnostics)
         {
-            byTool[diagnostic.tool].push_back(&diagnostic);
+            // A tool whose every report was merged into another's still ran: it keeps a run.
+            auto& reports = byTool[diagnostic.tool];
+            if (merged.count(&diagnostic) == 0)
+            {
+                reports.push_back(&diagnostic);
+            }
         }
 
         nlohmann::json log;
@@ -227,7 +297,16 @@ namespace ctrace
                 {
                     run["tool"]["driver"]["rules"].push_back({{"id", diagnostic->ruleId}});
                 }
-                run["results"].push_back(resultOf(*diagnostic));
+                nlohmann::json result = resultOf(*diagnostic);
+                if (const auto others = duplicates.find(diagnostic); others != duplicates.end())
+                {
+                    for (const Diagnostic* other : others->second)
+                    {
+                        result["properties"]["alsoReportedBy"].push_back(
+                            {{"tool", other->tool}, {"ruleId", other->ruleId}});
+                    }
+                }
+                run["results"].push_back(std::move(result));
             }
             log["runs"].push_back(std::move(run));
         }

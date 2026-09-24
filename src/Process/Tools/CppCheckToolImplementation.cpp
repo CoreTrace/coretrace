@@ -69,7 +69,8 @@ namespace ctrace
     std::vector<Diagnostic> CppCheckToolImplementation::parseDiagnostics(const std::string& output)
     {
         // One line per finding, exactly as kOutputTemplate lays it out.
-        static const std::regex linePattern(R"(^(.+?):(\d+):(\d+): (\w+): (.*) \[([^\]]+)\]$)");
+        static const std::regex linePattern(
+            R"(^(.+?):(\d+):(\d+): (\w+): (.*) \[([^\]]+)\] \[CWE-(\d+)\]$)");
         std::vector<Diagnostic> diagnostics;
         std::istringstream stream(output);
         std::string line;
@@ -88,6 +89,10 @@ namespace ctrace
             diagnostic.severity = severityOf(match[4]);
             diagnostic.message = match[5];
             diagnostic.ruleId = match[6];
+            if (match[7] != "0")
+            {
+                diagnostic.cwe = "CWE-" + match[7].str();
+            }
             diagnostics.push_back(std::move(diagnostic));
         }
         return diagnostics;

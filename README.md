@@ -117,8 +117,10 @@ stdout and written to `--report-file`, ready for `github/codeql-action/upload-sa
     --input src/main.c --report-file ctrace.sarif
 ```
 
-Findings are not deduplicated across tools: a defect seen by two analyzers appears in both
-runs, each attributed to its tool.
+A weakness reported by several tools, same file, same line and same CWE, is one result: the
+most severe report is kept in its tool's run, and its `alsoReportedBy` property names the other
+tools and rules. Reports without a CWE cannot be matched and are all kept; the console output
+and the counters still show every tool's report.
 
 ### CONFIGURATION
 
