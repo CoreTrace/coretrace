@@ -416,6 +416,12 @@ set(ctrace_dedup_sarif ${CMAKE_BINARY_DIR}/ctrace-dedup.sarif)
 add_test(NAME ctrace_sarif_merges_cross_tool_duplicates
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer --config ${CMAKE_SOURCE_DIR}/config/tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_dedup_sarif} > /dev/null && test $(grep -c 'coretrace/v1' ${ctrace_dedup_sarif}) -eq 1 && grep -q 'alsoReportedBy' ${ctrace_dedup_sarif}")
 
+# Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
+# its findings (null dereference, signed overflow) with an absolute path.
+add_test(NAME ctrace_stack_analyzer_paths_follow_the_input
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer,cppcheck --input tests/null_pointer.c,tests/dead_code.cc > ${CMAKE_BINARY_DIR}/paths.sarif 2>/dev/null && grep -q '\"uri\": \"tests/null_pointer.c\"' ${CMAKE_BINARY_DIR}/paths.sarif && ! grep -q '\"uri\": \"/' ${CMAKE_BINARY_DIR}/paths.sarif"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # Every stack analyzer finding names its rule and CWE (coretrace-stack-analyzer >= v0.21.0):
 # the strcpy overflow is MemcpyWithStackDest, CWE-120, the CWE flawfinder gives it too.
 add_test(NAME ctrace_stack_analyzer_findings_name_rule_and_cwe

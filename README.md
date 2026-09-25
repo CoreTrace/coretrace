@@ -24,11 +24,11 @@ into a standalone executable with [Nuitka](https://nuitka.net), staged in
 Python runtime: people running `ctrace` need neither Python nor any package. The Linux release
 archives ship it this way.
 
-The Linux release archives (amd64, arm64) run on any distribution with glibc 2.35 or newer:
-Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10. They are built on Ubuntu 22.04 and carry their
-own libstdc++, so nothing else is required. Each archive is unpacked and run on bare Ubuntu
-22.04, Debian 12 and Ubuntu 24.04 images, with no compiler, LLVM or Python, before it is
-published. Building it needs
+The Linux release archives (amd64, arm64) run on any distribution with glibc 2.34 or newer:
+RHEL 9 and its rebuilds (Rocky, Alma), Amazon Linux 2023, Ubuntu 22.04+, Debian 12+, Fedora
+35+. ctrace is built on Ubuntu 22.04 and carries its own libstdc++; the Python analyzer is
+built on Rocky Linux 9. Each archive is unpacked and run on bare Rocky Linux 9, Ubuntu 22.04,
+Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published. Building it needs
 Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and `patchelf` on
 Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
 the pinned tag.
@@ -122,6 +122,11 @@ stdout and written to `--report-file`, ready for `github/codeql-action/upload-sa
 ./ctrace --sarif-format --invoke cppcheck,flawfinder,ctrace_stack_analyzer \
     --input src/main.c --report-file ctrace.sarif
 ```
+
+Every tool spells a file the same way: an input as it was typed on the command line, any
+other file relative to the working directory when below it, else absolute. The locations and
+the fingerprints of a run are therefore the same whichever tool reports the finding and on
+whichever machine the run happens, when it runs from the repository root.
 
 A weakness reported by several tools, same file, same line and same CWE, is one result: the
 most severe report is kept in its tool's run, and its `alsoReportedBy` property names the other

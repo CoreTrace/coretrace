@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/InputPaths.hpp"
 #include "Process/Tools/Sarif.hpp"
 
 #include <coretrace/logger.hpp>
@@ -21,16 +22,6 @@ namespace ctrace
 
         constexpr std::array<const char*, 4> kProjectMarkers = {"pyproject.toml", "setup.py",
                                                                 "setup.cfg", ".git"};
-
-        /// One spelling per file, whatever the input said: absolute, `.` and `..` resolved,
-        /// symlinks followed where the path exists.
-        [[nodiscard]] fs::path identityOf(const fs::path& path)
-        {
-            const fs::path absolute = fs::absolute(path);
-            std::error_code err;
-            const fs::path resolved = fs::weakly_canonical(absolute, err);
-            return (err ? absolute : resolved).lexically_normal();
-        }
     } // namespace
 
     std::vector<std::string>
@@ -46,7 +37,7 @@ namespace ctrace
 
     fs::path PythonAnalyzerToolImplementation::projectRoot(const std::string& file)
     {
-        const fs::path directory = identityOf(file).parent_path();
+        const fs::path directory = InputPaths::identityOf(file).parent_path();
         for (fs::path candidate = directory; !candidate.empty();
              candidate = candidate.parent_path())
         {
@@ -74,12 +65,7 @@ namespace ctrace
         {
             return diagnostics;
         }
-        std::map<fs::path, std::string> inputByIdentity;
-        for (const std::string& input : inputs)
-        {
-            inputByIdentity.emplace(identityOf(input), input);
-        }
-        const fs::path workingDirectory = identityOf(fs::current_path());
+        const InputPaths paths(inputs);
         std::vector<Diagnostic> kept;
         for (Diagnostic& diagnostic : *diagnostics)
         {
@@ -88,21 +74,19 @@ namespace ctrace
                 continue;
             }
             // The analyzer locates findings relative to the project root it was given.
-            const fs::path located =
-                identityOf(fs::path(diagnostic.file).is_relative() ? root / diagnostic.file
-                                                                   : fs::path(diagnostic.file));
-            if (const auto input = inputByIdentity.find(located); input != inputByIdentity.end())
+            const fs::path located = fs::path(diagnostic.file).is_relative()
+                                         ? root / diagnostic.file
+                                         : fs::path(diagnostic.file);
+            if (auto input = paths.asInput(located))
             {
-                diagnostic.file = input->second;
+                diagnostic.file = *input;
                 kept.push_back(std::move(diagnostic));
             }
             else if (located.extension() != ".py")
             {
                 // Not in a Python source: a finding about the project itself, such as a
                 // vulnerable pin in requirements.txt. It concerns every input of the project.
-                const fs::path relative = located.lexically_relative(workingDirectory);
-                const bool below = !relative.empty() && *relative.begin() != "..";
-                diagnostic.file = (below ? relative : located).string();
+                diagnostic.file = paths.display(located);
                 kept.push_back(std::move(diagnostic));
             }
         }
@@ -132,8 +116,11 @@ namespace ctrace
             const auto diagnostics = parseDiagnostics(run->output, root, inputs);
             if (!diagnostics)
             {
-                coretrace::log(coretrace::Level::Warn, coretrace::Module(name()),
-                               "output is not a SARIF document; findings are not counted\n");
+                // The analyzer always reports in SARIF when it ran. Without a report, its exit
+                // code means nothing: a system that cannot load the executable exits 1, which
+                // would otherwise read as "findings".
+                output.error(name() + " did not produce a SARIF report (exit code " +
+                             std::to_string(run->exitCode) + "); the analysis is incomplete");
                 if (config.output.sarif_format)
                 {
                     output.record("stdout", run->output);
