@@ -4,6 +4,7 @@
 // that counting, gating and merging work the same whatever produced them.
 #include "Process/Tools/AnalysisTools.hpp"
 #include "Process/Tools/Diagnostic.hpp"
+#include "Process/Tools/InputPaths.hpp"
 #include "Process/Tools/Sarif.hpp"
 
 #include <nlohmann/json.hpp>
@@ -302,6 +303,28 @@ int main(int argc, char** argv)
         };
         report.expect(renderSarif(sameTool)["runs"][0]["results"].size() == 2,
                       "SARIF duplicates: only reports of different tools are merged");
+    }
+
+    // One spelling per file, whatever the tool reported: an input as the user typed it, any
+    // other file relative to the working directory when below it, else absolute.
+    {
+        namespace fs = std::filesystem;
+        const fs::path cwd = fs::current_path();
+        const InputPaths paths({"tests/double_free.c", "/elsewhere/a.c"});
+        report.expect(paths.display(cwd / "tests/double_free.c") == "tests/double_free.c" &&
+                          paths.display(cwd / "tests/../tests/double_free.c") ==
+                              "tests/double_free.c" &&
+                          paths.display("tests/double_free.c") == "tests/double_free.c",
+                      "InputPaths: an input keeps the user's spelling, however a tool wrote it");
+        report.expect(paths.display("/elsewhere/a.c") == "/elsewhere/a.c",
+                      "InputPaths: an absolute input stays absolute");
+        report.expect(paths.display(cwd / "include/header.h") == "include/header.h",
+                      "InputPaths: another file below the working directory is relative");
+        report.expect(paths.display("/usr/include/stdio.h") == "/usr/include/stdio.h",
+                      "InputPaths: a file outside the working directory is absolute");
+        report.expect(paths.asInput(cwd / "tests/double_free.c") == "tests/double_free.c" &&
+                          !paths.asInput(cwd / "include/header.h").has_value(),
+                      "InputPaths: asInput recognizes the inputs only");
     }
 
     // A SARIF result suppressed in source is not a finding; a rejected suppression is.

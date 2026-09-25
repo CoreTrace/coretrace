@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/InputPaths.hpp"
 #include "Process/Tools/ReportFile.hpp"
 #include "app/AnalyzerApp.hpp"
 
@@ -456,14 +457,18 @@ namespace
 
     /// The per-file diagnostics, in report order: the same set `report.summary` counts.
     [[nodiscard]] std::vector<ctrace::Diagnostic>
-    toDiagnostics(const ctrace::stack::app::AnalysisReport& report, const std::string& tool)
+    toDiagnostics(const ctrace::stack::app::AnalysisReport& report, const std::string& tool,
+                  const ctrace::InputPaths& paths)
     {
         std::vector<ctrace::Diagnostic> diagnostics;
         for (const auto& file : report.files)
         {
             for (const auto& item : file.result.diagnostics)
             {
-                diagnostics.push_back({tool, item.ruleId, item.filePath, item.line, item.column,
+                // The analyzer writes some findings with an absolute path and others as given.
+                const std::string where =
+                    item.filePath.empty() ? item.filePath : paths.display(item.filePath);
+                diagnostics.push_back({tool, item.ruleId, where, item.line, item.column,
                                        toSeverity(item.severity), item.message, item.cweId});
             }
         }
@@ -584,7 +589,7 @@ namespace ctrace
         }
 
         const ctrace::stack::app::AnalysisReport& report = *analysis.report;
-        output.diagnostics(toDiagnostics(report, name()));
+        output.diagnostics(toDiagnostics(report, name(), InputPaths(files)));
         if (config.output.sarif_format)
         {
             return; // The runner renders the merged SARIF document and the report file.
