@@ -28,7 +28,12 @@ The Linux release archives (amd64, arm64) run on any distribution with glibc 2.3
 RHEL 9 and its rebuilds (Rocky, Alma), Amazon Linux 2023, Ubuntu 22.04+, Debian 12+, Fedora
 35+. ctrace is built on Ubuntu 22.04 and carries its own libstdc++; the Python analyzer is
 built on Rocky Linux 9. Each archive is unpacked and run on bare Rocky Linux 9, Ubuntu 22.04,
-Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published. Building it needs
+Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published.
+
+Analyzing C and C++ needs no LLVM or clang installation either: Clang's own headers ship in
+`lib/clang/<version>/include` next to `bin/ctrace`, and the stack analyzer compiles in process.
+Only the C library's headers come from the system (`libc6-dev` on Debian and Ubuntu,
+`glibc-devel` on RHEL), as for any C build. `CT_CLANG` still selects another clang when set. Building it needs
 Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and `patchelf` on
 Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
 the pinned tag.

@@ -80,6 +80,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/logger/coretraceLog.cmake)
 target_link_libraries(ctrace PRIVATE coretrace::logger)
 
 include(${CMAKE_SOURCE_DIR}/cmake/stackUsageAnalyzer.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/clangHeaders.cmake)
 target_link_libraries(ctrace PRIVATE coretrace::stack_usage_analyzer_lib)
 
 include(${CMAKE_SOURCE_DIR}/cmake/httpLib.cmake)

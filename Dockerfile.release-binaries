@@ -121,8 +121,12 @@ RUN set -eux; \
     rm -rf /staging
 
 # The archive as users receive it, unpacked once and then run on the oldest distributions it
-# targets (RHEL 9, Ubuntu 22.04, Debian 12) and on the newest, each image bare: no compiler, no LLVM, no Python. Each stage
-# depends on the previous one, so the artifacts are only exported when all of them pass.
+# targets (RHEL 9, Ubuntu 22.04, Debian 12) and on the newest, each image bare: no compiler, no
+# LLVM, no Python. The Python analyzer is checked first; then only the C library's headers are
+# added, as any C build environment has them, and a C source is analyzed with no clang
+# installed. Each stage depends on the previous one, so the artifacts are only exported when all
+# of them pass.
+
 FROM base AS unpacked
 
 COPY --from=packager /out/ /out/
@@ -133,31 +137,43 @@ FROM ubuntu:22.04 AS verify-ubuntu-22.04
 
 COPY --from=unpacked /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
-COPY tests/python/ /checks/
+COPY tests/ /tests/
 RUN set -eux; \
     if command -v python3; then echo "the verification image must not have Python" >&2; exit 1; fi; \
-    sh /checks/check-installed.sh /opt/coretrace /tmp/check-installed
+    sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
+    apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
+    if command -v clang || ls /usr/lib/llvm-*; then echo "the verification image must not have clang" >&2; exit 1; fi; \
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
 
 FROM debian:12 AS verify-debian-12
 
 COPY --from=verify-ubuntu-22.04 /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
-COPY tests/python/ /checks/
-RUN sh /checks/check-installed.sh /opt/coretrace /tmp/check-installed
+COPY tests/ /tests/
+RUN set -eux; \
+    sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
+    apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
 
 FROM rockylinux/rockylinux:9 AS verify-rhel-9
 
 COPY --from=verify-debian-12 /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
-COPY tests/python/ /checks/
-RUN sh /checks/check-installed.sh /opt/coretrace /tmp/check-installed
+COPY tests/ /tests/
+RUN set -eux; \
+    sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
+    dnf install -y glibc-devel; \
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
 
 FROM ubuntu:24.04 AS verify-ubuntu-24.04
 
 COPY --from=verify-rhel-9 /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
-COPY tests/python/ /checks/
-RUN sh /checks/check-installed.sh /opt/coretrace /tmp/check-installed
+COPY tests/ /tests/
+RUN set -eux; \
+    sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
+    apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
 
 FROM scratch AS artifacts
 

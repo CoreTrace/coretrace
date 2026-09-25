@@ -14,6 +14,14 @@
 /// same way, after the config file and the request, so an explicit value always wins.
 namespace ctrace
 {
+    /// When Clang's own headers (stddef.h, stdarg.h...) ship next to the binary at `executable`,
+    /// in `<exe dir>/../lib/clang/<version>/include`, points the compiler library at the binary
+    /// itself through CT_CLANG: it derives the headers' location from that path and compiles in
+    /// process, so no clang has to be installed. The path is never executed. Returns whether it
+    /// did; a CT_CLANG the user set always wins. Changes the environment: call it before any
+    /// thread starts.
+    bool useShippedClangHeaders(const std::filesystem::path& executable);
+
     /// Applies every shipped default for the binary at `executable`. An empty `executable`
     /// (location unknown) ships nothing; missing models are then reported in `warnings`.
     void applyShippedDefaults(ProgramConfig& config, const std::filesystem::path& executable,

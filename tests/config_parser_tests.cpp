@@ -766,6 +766,40 @@ namespace
         CHECK(unknownWarnings.size() == 3);
     }
 
+    // Clang's own headers (stddef.h...) shipped next to the binary let the compiler library
+    // compile without an installed clang: it is pointed at the binary itself, from which it
+    // finds <exe dir>/../lib/clang/<version>. A CT_CLANG set by the user always wins.
+    void testShippedClangHeaders()
+    {
+        const auto restore = [](const char* previous)
+        {
+            if (previous)
+                setenv("CT_CLANG", previous, 1);
+            else
+                unsetenv("CT_CLANG");
+        };
+        const char* original = std::getenv("CT_CLANG");
+        const std::string saved = original ? original : "";
+
+        const auto shipped = makeLayout("clang-headers", {"lib/clang/20/include/stddef.h"});
+        const auto executable = shipped / "bin/ctrace";
+        unsetenv("CT_CLANG");
+        CHECK(ctrace::useShippedClangHeaders(executable));
+        CHECK(std::getenv("CT_CLANG") &&
+              std::string(std::getenv("CT_CLANG")) == executable.string());
+
+        setenv("CT_CLANG", "/opt/my/clang", 1);
+        CHECK(!ctrace::useShippedClangHeaders(executable));
+        CHECK(std::string(std::getenv("CT_CLANG")) == "/opt/my/clang");
+
+        unsetenv("CT_CLANG");
+        CHECK(!ctrace::useShippedClangHeaders(makeLayout("clang-headers-bare", {}) / "bin/ctrace"));
+        CHECK(std::getenv("CT_CLANG") == nullptr);
+        CHECK(!ctrace::useShippedClangHeaders({}));
+
+        restore(original ? saved.c_str() : nullptr);
+    }
+
     // --fail-on is the gate policy; it is validated like every other enumerated value.
     void testFailOnPolicy()
     {
@@ -818,6 +852,7 @@ int main()
     testDefaultModelsFillOnlyEmptyFields();
     testBuildConfigAppliesDefaultModels();
     testBundledToolsFollowTheExecutable();
+    testShippedClangHeaders();
     testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;
     return 0;

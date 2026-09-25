@@ -1,0 +1,6 @@
+# Local build trees and caches: a checked-out copy's build/ would otherwise be copied into the
+# release image, where CMake refuses a cache configured for another source directory.
+build/
+build-*/
+.cache/
+.worktrees/
