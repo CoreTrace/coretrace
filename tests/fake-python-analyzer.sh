@@ -9,6 +9,10 @@ code=1
 for arg in "$@"; do
     case "$arg" in
         --fake-exit=*) code="${arg#--fake-exit=}" ;;
+        --fake-cannot-start)
+            # What the dynamic loader prints when the executable cannot run on this system.
+            echo "coretrace-python-analyzer: /lib64/libm.so.6: version \`GLIBC_2.35' not found" >&2
+            exit 1 ;;
         *) target="$arg" ;;
     esac
 done

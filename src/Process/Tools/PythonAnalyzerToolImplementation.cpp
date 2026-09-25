@@ -132,8 +132,11 @@ namespace ctrace
             const auto diagnostics = parseDiagnostics(run->output, root, inputs);
             if (!diagnostics)
             {
-                coretrace::log(coretrace::Level::Warn, coretrace::Module(name()),
-                               "output is not a SARIF document; findings are not counted\n");
+                // The analyzer always reports in SARIF when it ran. Without a report, its exit
+                // code means nothing: a system that cannot load the executable exits 1, which
+                // would otherwise read as "findings".
+                output.error(name() + " did not produce a SARIF report (exit code " +
+                             std::to_string(run->exitCode) + "); the analysis is incomplete");
                 if (config.output.sarif_format)
                 {
                     output.record("stdout", run->output);

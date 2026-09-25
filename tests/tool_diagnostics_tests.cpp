@@ -416,6 +416,14 @@ int main(int argc, char** argv)
         python.executeBatch({main}, config, broken);
         report.expect(broken.failed(), "coretrace-python-analyzer: exit 2 is a failed run");
 
+        // Exit 1 means findings only when the analyzer produced its report: an executable the
+        // system cannot load also exits 1, and must not pass for a clean run.
+        config.tools.args["coretrace-python-analyzer"] = {"--fake-cannot-start"};
+        ToolOutput unloadable(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
+        python.executeBatch({main}, config, unloadable);
+        report.expect(unloadable.failed() && unloadable.diagnostics().empty(),
+                      "coretrace-python-analyzer: exit 1 without a SARIF report is a failed run");
+
         config.tools.args["coretrace-python-analyzer"] = {"--fake-exit=0"};
         ToolOutput clean(nullptr, "coretrace-python-analyzer", /*mirrorToConsole=*/false);
         python.executeBatch({main}, config, clean);
