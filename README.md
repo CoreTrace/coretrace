@@ -1,5 +1,9 @@
 # ctrace
 
+The first standalone milestone provides opt-in static LLVM/Clang linkage for IR
+analysis. See [the build instructions and dependency audit](docs/standalone.md)
+for its current scope; the full single-file source distribution is still in progress.
+
 ### BUILD
 
 ```bash

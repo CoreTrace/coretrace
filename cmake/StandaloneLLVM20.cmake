@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# Initial cache for llvm-project/llvm, not for the CoreTrace build.
+# Reference source: llvmorg-20.1.8, 87f0227cb60147a26a1eeb4fb06e3b505e9c7261.
+set(CMAKE_BUILD_TYPE Release CACHE STRING "Build configuration")
+set(LLVM_ENABLE_PROJECTS clang CACHE STRING "Required frontend")
+set(LLVM_TARGETS_TO_BUILD Native CACHE STRING "Release target backends")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build component archives")
+set(LLVM_BUILD_LLVM_DYLIB OFF CACHE BOOL "No LLVM shared library")
+set(LLVM_LINK_LLVM_DYLIB OFF CACHE BOOL "Use LLVM archives")
+set(CLANG_LINK_CLANG_DYLIB OFF CACHE BOOL "Use Clang archives")
+set(LLVM_ENABLE_RTTI ON CACHE BOOL "CoreTrace ABI profile")
+set(LLVM_ENABLE_EH ON CACHE BOOL "CoreTrace ABI profile")
+set(LLVM_ENABLE_ASSERTIONS OFF CACHE BOOL "Release ABI profile")
+set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "SDK build scope")
+set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "SDK build scope")
+set(LLVM_INCLUDE_BENCHMARKS OFF CACHE BOOL "SDK build scope")
+set(LLVM_ENABLE_ZLIB OFF CACHE STRING "Exclude optional compression dependency")
+set(LLVM_ENABLE_ZSTD OFF CACHE STRING "Exclude optional compression dependency")
+set(LLVM_ENABLE_LIBXML2 OFF CACHE BOOL "Exclude optional XML dependency")
+set(LLVM_ENABLE_LIBEDIT OFF CACHE BOOL "Exclude optional line editor dependency")
+set(LLVM_ENABLE_FFI OFF CACHE BOOL "Exclude optional interpreter dependency")
+set(LLVM_ENABLE_CURL OFF CACHE BOOL "Exclude optional networking dependency")
+set(LLVM_ENABLE_HTTPLIB OFF CACHE BOOL "Exclude optional networking dependency")

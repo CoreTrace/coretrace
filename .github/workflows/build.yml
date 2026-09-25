@@ -21,12 +21,13 @@ permissions:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build on ${{ matrix.os }} (static LLVM=${{ matrix.static_llvm }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-14]
+        static_llvm: ["OFF", "ON"]
 
     steps:
       - name: Checkout code
@@ -47,6 +48,7 @@ jobs:
             cppcheck \
             patchelf
           sudo ./scripts/ci/install-llvm-apt.sh 20
+          sudo apt-get install -y --no-install-recommends libpolly-20-dev
           echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
 
@@ -78,6 +80,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DUSE_THREAD_SANITIZER=OFF \
             -DUSE_ADDRESS_SANITIZER=OFF \
+            -DCORETRACE_STATIC_LLVM=${{ matrix.static_llvm }} \
             -DLLVM_DIR="${LLVM_DIR}" \
             -DClang_DIR="${Clang_DIR}" \
             -DENABLE_PYTHON_ANALYZER=ON \
