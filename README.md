@@ -123,6 +123,11 @@ stdout and written to `--report-file`, ready for `github/codeql-action/upload-sa
     --input src/main.c --report-file ctrace.sarif
 ```
 
+Every tool spells a file the same way: an input as it was typed on the command line, any
+other file relative to the working directory when below it, else absolute. The locations and
+the fingerprints of a run are therefore the same whichever tool reports the finding and on
+whichever machine the run happens, when it runs from the repository root.
+
 A weakness reported by several tools, same file, same line and same CWE, is one result: the
 most severe report is kept in its tool's run, and its `alsoReportedBy` property names the other
 tools and rules. Reports without a CWE cannot be matched and are all kept; the console output
