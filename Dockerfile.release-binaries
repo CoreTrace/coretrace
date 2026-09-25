@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV CC=gcc-${GCC_VERSION} CXX=g++-${GCC_VERSION}
 
-COPY scripts/ci/install-llvm-apt.sh /usr/local/bin/install-llvm-apt.sh
+COPY scripts/ci/install-llvm-apt.sh scripts/ci/retry.sh /usr/local/bin/
 RUN install-llvm-apt.sh ${LLVM_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 

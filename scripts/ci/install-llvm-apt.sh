@@ -20,16 +20,23 @@ if [[ -z "${codename}" ]]; then
     exit 1
 fi
 
+# apt.llvm.org drops connections and DNS for up to a minute or so, which failed releases at
+# every step below: each network step is retried, 5 times over about 2.5 minutes.
+# shellcheck source=retry.sh
+. "$(dirname "$0")/retry.sh"
+
 keyring=/etc/apt/keyrings/apt.llvm.org.gpg
 install -d -m 0755 /etc/apt/keyrings
-# --retry alone ignores connection failures, which is how this step flakes in CI.
-curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 15 \
-    https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o "${keyring}"
+fetch_key() {
+    curl -fsSL --connect-timeout 15 https://apt.llvm.org/llvm-snapshot.gpg.key |
+        gpg --batch --yes --dearmor -o "${keyring}"
+}
+retry 5 10 fetch_key
 echo "deb [signed-by=${keyring}] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${llvm_version} main" \
     > /etc/apt/sources.list.d/apt.llvm.org.list
 
-apt-get update
-apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+retry 5 10 apt-get update
+retry 5 10 apt-get install -y --no-install-recommends \
     "llvm-${llvm_version}" \
     "llvm-${llvm_version}-dev" \
     "clang-${llvm_version}" \
