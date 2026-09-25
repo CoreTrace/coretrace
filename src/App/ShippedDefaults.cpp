@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <system_error>
 
 namespace ctrace
@@ -137,5 +138,24 @@ namespace ctrace
         }
         applyDefaultModels(config, defaultModelsDirectory(executable), warnings);
         applyBundledTools(config, executable);
+    }
+
+    bool useShippedClangHeaders(const std::filesystem::path& executable)
+    {
+        const char* configured = std::getenv("CT_CLANG");
+        if (executable.empty() || (configured != nullptr && *configured != '\0'))
+        {
+            return false;
+        }
+        std::error_code err;
+        const std::filesystem::path clangDir = executable.parent_path() / ".." / "lib" / "clang";
+        for (const auto& version : std::filesystem::directory_iterator(clangDir, err))
+        {
+            if (std::filesystem::is_regular_file(version.path() / "include" / "stddef.h", err))
+            {
+                return setenv("CT_CLANG", executable.string().c_str(), /*overwrite=*/1) == 0;
+            }
+        }
+        return false;
     }
 } // namespace ctrace

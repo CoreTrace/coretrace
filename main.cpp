@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "App/Config.hpp"
 #include "App/Runner.hpp"
+#include "App/ShippedDefaults.hpp"
 
 #include <coretrace/logger.hpp>
 
@@ -47,6 +48,8 @@ int main(int argc, char* argv[])
     {
         return loaded.exitCode;
     }
+    // Before any thread starts: it sets CT_CLANG for the compiler library.
+    ctrace::useShippedClangHeaders(loaded.executable);
 
     // Last resort: a failure nobody handled is reported, not a process abort.
     try
