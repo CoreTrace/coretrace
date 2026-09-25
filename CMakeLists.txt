@@ -432,6 +432,9 @@ add_test(NAME ctrace_stack_analyzer_findings_name_rule_and_cwe
 add_test(NAME ctrace_stack_analyzer_recursion_has_a_rule
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer --input ${CMAKE_SOURCE_DIR}/tests/infinite_recursion.c > ${CMAKE_BINARY_DIR}/recursion.sarif 2>/dev/null && grep -q '\"ruleId\": \"Recursion.Unconditional\"' ${CMAKE_BINARY_DIR}/recursion.sarif && grep -q '\"cwe\": \"CWE-674\"' ${CMAKE_BINARY_DIR}/recursion.sarif && ! grep -q '\"ruleId\": \"None\"' ${CMAKE_BINARY_DIR}/recursion.sarif")
 
+# The CI's network steps retry with a growing delay (apt.llvm.org drops connections).
+add_test(NAME ctrace_ci_retry_helper COMMAND sh ${CMAKE_SOURCE_DIR}/tests/retry_test.sh)
+
 # Python sources go to the Python analyzer only; the C/C++ tools never see them.
 add_test(NAME ctrace_python_file_skips_c_tools
     COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
