@@ -416,6 +416,11 @@ set(ctrace_dedup_sarif ${CMAKE_BINARY_DIR}/ctrace-dedup.sarif)
 add_test(NAME ctrace_sarif_merges_cross_tool_duplicates
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer --config ${CMAKE_SOURCE_DIR}/config/tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_dedup_sarif} > /dev/null && test $(grep -c 'coretrace/v1' ${ctrace_dedup_sarif}) -eq 1 && grep -q 'alsoReportedBy' ${ctrace_dedup_sarif}")
 
+# Every stack analyzer finding names its rule and CWE (coretrace-stack-analyzer >= v0.21.0):
+# the strcpy overflow is MemcpyWithStackDest, CWE-120, the CWE flawfinder gives it too.
+add_test(NAME ctrace_stack_analyzer_findings_name_rule_and_cwe
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer --input ${CMAKE_SOURCE_DIR}/tests/buffer_overflow.cc > ${CMAKE_BINARY_DIR}/rule-cwe.sarif 2>/dev/null && grep -q '\"ruleId\": \"MemcpyWithStackDest\"' ${CMAKE_BINARY_DIR}/rule-cwe.sarif && grep -q '\"cwe\": \"CWE-120\"' ${CMAKE_BINARY_DIR}/rule-cwe.sarif")
+
 # Python sources go to the Python analyzer only; the C/C++ tools never see them.
 add_test(NAME ctrace_python_file_skips_c_tools
     COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
