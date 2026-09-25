@@ -3,6 +3,9 @@ build/
 
 # Analyzer cache and reports produced by a run with config/tool-config.json
 config/.cache/
+# The stack analyzer's cache, written in the working directory of any run from the repository
+# root (the tests do so).
+/.cache/
 coretrace-results.json
 ctrace-report.txt
 
