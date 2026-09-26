@@ -50,6 +50,20 @@ so it follows data across modules, but it only reports findings located in the f
 `requirements.txt`. The project root is the nearest directory above the file that holds
 `pyproject.toml`, `setup.py`, `setup.cfg` or `.git`, else the file's own directory.
 
+### TESTS
+
+```bash
+ctest --test-dir build                  # every test
+ctest --test-dir build -L unit          # one component, in process
+ctest --test-dir build -L integration   # ctrace, a server, a socket peer or a real tool
+```
+
+Coverage of CoreTrace's own code (`src/`, `include/`, `main.cpp`) needs a Clang build with
+`-DCORETRACE_COVERAGE=ON`. `scripts/ci/coverage.sh <build> <output>` then runs the tests and
+writes a report for the unit tests, the integration tests and both, with an HTML report in
+`<output>/html`. CI publishes the same report as the `coverage-report` artifact. On Linux, set
+`LLVM_PROFDATA` and `LLVM_COV` to the tools of your Clang (`llvm-profdata-20`, `llvm-cov-20`).
+
 ### CODE STYLE (clang-format)
 
 - Version cible : `clang-format` 17 (utilisée dans la CI).
