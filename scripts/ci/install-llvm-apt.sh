@@ -35,9 +35,14 @@ retry 5 10 fetch_key
 echo "deb [signed-by=${keyring}] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${llvm_version} main" \
     > /etc/apt/sources.list.d/apt.llvm.org.list
 
-retry 5 10 apt-get update
-retry 5 10 apt-get install -y --no-install-recommends \
-    "llvm-${llvm_version}" \
-    "llvm-${llvm_version}-dev" \
-    "clang-${llvm_version}" \
-    "libclang-${llvm_version}-dev"
+# apt-get update only warns when it cannot fetch an index, and exits 0: the failure shows up at
+# install, as packages it cannot locate. Each attempt therefore refreshes the index first.
+install_llvm() {
+    apt-get update &&
+        apt-get install -y --no-install-recommends \
+            "llvm-${llvm_version}" \
+            "llvm-${llvm_version}-dev" \
+            "clang-${llvm_version}" \
+            "libclang-${llvm_version}-dev"
+}
+retry 5 10 install_llvm
