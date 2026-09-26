@@ -61,8 +61,9 @@ ctest --test-dir build -L integration   # ctrace, a server, a socket peer or a r
 Coverage of CoreTrace's own code (`src/`, `include/`, `main.cpp`) needs a Clang build with
 `-DCORETRACE_COVERAGE=ON`. `scripts/ci/coverage.sh <build> <output>` then runs the tests and
 writes a report for the unit tests, the integration tests and both, with an HTML report in
-`<output>/html`. CI publishes the same report as the `coverage-report` artifact. On Linux, set
-`LLVM_PROFDATA` and `LLVM_COV` to the tools of your Clang (`llvm-profdata-20`, `llvm-cov-20`).
+`<output>/html`. CI publishes the same report as the `coverage-report` artifact. On Linux, the
+build links Clang's profile runtime (`libclang-rt-20-dev` from apt.llvm.org), and `LLVM_PROFDATA`
+and `LLVM_COV` name the tools of your Clang (`/usr/lib/llvm-20/bin/llvm-profdata`, `llvm-cov`).
 
 ### CODE STYLE (clang-format)
 
