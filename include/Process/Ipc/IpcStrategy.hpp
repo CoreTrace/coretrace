@@ -39,6 +39,12 @@ class UnixSocketStrategy : public IpcStrategy
     int sock;
     std::string path;
 
+#ifdef MSG_NOSIGNAL
+    static constexpr int kSendFlags = MSG_NOSIGNAL;
+#else
+    static constexpr int kSendFlags = 0; // SO_NOSIGPIPE, set on the socket, does it instead.
+#endif
+
   public:
     explicit UnixSocketStrategy(const std::string& socketPath) : sock(-1), path(socketPath)
     {
@@ -47,13 +53,21 @@ class UnixSocketStrategy : public IpcStrategy
         {
             throw std::runtime_error("Error socket creation: " + std::string(strerror(errno)));
         }
+#ifdef SO_NOSIGPIPE
+        // A reader that went away must be an error for write(), not a SIGPIPE ending ctrace.
+        const int enabled = 1;
+        (void)setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled));
+#endif
         sockaddr_un addr;
         memset(&addr, 0, sizeof(addr));
         addr.sun_family = AF_UNIX;
         strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
         if (connect(sock, (sockaddr*)&addr, sizeof(addr)) == -1)
         {
-            throw std::runtime_error("Error socket connexion: " + std::string(strerror(errno)));
+            const std::string reason = strerror(errno);
+            ::close(sock); // The destructor does not run when the constructor throws.
+            sock = -1;
+            throw std::runtime_error("Error socket connexion: " + reason);
         }
     }
     ~UnixSocketStrategy()
@@ -67,7 +81,7 @@ class UnixSocketStrategy : public IpcStrategy
             throw ctrace::ipc::SocketError(std::string("Socket is not connected: ") +
                                            strerror(errno));
         }
-        if (send(sock, data.c_str(), data.size(), 0) == -1)
+        if (send(sock, data.c_str(), data.size(), kSendFlags) == -1)
         {
             throw ctrace::ipc::SocketError(std::string("Connection failed: ") + strerror(errno));
         }

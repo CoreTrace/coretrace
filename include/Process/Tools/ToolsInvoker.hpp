@@ -171,33 +171,18 @@ namespace ctrace
         }
 
         // Execute all static analysis tools
-        void runStaticTools(const std::string& file)
-        {
-            runStaticTools(std::vector<std::string>{file});
-        }
-
         void runStaticTools(const std::vector<std::string>& files)
         {
             runToolList(static_tools, files);
         }
 
         // Execute all dynamic analysis tools
-        void runDynamicTools(const std::string& file)
-        {
-            runDynamicTools(std::vector<std::string>{file});
-        }
-
         void runDynamicTools(const std::vector<std::string>& files)
         {
             runToolList(dynamic_tools, files);
         }
 
         // Execute a specific tool list
-        void runSpecificTools(const std::vector<std::string>& tool_names, const std::string& file)
-        {
-            runSpecificTools(tool_names, std::vector<std::string>{file});
-        }
-
         void runSpecificTools(const std::vector<std::string>& tool_names,
                               const std::vector<std::string>& files)
         {
@@ -268,25 +253,8 @@ namespace ctrace
       private:
         void executeTool(const std::string& tool_name, const std::string& file)
         {
-            auto tool_it = tools.find(tool_name);
-            if (tool_it == tools.end())
-            {
-                coretrace::log(coretrace::Level::Error, "Unknown tool: {}\n", tool_name);
-                return;
-            }
-
-            ToolOutput output(m_output_capture, tool_name, /*mirrorToConsole=*/true);
-            auto lock_it = toolLocks.find(tool_name);
-            if (lock_it != toolLocks.end() && lock_it->second)
-            {
-                std::lock_guard<std::mutex> lock(*lock_it->second);
-                tool_it->second->execute(file, m_config, output);
-                recordDiagnostics(tool_name, output);
-                return;
-            }
-
-            tool_it->second->execute(file, m_config, output);
-            recordDiagnostics(tool_name, output);
+            runTool(tool_name, [&](const IAnalysisTool& tool, ToolOutput& output)
+                    { tool.execute(file, m_config, output); });
         }
 
         void executeBatchTool(const std::string& tool_name, const std::vector<std::string>& files)
@@ -295,7 +263,15 @@ namespace ctrace
             {
                 return;
             }
+            runTool(tool_name, [&](const IAnalysisTool& tool, ToolOutput& output)
+                    { tool.executeBatch(files, m_config, output); });
+        }
 
+        /// Runs `tool_name` under its lock and records what it reported. A tool that throws
+        /// failed, like one that could not start: its error goes to its sink, the run is
+        /// incomplete, and the other tools still run.
+        template <typename Execute> void runTool(const std::string& tool_name, Execute&& execute)
+        {
             auto tool_it = tools.find(tool_name);
             if (tool_it == tools.end())
             {
@@ -304,16 +280,20 @@ namespace ctrace
             }
 
             ToolOutput output(m_output_capture, tool_name, /*mirrorToConsole=*/true);
-            auto lock_it = toolLocks.find(tool_name);
-            if (lock_it != toolLocks.end() && lock_it->second)
+            std::unique_lock<std::mutex> lock;
+            if (auto lock_it = toolLocks.find(tool_name);
+                lock_it != toolLocks.end() && lock_it->second)
             {
-                std::lock_guard<std::mutex> lock(*lock_it->second);
-                tool_it->second->executeBatch(files, m_config, output);
-                recordDiagnostics(tool_name, output);
-                return;
+                lock = std::unique_lock<std::mutex>(*lock_it->second);
             }
-
-            tool_it->second->executeBatch(files, m_config, output);
+            try
+            {
+                execute(*tool_it->second, output);
+            }
+            catch (const std::exception& e)
+            {
+                output.error(e.what());
+            }
             recordDiagnostics(tool_name, output);
         }
 

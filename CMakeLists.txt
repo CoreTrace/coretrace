@@ -63,6 +63,20 @@ function(coretrace_enable_warnings target)
     endif()
 endfunction()
 
+# Source-based coverage of the code we own (scripts/ci/coverage.sh reads it). Our targets are
+# built at -O0 so that every line maps to what ran; fetched dependencies are not instrumented.
+option(CORETRACE_COVERAGE "Instrument CoreTrace's own targets for llvm-cov (Clang only)" OFF)
+if (CORETRACE_COVERAGE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "CORETRACE_COVERAGE needs Clang: it uses source-based coverage")
+endif()
+
+function(coretrace_enable_coverage target)
+    if (CORETRACE_COVERAGE)
+        target_compile_options(${target} PRIVATE -O0 -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(${target} PRIVATE -fprofile-instr-generate)
+    endif()
+endfunction()
+
 if (USE_THREAD_SANITIZER)
     include(${CMAKE_SOURCE_DIR}/cmake/debug/sanitizer/ThreadSanitizer.cmake)
 endif()
@@ -216,6 +230,9 @@ add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
 add_executable(ctrace_tool_output_tests tests/tool_output_tests.cpp)
 add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 
+add_executable(ctrace_report_file_tests tests/report_file_tests.cpp)
+add_test(NAME ctrace_report_file_tests COMMAND ctrace_report_file_tests)
+
 # The unified diagnostic model and the per-tool parsers that feed it.
 add_executable(ctrace_tool_diagnostics_tests
     tests/tool_diagnostics_tests.cpp
@@ -264,6 +281,12 @@ add_test(NAME ctrace_exit_3_when_a_tool_cannot_run
     COMMAND sh -c "$<TARGET_FILE:ctrace> --config ${CMAKE_SOURCE_DIR}/tests/missing-tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck; test $? -eq 3")
 add_test(NAME ctrace_help_lists_fail_on COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSION "--fail-on")
+# Nothing to analyze is a usage error. A SARIF report that cannot be written is a warning: the
+# log still reaches stdout and the verdict stands.
+add_test(NAME ctrace_exit_1_without_input
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No input files resolved'")
+add_test(NAME ctrace_unwritable_sarif_report_keeps_the_verdict
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${CMAKE_SOURCE_DIR}/tests/double_free.c/report.sarif 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Unable to write the SARIF report' && printf '%s\\n' \"$out\" | grep -q '\"name\": \"cppcheck\"'")
 
 # External tool findings feed the same counters as the stack analyzer; a tool whose output
 # was not interpreted says so instead of reporting zero.
@@ -337,6 +360,19 @@ target_link_libraries(ctrace_server_http_tests
             httplib::httplib)
 add_test(NAME ctrace_server_http_tests COMMAND ctrace_server_http_tests)
 
+# The server as `ctrace --ipc serve` runs it: an analysis over HTTP, then a clean shutdown.
+add_executable(ctrace_server_cli_tests tests/server_cli_tests.cpp)
+target_link_libraries(ctrace_server_cli_tests
+    PRIVATE nlohmann_json::nlohmann_json httplib::httplib)
+add_test(NAME ctrace_server_cli_tests
+    COMMAND ctrace_server_cli_tests $<TARGET_FILE:ctrace> ${CMAKE_SOURCE_DIR})
+set_tests_properties(ctrace_server_cli_tests PROPERTIES TIMEOUT 120)
+# The bind policy holds from the command line: no token, no host beyond the loopback. A
+# server that started anyway would never return, hence the timeout.
+add_test(NAME ctrace_serve_refuses_an_exposed_host_without_token
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --ipc serve --serve-host 0.0.0.0 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Refusing to serve'")
+set_tests_properties(ctrace_serve_refuses_an_exposed_host_without_token PROPERTIES TIMEOUT 30)
+
 # K4: the bridge report explains every option forwarded to the analyzer, at verbose level.
 add_test(NAME ctrace_bridge_report_is_logged
     COMMAND ctrace --verbose --config ${CMAKE_SOURCE_DIR}/config/tool-config.json
@@ -358,6 +394,15 @@ add_test(NAME ctrace_socket_failure_is_reported
 set_tests_properties(ctrace_socket_failure_is_reported PROPERTIES
     PASS_REGULAR_EXPRESSION "deprecated"
     FAIL_REGULAR_EXPRESSION "terminating due to uncaught exception")
+
+# A reachable socket receives the reports; a reader that goes away is an error, not a SIGPIPE.
+find_package(Threads REQUIRED)
+add_executable(ctrace_ipc_socket_tests tests/ipc_socket_tests.cpp)
+target_link_libraries(ctrace_ipc_socket_tests PRIVATE coretrace::logger Threads::Threads)
+add_test(NAME ctrace_ipc_socket_tests COMMAND ctrace_ipc_socket_tests)
+add_test(NAME ctrace_ipc_socket_through_the_cli
+    COMMAND ctrace_ipc_socket_tests --ctrace $<TARGET_FILE:ctrace>
+        ${CMAKE_SOURCE_DIR}/tests/double_free.c)
 
 # Compatibility gate with the pinned coretrace-stack-analyzer library (see ROADMAP.md K10).
 add_executable(ctrace_stack_analyzer_bridge_tests
@@ -457,6 +502,40 @@ set_tests_properties(ctrace_python_analyzer_summary PROPERTIES
 add_test(NAME ctrace_python_analyzer_runs_once_per_project
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --fail-on none --config ${CMAKE_BINARY_DIR}/fake-python-analyzer.json --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py,${CMAKE_SOURCE_DIR}/tests/python/project/app/other.py --invoke coretrace-python-analyzer 2>&1); printf '%s\\n' \"$out\"; test $(printf '%s\\n' \"$out\" | grep -c 'Running coretrace-python-analyzer on') -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Diagnostics summary: info=0, warning=0, error=3'")
 
+# C and Python in one run: one SARIF log, one run per tool, each finding in a file of its
+# tool's language.
+add_executable(ctrace_mixed_language_tests tests/mixed_language_tests.cpp)
+target_link_libraries(ctrace_mixed_language_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+add_test(NAME ctrace_mixed_language_tests
+    COMMAND ctrace_mixed_language_tests $<TARGET_FILE:ctrace> ${CMAKE_SOURCE_DIR}
+        ${CMAKE_BINARY_DIR}/fake-python-analyzer.json ${CMAKE_BINARY_DIR})
+
+# A compilation database drives the inputs end to end: each source is resolved against its
+# entry's directory, and a discovered database's dependency entries (_deps) are left out
+# unless --include-compdb-deps asks for them.
+set(ctrace_compdb_fixture ${CMAKE_BINARY_DIR}/compdb-fixture)
+file(WRITE ${ctrace_compdb_fixture}/_deps/dep/dep.c "int dep(void) { return 0; }\n")
+file(WRITE ${ctrace_compdb_fixture}/compile_commands.json
+    "[\n  {\"directory\": \"${CMAKE_SOURCE_DIR}/tests\", \"file\": \"double_free.c\", \"command\": \"cc -c double_free.c\"},\n  {\"directory\": \"${ctrace_compdb_fixture}\", \"file\": \"_deps/dep/dep.c\", \"command\": \"cc -c _deps/dep/dep.c\"}\n]\n")
+add_test(NAME ctrace_compile_commands_drive_the_inputs
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --fail-on none --invoke cppcheck --compile-commands ${ctrace_compdb_fixture} 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*tests/double_free.c' && ! printf '%s\\n' \"$out\" | grep -q '_deps/dep/dep.c'")
+add_test(NAME ctrace_compile_commands_include_deps_on_request
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --fail-on none --invoke cppcheck --compile-commands ${ctrace_compdb_fixture} --include-compdb-deps 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*tests/double_free.c' && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*_deps/dep/dep.c'")
+
+# --static runs every static tool on the files of its language. flawfinder, TscanCode and IKOS
+# are pointed at missing commands, so that the result does not depend on what is installed:
+# they are reported and the analysis is incomplete (exit 3), while cppcheck and the stack
+# analyzer analyze the C file and the Python analyzer the Python one.
+file(WRITE ${CMAKE_BINARY_DIR}/static-tools.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-python-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-python-analyzer.sh\"}, \"flawfinder\": {\"path\": \"/nonexistent/ctrace-flawfinder\"}, \"tscancode\": {\"path\": \"/nonexistent/ctrace-tscancode\"}, \"ikos\": {\"path\": \"/nonexistent/ctrace-ikos\"}}}\n")
+add_test(NAME ctrace_static_runs_every_static_tool
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --static --config ${CMAKE_BINARY_DIR}/static-tools.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c,${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Running static analysis on 2 file(s)' && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*double_free.c' && printf '%s\\n' \"$out\" | grep -q '(ctrace_stack_analyzer) Diagnostics summary: info=0, warning=0, error=1' && printf '%s\\n' \"$out\" | grep -q 'Running coretrace-python-analyzer on .* for 1 input file(s)' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: flawfinder,ikos,tscancode could not run' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*main.py'")
+# --dyn runs the dynamic tool slots. They are placeholders until the runtime analyzer takes
+# them (#53, #112): they run without failing and report nothing.
+add_test(NAME ctrace_dyn_runs_the_dynamic_tools
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input ${CMAKE_SOURCE_DIR}/tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Running dynamic analysis on 1 file(s)' && test $(printf '%s\\n' \"$out\" | grep -c 'Running dyn_tools_[123] on') -eq 3")
+
 # A bundled tool is found next to ctrace, from a copy of the release layout run elsewhere with
 # an empty environment. The stand-in covers the lookup everywhere; the real standalone
 # analyzer covers "no Python needed" when it is built.
@@ -480,6 +559,31 @@ if(ENABLE_PYTHON_ANALYZER)
         PASS_REGULAR_EXPRESSION "calculator\\.py:4:[0-9]+: error: .*\\[coretrace-python-analyzer/code-injection\\]")
 endif()
 
+# `ctest -L unit` runs the tests of one component in process; `ctest -L integration` those that
+# run ctrace, a server, a socket peer or a real analysis tool. A test not listed here is an
+# integration test.
+set(coretrace_unit_tests
+    ctrace_config_tests
+    ctrace_tool_arguments_tests
+    ctrace_files_tests
+    ctrace_tool_output_tests
+    ctrace_report_file_tests
+    ctrace_tool_diagnostics_tests
+    ctrace_tool_routing_tests
+    ctrace_exit_policy_tests
+    ctrace_process_tests
+    ctrace_ipc_socket_tests
+    ctrace_ci_retry_helper
+)
+get_property(coretrace_tests DIRECTORY PROPERTY TESTS)
+foreach(coretrace_test IN LISTS coretrace_tests)
+    if(coretrace_test IN_LIST coretrace_unit_tests)
+        set_tests_properties(${coretrace_test} PROPERTIES LABELS unit)
+    else()
+        set_tests_properties(${coretrace_test} PROPERTIES LABELS integration)
+    endif()
+endforeach()
+
 # Applied last so every executable we own exists by now.
 foreach(coretrace_target
     ctrace
@@ -487,12 +591,18 @@ foreach(coretrace_target
     ctrace_tool_arguments_tests
     ctrace_files_tests
     ctrace_tool_output_tests
+    ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
+    ctrace_tool_routing_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
+    ctrace_ipc_socket_tests
     ctrace_server_concurrency_tests
     ctrace_server_http_tests
+    ctrace_server_cli_tests
+    ctrace_mixed_language_tests
     ctrace_stack_analyzer_bridge_tests
 )
     coretrace_enable_warnings(${coretrace_target})
+    coretrace_enable_coverage(${coretrace_target})
 endforeach()

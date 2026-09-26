@@ -159,6 +159,15 @@ class UnixProcess : public Process
         return content;
     }
 
+    /// What a PATH lookup accepts, as a shell does: an executable regular file. A directory is
+    /// searchable, so execute permission alone would let it hide a later PATH entry.
+    [[nodiscard]] static bool isExecutableFile(const std::string& path)
+    {
+        struct stat st{};
+        return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode) &&
+               access(path.c_str(), X_OK) == 0;
+    }
+
     void resolveCommandPath()
     {
         if (command_.find('/') != std::string::npos)
@@ -187,7 +196,7 @@ class UnixProcess : public Process
             if (!dir.empty())
             {
                 const std::string candidate = dir + "/" + command_;
-                if (access(candidate.c_str(), X_OK) == 0)
+                if (isExecutableFile(candidate))
                 {
                     resolvedPath_ = candidate;
                     return;
