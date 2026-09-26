@@ -5,6 +5,9 @@ project(ArgumentManagerProject VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# No C++20 modules here. Built with Clang and Ninja, CMake would otherwise scan every source
+# for them with clang-scan-deps, which Debian and Ubuntu ship apart from clang (clang-tools).
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 include(${CMAKE_SOURCE_DIR}/cmake/CoreTraceVersion.cmake)
 coretrace_resolve_version(CTRACE_VERSION_STRING CTRACE_VERSION_SOURCE)
