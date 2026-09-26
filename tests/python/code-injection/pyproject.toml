@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Fixture: a Python project for coretrace-python-analyzer. This file marks its root.
+[project]
+name = "coretrace-code-injection-fixture"
+version = "0"

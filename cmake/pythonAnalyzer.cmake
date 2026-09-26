@@ -13,7 +13,7 @@
 # script built elsewhere (the release builds it on an older distribution than ctrace).
 include(ExternalProject)
 
-set(CORETRACE_PYTHON_ANALYZER_TAG "v0.6.0" CACHE STRING
+set(CORETRACE_PYTHON_ANALYZER_TAG "v0.12.0" CACHE STRING
     "coretrace-python-analyzer tag to build")
 set(CORETRACE_PYTHON_ANALYZER_SOURCE_DIR "" CACHE PATH
     "Local coretrace-python-analyzer checkout to build instead of downloading the tag")

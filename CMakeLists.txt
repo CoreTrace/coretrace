@@ -471,6 +471,13 @@ if(ENABLE_PYTHON_ANALYZER)
     set(ctrace_install_check ${CMAKE_BINARY_DIR}/install-check)
     add_test(NAME ctrace_install_ships_python_analyzer
         COMMAND sh -c "rm -rf '${ctrace_install_check}' && '${CMAKE_COMMAND}' --install '${CMAKE_BINARY_DIR}' --prefix '${ctrace_install_check}' > /dev/null && sh '${CMAKE_SOURCE_DIR}/tests/python/check-installed.sh' '${ctrace_install_check}' '${ctrace_install_check}-work'")
+    # The shipped analyzer's rules reach the report: code-injection is one of its 0.11.0.
+    add_test(NAME ctrace_python_analyzer_reports_code_injection
+        COMMAND ctrace --fail-on none
+            --input ${CMAKE_SOURCE_DIR}/tests/python/code-injection/calculator.py
+            --invoke coretrace-python-analyzer)
+    set_tests_properties(ctrace_python_analyzer_reports_code_injection PROPERTIES
+        PASS_REGULAR_EXPRESSION "calculator\\.py:4:[0-9]+: error: .*\\[coretrace-python-analyzer/code-injection\\]")
 endif()
 
 # Applied last so every executable we own exists by now.
