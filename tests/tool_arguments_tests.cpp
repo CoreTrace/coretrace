@@ -69,6 +69,23 @@ int main()
         report.expect(contains(args, "--format=text") && !contains(args, "--format=json"),
                       "ikos: without SARIF the text format is used");
     }
+    // ikos names entry points as the binary does: plain in C, Itanium-mangled in C++, and an
+    // already mangled name is kept.
+    {
+        report.expect(
+            contains(IkosToolImplementation::buildArguments(configWithSarif(false), "a.c"),
+                     "--entry-points=main"),
+            "ikos: a C entry point keeps its name");
+        report.expect(
+            contains(IkosToolImplementation::buildArguments(configWithSarif(false), "a.cpp"),
+                     "--entry-points=_Z4mainv"),
+            "ikos: a C++ entry point is mangled");
+        ctrace::ProgramConfig mangled = configWithSarif(false);
+        mangled.files.entry_points = {"_Z3runi"};
+        report.expect(contains(IkosToolImplementation::buildArguments(mangled, "a.cpp"),
+                               "--entry-points=_Z3runi"),
+                      "ikos: an already mangled C++ entry point is kept");
+    }
     {
         // The merged SARIF document is rendered by CoreTrace from the model, so cppcheck
         // always runs with the template CoreTrace parses, whatever the output mode.

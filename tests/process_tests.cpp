@@ -4,10 +4,16 @@
 #include "Process/ProcessFactory.hpp"
 
 #include <csignal>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <unistd.h>
 
 namespace
 {
@@ -104,6 +110,134 @@ namespace
                       "missing command with path: explicit error naming the path");
     }
 
+    namespace fs = std::filesystem;
+
+    /// The error execute() throws for `command`; empty when the command runs.
+    std::string executeError(const std::string& command)
+    {
+        try
+        {
+            auto process = ProcessFactory::createProcess(command);
+            (void)process->execute();
+        }
+        catch (const std::runtime_error& e)
+        {
+            return e.what();
+        }
+        return {};
+    }
+
+    void writeScript(const fs::path& path, const std::string& body, fs::perms permissions)
+    {
+        std::ofstream(path) << "#!/bin/sh\n" << body << "\n";
+        fs::permissions(path, permissions);
+    }
+
+    /// Sets PATH for the scope, and restores the previous value (or its absence) after.
+    class ScopedPath
+    {
+      public:
+        explicit ScopedPath(const std::optional<std::string>& value)
+        {
+            if (const char* current = std::getenv("PATH"))
+            {
+                saved_ = current;
+            }
+            if (value)
+            {
+                ::setenv("PATH", value->c_str(), 1);
+            }
+            else
+            {
+                ::unsetenv("PATH");
+            }
+        }
+
+        ~ScopedPath()
+        {
+            if (saved_)
+            {
+                ::setenv("PATH", saved_->c_str(), 1);
+            }
+            else
+            {
+                ::unsetenv("PATH");
+            }
+        }
+
+        ScopedPath(const ScopedPath&) = delete;
+        ScopedPath& operator=(const ScopedPath&) = delete;
+
+      private:
+        std::optional<std::string> saved_;
+    };
+
+    void testUnsetPathIsAnExplicitError(TestReport& report)
+    {
+        const ScopedPath noPath(std::nullopt);
+        const std::string error = executeError("sh");
+        report.expect(error.find("PATH is not set") != std::string::npos,
+                      "unset PATH: the error says so (got '" + error + "')");
+    }
+
+    void testCommandThatCannotRun(TestReport& report, const fs::path& base)
+    {
+        const fs::path notExecutable = base / "not-executable";
+        writeScript(notExecutable, "exit 0", fs::perms::owner_read | fs::perms::owner_write);
+        const std::string denied = executeError(notExecutable.string());
+        report.expect(denied.find("Command not executable") != std::string::npos,
+                      "a file without execute permission is refused (got '" + denied + "')");
+
+        const std::string directory = executeError(base.string() + "/");
+        report.expect(directory.find("not a regular file") != std::string::npos,
+                      "a directory is not run as a command (got '" + directory + "')");
+    }
+
+    // As a shell does: a directory named like the command does not hide the executable that a
+    // later PATH entry holds.
+    void testPathLookupSkipsDirectories(TestReport& report, const fs::path& base)
+    {
+        const fs::path shadow = base / "shadow";
+        const fs::path bin = base / "bin";
+        fs::create_directories(shadow / "ctrace-probe-tool");
+        fs::create_directories(bin);
+        writeScript(bin / "ctrace-probe-tool", "echo probe-found", fs::perms::owner_all);
+
+        const ScopedPath path(shadow.string() + ":" + bin.string());
+        std::string error;
+        ProcessResult result;
+        try
+        {
+            result = ProcessFactory::createProcess("ctrace-probe-tool")->execute();
+        }
+        catch (const std::runtime_error& e)
+        {
+            error = e.what();
+        }
+        report.expect(error.empty() && result.succeeded() &&
+                          result.output.find("probe-found") != std::string::npos,
+                      "PATH lookup skips a directory with the command's name (" +
+                          (error.empty() ? result.output : error) + ")");
+    }
+
+    void testLargeOutputIsCapturedWhole(TestReport& report)
+    {
+        const ProcessResult result = runShell("head -c 1000000 /dev/zero | tr '\\000' x");
+        report.expect(result.succeeded() && result.output.size() == 1000000,
+                      "a megabyte of output is captured whole (got " +
+                          std::to_string(result.output.size()) + " bytes)");
+    }
+
+    void testArgumentsArePassedVerbatim(TestReport& report)
+    {
+        auto process = ProcessFactory::createProcess(
+            "sh", {"-c", "printf '%s|' \"$@\"", "sh", "two words", "with \"quotes\"", "$HOME"});
+        const ProcessResult result = process->execute();
+        report.expect(result.output == "two words|with \"quotes\"|$HOME|",
+                      "arguments reach the command verbatim, never through a shell (got '" +
+                          result.output + "')");
+    }
+
     void testDescribeFailure(TestReport& report)
     {
         ProcessResult exited;
@@ -131,6 +265,17 @@ int main()
     testMissingCommandIsAnExplicitError(report);
     testMissingCommandWithPathIsAnExplicitError(report);
     testDescribeFailure(report);
+
+    const fs::path base =
+        fs::temp_directory_path() / ("ctrace-process-" + std::to_string(::getpid()));
+    fs::remove_all(base);
+    fs::create_directories(base);
+    testUnsetPathIsAnExplicitError(report);
+    testCommandThatCannotRun(report, base);
+    testPathLookupSkipsDirectories(report, base);
+    testLargeOutputIsCapturedWhole(report);
+    testArgumentsArePassedVerbatim(report);
+    fs::remove_all(base);
 
     if (report.failures == 0)
     {

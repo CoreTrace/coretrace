@@ -87,6 +87,59 @@ namespace
         bool m_batch;
     };
 
+    /// A tool whose run throws, as one whose report cannot be delivered does.
+    class ThrowingTool : public ctrace::AnalysisToolBase
+    {
+      public:
+        explicit ThrowingTool(bool batch) : m_batch(batch) {}
+
+        void execute(const std::string&, const ctrace::ProgramConfig&,
+                     ctrace::ToolOutput&) const override
+        {
+            throw std::runtime_error("report could not be delivered");
+        }
+
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return m_batch;
+        }
+
+        std::string name() const override
+        {
+            return "fake_throws";
+        }
+
+      private:
+        bool m_batch;
+    };
+
+    // A tool that throws fails like one that cannot start: the run goes on and is incomplete.
+    void checkThrowingToolFails(TestReport& report, std::launch policy, bool batch,
+                                const std::string& label)
+    {
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 2, policy);
+        auto seen = std::make_shared<Seen>();
+        invoker.registerTool("fake_throws", std::make_unique<ThrowingTool>(batch));
+        invoker.registerTool("fake_c",
+                             std::make_unique<RecordingTool>("fake_c", seen, false, batch));
+
+        bool threw = false;
+        try
+        {
+            invoker.runSpecificTools({"fake_throws", "fake_c"}, std::vector<std::string>{"a.c"});
+        }
+        catch (const std::exception&)
+        {
+            threw = true;
+        }
+        report.expect(!threw, label + ": a throwing tool does not end the run");
+        report.expect((seen->sorted() == std::vector<std::string>{"a.c"}),
+                      label + ": the other tools still run");
+        report.expect((invoker.failedTools() == std::vector<std::string>{"fake_throws"}) &&
+                          invoker.outcome().toolFailed,
+                      label + ": the throwing tool is failed, so the analysis is incomplete");
+    }
+
     void checkRouting(TestReport& report, std::launch policy, bool batch, const std::string& label)
     {
         ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 2, policy);
@@ -121,6 +174,9 @@ int main()
     checkRouting(report, std::launch::deferred, /*batch=*/false, "sync, per file");
     checkRouting(report, std::launch::async, /*batch=*/false, "async, per file");
     checkRouting(report, std::launch::deferred, /*batch=*/true, "sync, batch");
+    checkThrowingToolFails(report, std::launch::deferred, /*batch=*/false, "sync, per file");
+    checkThrowingToolFails(report, std::launch::async, /*batch=*/false, "async, per file");
+    checkThrowingToolFails(report, std::launch::deferred, /*batch=*/true, "sync, batch");
 
     if (report.failures == 0)
     {

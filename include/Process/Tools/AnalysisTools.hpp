@@ -58,14 +58,6 @@ class EntryPoint
         }
         return mangledName;
     }
-    [[nodiscard]] std::vector<std::string> getParamTypes() const noexcept
-    {
-        if (paramTypes.empty())
-        {
-            return {"void"};
-        }
-        return paramTypes;
-    }
 
   protected:
     std::string name;

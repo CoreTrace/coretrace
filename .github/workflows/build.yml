@@ -106,3 +106,63 @@ jobs:
           set -euo pipefail
           python3 tests/BTP-STACK-ANALYZER-F7 --ctrace-bin ./build/ctrace \
             --iterations 1 --warmups 0 --min-speedup-ratio 0
+
+  # How much of CoreTrace's own code the unit and the integration tests run: a table in the job
+  # summary and the full report as an artifact (scripts/ci/coverage.sh). No threshold fails it.
+  coverage:
+    name: Coverage (llvm-cov)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            curl \
+            ca-certificates \
+            gnupg \
+            cppcheck
+          sudo ./scripts/ci/install-llvm-apt.sh 20
+          # The profile runtime that -fprofile-instr-generate links (libclang_rt.profile.a).
+          . ./scripts/ci/retry.sh
+          retry 5 10 sudo apt-get install -y --no-install-recommends libclang-rt-20-dev
+
+      # Source-based coverage needs Clang; only CoreTrace's own targets are instrumented.
+      - name: Configure CMake
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-20 \
+            -DCMAKE_CXX_COMPILER=clang++-20 \
+            -DCORETRACE_COVERAGE=ON \
+            -DLLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm \
+            -DClang_DIR=/usr/lib/llvm-20/lib/cmake/clang
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          cmake --build build -j4
+
+      - name: Measure coverage
+        env:
+          LLVM_PROFDATA: /usr/lib/llvm-20/bin/llvm-profdata
+          LLVM_COV: /usr/lib/llvm-20/bin/llvm-cov
+        run: sh scripts/ci/coverage.sh build coverage
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/*.txt
+            coverage/summary.md
+            coverage/html
