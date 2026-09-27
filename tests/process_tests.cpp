@@ -3,6 +3,7 @@
 // Contract of the external process runner: callers always learn how the child ended.
 #include "Process/ProcessFactory.hpp"
 
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
@@ -11,6 +12,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <unistd.h>
@@ -238,6 +240,53 @@ namespace
                           result.output + "')");
     }
 
+    // A deadline stops a child that runs too long, and everything it started: the whole
+    // process group, so that a grandchild holding the output does not outlive it.
+    void testDeadlineStopsTheProcessGroup(TestReport& report, const fs::path& base)
+    {
+        const fs::path pidFile = base / "grandchild.pid";
+        const auto start = std::chrono::steady_clock::now();
+        auto process = ProcessFactory::createProcess(
+            "sh", {"-c", "sleep 30 & echo $! > '" + pidFile.string() + "'; wait"},
+            std::chrono::seconds(1));
+        const ProcessResult result = process->execute();
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+
+        report.expect(result.timedOut && !result.succeeded(),
+                      "deadline: the child is reported as timed out");
+        report.expect(elapsed < std::chrono::seconds(10),
+                      "deadline: execute returns soon after the deadline");
+        report.expect(result.describeFailure("tool").find("time limit") != std::string::npos,
+                      "deadline: the failure names the time limit (" +
+                          result.describeFailure("tool") + ")");
+
+        std::ifstream in(pidFile);
+        pid_t grandchild = 0;
+        in >> grandchild;
+        // Killed, the grandchild stays a zombie until init reaps it, and kill(pid, 0) still
+        // succeeds on a zombie: give it a moment to go away.
+        bool gone = false;
+        for (int attempt = 0; grandchild > 0 && attempt < 100 && !gone; ++attempt)
+        {
+            gone = ::kill(grandchild, 0) != 0;
+            if (!gone)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        }
+        report.expect(gone, "deadline: the grandchild is stopped with it");
+    }
+
+    void testFastChildIsUnaffectedByADeadline(TestReport& report)
+    {
+        auto process =
+            ProcessFactory::createProcess("sh", {"-c", "echo done"}, std::chrono::seconds(30));
+        const ProcessResult result = process->execute();
+        report.expect(result.succeeded() && !result.timedOut &&
+                          result.output.find("done") != std::string::npos,
+                      "deadline: a child that ends in time is a normal run");
+    }
+
     void testDescribeFailure(TestReport& report)
     {
         ProcessResult exited;
@@ -275,6 +324,8 @@ int main()
     testPathLookupSkipsDirectories(report, base);
     testLargeOutputIsCapturedWhole(report);
     testArgumentsArePassedVerbatim(report);
+    testDeadlineStopsTheProcessGroup(report, base);
+    testFastChildIsUnaffectedByADeadline(report);
     fs::remove_all(base);
 
     if (report.failures == 0)

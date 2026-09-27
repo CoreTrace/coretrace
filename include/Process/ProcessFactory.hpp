@@ -2,6 +2,7 @@
 #ifndef PROCESSFACTORY_HPP
 #define PROCESSFACTORY_HPP
 
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,17 +20,21 @@
 class ProcessFactory
 {
   public:
+    /// `timeout`: see Process::setTimeout; zero waits for the child however long it runs.
     static std::unique_ptr<Process> createProcess(const std::string& command,
-                                                  const std::vector<std::string>& args = {})
+                                                  const std::vector<std::string>& args = {},
+                                                  std::chrono::milliseconds timeout = {})
     {
 #if defined(_WIN32)
         coretrace::log(coretrace::Level::Debug, "Creating Windows process for command: {}\n",
                        command);
-        return std::make_unique<WindowsProcess>(command, args);
+        std::unique_ptr<Process> process = std::make_unique<WindowsProcess>(command, args);
 #else
         coretrace::log(coretrace::Level::Debug, "Creating Unix process for command: {}\n", command);
-        return std::make_unique<UnixProcess>(command, args);
+        std::unique_ptr<Process> process = std::make_unique<UnixProcess>(command, args);
 #endif
+        process->setTimeout(timeout);
+        return process;
     }
 };
 

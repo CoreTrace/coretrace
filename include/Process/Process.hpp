@@ -2,6 +2,7 @@
 #ifndef PROCESS_HPP
 #define PROCESS_HPP
 
+#include <chrono>
 #include <initializer_list>
 #include <string>
 #include <string_view>
@@ -10,9 +11,10 @@
 /// How an external tool ended, plus everything it printed.
 struct ProcessResult
 {
-    int exitCode = -1;  ///< Exit status when the child exited normally; -1 otherwise.
-    int signal = 0;     ///< Terminating signal when the child was killed; 0 otherwise.
-    std::string output; ///< Combined stdout and stderr, in emission order.
+    int exitCode = -1;     ///< Exit status when the child exited normally; -1 otherwise.
+    int signal = 0;        ///< Terminating signal when the child was killed; 0 otherwise.
+    bool timedOut = false; ///< The child outlived its time limit and was stopped.
+    std::string output;    ///< Combined stdout and stderr, in emission order.
 
     [[nodiscard]] bool succeeded() const noexcept
     {
@@ -40,7 +42,11 @@ struct ProcessResult
     [[nodiscard]] std::string describeFailure(std::string_view toolName) const
     {
         std::string message(toolName);
-        if (signal != 0)
+        if (timedOut)
+        {
+            message += " did not finish within its time limit and was stopped";
+        }
+        else if (signal != 0)
         {
             message += " was terminated by signal " + std::to_string(signal);
         }
@@ -62,6 +68,13 @@ class Process
   public:
     virtual ~Process() = default;
 
+    /// Stops the child, and every process it started, once `timeout` has passed. Zero, the
+    /// default, lets it run for as long as it takes.
+    void setTimeout(std::chrono::milliseconds timeout) noexcept
+    {
+        m_timeout = timeout;
+    }
+
     [[nodiscard]] ProcessResult execute()
     {
         prepare();
@@ -76,6 +89,7 @@ class Process
     virtual void cleanup() = 0;
 
     std::vector<std::string> m_arguments;
+    std::chrono::milliseconds m_timeout{0};
 };
 
 #endif // PROCESS_HPP
