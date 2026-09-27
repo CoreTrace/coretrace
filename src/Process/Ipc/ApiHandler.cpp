@@ -260,6 +260,15 @@ namespace
         return apply_ipc_field(params, config, err);
     }
 
+    /// Whether the run builds and runs the client's code: dynamic analysis, or the runtime
+    /// analyzer invoked by name.
+    [[nodiscard]] bool runsClientCode(const ctrace::ProgramConfig& config)
+    {
+        return config.analysis.dynamic_enabled ||
+               std::find(config.analysis.invoke.begin(), config.analysis.invoke.end(),
+                         "coretrace-runtime-analyzer") != config.analysis.invoke.end();
+    }
+
     bool run_analysis(const ctrace::ProgramConfig& config, ILogger& logger, json& result,
                       ParseError& err)
     {
@@ -481,6 +490,16 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     {
         baseResponse["status"] = "error";
         baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
+        return baseResponse;
+    }
+    if (!allowDynamicAnalysis_ && runsClientCode(config))
+    {
+        baseResponse["status"] = "error";
+        baseResponse["error"] = {
+            {"code", "DynamicAnalysisDisabled"},
+            {"message", "Dynamic analysis builds and runs the submitted code on the server, which "
+                        "this server does not allow: start it with --serve-allow-dynamic "
+                        "(server.allow_dynamic_analysis) to enable it."}};
         return baseResponse;
     }
     ctrace::applyShippedDefaults(config, executable_, warnings);

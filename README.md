@@ -38,6 +38,17 @@ Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and 
 Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
 the pinned tag.
 
+`--dyn` runs [coretrace-runtime-analyzer](https://github.com/CoreTrace/coretrace-runtime-analyzer)
+on each C/C++ input, which must be a whole program: it is built with CoreTrace instrumentation
+and run, and the memory errors that happen (heap and stack overflows, uses after free, double
+frees, leaks) join the other tools' findings, merged with a static finding at the same line and
+CWE. The Linux release archives ship the tool in `libexec/coretrace/coretrace-runtime-analyzer/`
+(`-DENABLE_RUNTIME_ANALYZER=ON` downloads its pinned release and checks it against the SHA-256
+recorded in `cmake/runtimeAnalyzer.cmake`). Linking an instrumented program needs a C++ build
+environment (`g++` on Debian and Ubuntu, `gcc-c++` on RHEL). The program runs with `ctrace`'s
+privileges, in a separate process but not in a sandbox, so the HTTP server refuses dynamic
+analysis unless it is started with `--serve-allow-dynamic`.
+
 ```bash
 cmake .. -DENABLE_PYTHON_ANALYZER=ON -DPython3_EXECUTABLE=/path/to/python3
 ./ctrace --input app.py,src/main.c --invoke coretrace-python-analyzer,cppcheck

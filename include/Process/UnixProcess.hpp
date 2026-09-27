@@ -4,10 +4,13 @@
 #include "Process.hpp"
 
 #include <cerrno>
+#include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <fcntl.h>
@@ -62,26 +65,28 @@ class UnixProcess : public Process
         }
         argv.push_back(nullptr);
 
+        // With a time limit, the child leads its own process group, so that stopping it also
+        // stops whatever it started. Without one, it stays in ours and keeps receiving the
+        // terminal's signals (Ctrl-C) with ctrace.
+        SpawnAttributes attributes;
+        if (m_timeout.count() > 0 &&
+            (posix_spawnattr_setflags(&attributes.attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
+             posix_spawnattr_setpgroup(&attributes.attributes, 0) != 0))
+        {
+            throw std::runtime_error("Failed to set the process group of '" + command_ + "'");
+        }
+
         pid_t pid = 0;
         const int spawnError = posix_spawn(&pid, resolvedPath_.c_str(), &fileActions.actions,
-                                           nullptr, argv.data(), environ);
+                                           &attributes.attributes, argv.data(), environ);
         if (spawnError != 0)
         {
             throw std::runtime_error("Failed to start '" + command_ +
                                      "': " + std::string(std::strerror(spawnError)));
         }
 
-        int status = 0;
-        while (waitpid(pid, &status, 0) == -1)
-        {
-            if (errno != EINTR)
-            {
-                throw std::runtime_error("Failed to wait for '" + command_ +
-                                         "': " + std::string(std::strerror(errno)));
-            }
-        }
-
         ProcessResult result;
+        const int status = waitForChild(pid, result.timedOut);
         if (WIFEXITED(status))
         {
             result.exitCode = WEXITSTATUS(status);
@@ -100,6 +105,63 @@ class UnixProcess : public Process
     }
 
   private:
+    /// Waits for `pid`, stopping its process group once the time limit has passed.
+    [[nodiscard]] int waitForChild(pid_t pid, bool& timedOut)
+    {
+        // ponytail: polls every 20 ms; a SIGCHLD-driven wait if a deadline ever needs to be
+        // finer than that.
+        constexpr auto kPollInterval = std::chrono::milliseconds(20);
+        const auto deadline = std::chrono::steady_clock::now() + m_timeout;
+        const int options = m_timeout.count() > 0 ? WNOHANG : 0;
+        int status = 0;
+        for (;;)
+        {
+            const pid_t waited = waitpid(pid, &status, options);
+            if (waited == pid)
+            {
+                return status;
+            }
+            if (waited == -1 && errno != EINTR)
+            {
+                throw std::runtime_error("Failed to wait for '" + command_ +
+                                         "': " + std::string(std::strerror(errno)));
+            }
+            if (waited == 0 && std::chrono::steady_clock::now() >= deadline)
+            {
+                timedOut = true;
+                (void)kill(-pid, SIGKILL);
+                (void)waitpid(pid, &status, 0);
+                return status;
+            }
+            if (waited == 0)
+            {
+                std::this_thread::sleep_for(kPollInterval);
+            }
+        }
+    }
+
+    struct SpawnAttributes
+    {
+        posix_spawnattr_t attributes{};
+
+        SpawnAttributes()
+        {
+            if (posix_spawnattr_init(&attributes) != 0)
+            {
+                throw std::runtime_error("Failed to init spawn attributes: " +
+                                         std::string(std::strerror(errno)));
+            }
+        }
+
+        ~SpawnAttributes()
+        {
+            posix_spawnattr_destroy(&attributes);
+        }
+
+        SpawnAttributes(const SpawnAttributes&) = delete;
+        SpawnAttributes& operator=(const SpawnAttributes&) = delete;
+    };
+
     struct SpawnFileActions
     {
         posix_spawn_file_actions_t actions{};

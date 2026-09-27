@@ -103,6 +103,10 @@ namespace ctrace
         /// Origin allowed to call the API from a browser. Empty means no cross-origin header
         /// is sent, so a browser on another origin cannot read the response.
         std::string cors_origin;
+
+        /// Whether requests may run dynamic analysis, which builds and runs the client's code
+        /// on this machine with the server's privileges. Off unless the server is started so.
+        bool allow_dynamic_analysis = false;
     };
 
     /// Settings forwarded to coretrace-stack-analyzer. Empty strings and zero mean "keep the
@@ -156,6 +160,9 @@ namespace ctrace
     {
         std::map<std::string, std::string> paths;
         std::map<std::string, std::vector<std::string>> args;
+        /// `tools.coretrace-runtime-analyzer.timeout_s`: how long each program may run; 0
+        /// disables the limit.
+        std::uint32_t runtime_analyzer_timeout_s = 60;
     };
 
     struct ProgramConfig

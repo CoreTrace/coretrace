@@ -33,8 +33,13 @@ CLI: `--static`
 Type: `bool`
 Default: `false`
 Allowed: `true|false`
-Description: enable dynamic analysis pipeline.
-Impact: runs dynamic tool set when true.
+Description: enable dynamic analysis.
+Impact: runs `coretrace-runtime-analyzer` on each C/C++ input, which must be a whole program
+(it defines `main`): the tool builds it with CoreTrace instrumentation, runs it, and reports
+the memory errors that happened (heap and stack overflows, uses after free, double frees,
+leaks, vtable misuse). It runs the program with `ctrace`'s privileges: a separate process, not
+a sandbox. Linking the program needs a C++ build environment (`g++` on Debian and Ubuntu,
+`gcc-c++` on RHEL). See `tools.coretrace-runtime-analyzer.timeout_s`.
 CLI: `--dyn`
 
 - `analysis.invoke`
@@ -228,20 +233,34 @@ Impact: empty sends no `Access-Control-*` header, so a page on another origin ca
 response. Set it only for the origin of your own front end.
 CLI: not exposed (`config/tool-config.json` only)
 
+- `server.allow_dynamic_analysis`
+Type: `bool`
+Default: `false`
+Allowed: `true|false`
+Description: whether requests may run dynamic analysis (`dynamic_analysis`, or
+`coretrace-runtime-analyzer` in `invoke`).
+Impact: dynamic analysis builds and runs the submitted code on this machine, with the server's
+privileges. Without this setting, such a request is refused (`DynamicAnalysisDisabled`). A
+request's own `config` file cannot set it: only the server's configuration can. Run the server
+in an isolated environment (container, dedicated user) before enabling it.
+CLI: `--serve-allow-dynamic`
+
 ### Exposure
 
 The API has no authentication. Binding `server.host` to anything outside the loopback
 interface therefore requires `server.shutdown_token`; the server refuses to start otherwise.
 The token protects `POST /shutdown` only, so treat a non-loopback bind as giving anyone who
-can reach the port the ability to run analyses on this machine.
+can reach the port the ability to run analyses on this machine, and, with
+`server.allow_dynamic_analysis`, to run code on it.
 
 ## tools
 
 External tools are looked up in this order: `tools.<name>.path` when set; then the copy
 shipped with `ctrace`, an executable at `<prefix>/libexec/coretrace/<name>/<name>` next to
-`bin/ctrace` (or `<build>/libexec/coretrace/<name>/<name>` in a build tree); then the tool's
-name resolved through `PATH`. Give a tool an explicit location only when you need a specific
-build.
+`bin/ctrace` (or `<build>/libexec/coretrace/<name>/<name>` in a build tree), or
+`<name>/bin/runtime-analyzer` for `coretrace-runtime-analyzer`, which ships as its own release
+tree; then the tool's name resolved through `PATH`. Give a tool an explicit location only when
+you need a specific build.
 
 Each input file only reaches the tools of its language: `.py` files go to
 `coretrace-python-analyzer`, every other file to the C/C++ tools. `coretrace-python-analyzer`
@@ -253,7 +272,7 @@ project itself (a vulnerable pin in a dependency manifest), are reported.
 - `tools.<name>.path`
 Type: `string`
 Default: the bundled copy when there is one, else the tool's own name (`cppcheck`, `ikos`,
-`tscancode`, `flawfinder`, `coretrace-python-analyzer`)
+`tscancode`, `flawfinder`, `coretrace-python-analyzer`, `coretrace-runtime-analyzer`)
 Allowed: a command name resolved through `PATH`, or an absolute path.
 Description: the command to execute for that tool.
 Impact: replaces the default lookup. A command that cannot be found or executed is reported
@@ -280,6 +299,22 @@ CLI: not exposed (`config/tool-config.json` only)
   }
 }
 ```
+
+- `tools.coretrace-runtime-analyzer.timeout_s`
+Type: `uint`
+Default: `60`
+Allowed: seconds; `0` disables the limit.
+Description: how long each program may run under the runtime analyzer.
+Impact: passed to the tool as `--timeout`; a program that runs longer is stopped and reported
+as an incomplete analysis. `ctrace` also stops the tool itself after twice this time, which
+covers building the program, and reports it the same way.
+CLI: not exposed (`config/tool-config.json` only)
+
+The runtime analyzer receives `--format sarif --timeout <timeout_s> -o <run directory>/program`,
+then `tools.coretrace-runtime-analyzer.args`, then `--` followed by `-I`/`-D` from
+`stack_analyzer.include_dirs` and `stack_analyzer.defines` and the input. Each program is built
+in a private temporary directory, removed afterwards. Exit code 2 from the tool (the program
+could not be built or run) makes the analysis incomplete.
 
 Derived cppcheck options: `--enable=warning,style,performance,portability` and
 `--inline-suppr` always; `-I<dir>` for each `stack_analyzer.include_dirs` entry, `-D<macro>`

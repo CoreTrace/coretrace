@@ -11,6 +11,7 @@
 #include <coretrace/logger.hpp>
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -98,15 +99,17 @@ namespace ctrace
     /// Runs an external tool to completion. A tool that cannot be started is reported on the
     /// sink and yields nothing. An exit code outside `completedCodes` (by default only 0) is
     /// reported too, but the output is still returned: partial findings are not lost because
-    /// the tool ended badly.
+    /// the tool ended badly. A tool still running after `timeout` (none by default) is stopped
+    /// and reported the same way.
     [[nodiscard]] inline std::optional<ProcessResult>
     runExternalTool(const ProgramConfig& config, const IAnalysisTool& tool,
                     const std::vector<std::string>& args, ToolOutput& output,
-                    std::initializer_list<int> completedCodes = {0})
+                    std::initializer_list<int> completedCodes = {0},
+                    std::chrono::milliseconds timeout = {})
     {
         try
         {
-            auto process = ProcessFactory::createProcess(toolCommand(config, tool), args);
+            auto process = ProcessFactory::createProcess(toolCommand(config, tool), args, timeout);
             const ProcessResult run = process->execute();
             if (!run.completedWith(completedCodes))
             {
@@ -248,6 +251,23 @@ namespace ctrace
         std::string name() const override;
     };
 
+    /// coretrace-runtime-analyzer (github.com/CoreTrace/coretrace-runtime-analyzer): builds one
+    /// program with CoreTrace instrumentation, runs it, and reports the memory errors it hit
+    /// as SARIF. Each C or C++ input is a program. The tool runs as its own process, bundled
+    /// next to ctrace: a crash or hang of the tool or of the program does not reach ctrace.
+    /// That process is not a sandbox; the program runs with ctrace's privileges.
+    class RuntimeAnalyzerToolImplementation : public AnalysisToolBase
+    {
+      public:
+        /// `program` is where the instrumented binary is written, in ctrace's run directory.
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ProgramConfig& config, const std::string& file,
+                       const std::filesystem::path& program);
+        void execute(const std::string& file, const ProgramConfig& config,
+                     ToolOutput& output) const override;
+        std::string name() const override;
+    };
+
     class TscancodeToolImplementation : public AnalysisToolBase
     {
       public:
@@ -277,49 +297,6 @@ namespace ctrace
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override;
         std::string name() const override;
-    };
-
-    // Outils dynamiques
-    class DynTool1 : public AnalysisToolBase
-    {
-      public:
-        void execute(const std::string& file, const ctrace::ProgramConfig& /*config*/,
-                     ToolOutput& /*output*/) const override
-        {
-            coretrace::log(coretrace::Level::Info, "Running dyn_tools_1 on {}\n", file);
-        }
-        std::string name() const override
-        {
-            return "dyn_tools_1";
-        }
-    };
-
-    class DynTool2 : public AnalysisToolBase
-    {
-      public:
-        void execute(const std::string& file, const ctrace::ProgramConfig& /*config*/,
-                     ToolOutput& /*output*/) const override
-        {
-            coretrace::log(coretrace::Level::Info, "Running dyn_tools_2 on {}\n", file);
-        }
-        std::string name() const override
-        {
-            return "dyn_tools_2";
-        }
-    };
-
-    class DynTool3 : public AnalysisToolBase
-    {
-      public:
-        void execute(const std::string& file, const ctrace::ProgramConfig& /*config*/,
-                     ToolOutput& /*output*/) const override
-        {
-            coretrace::log(coretrace::Level::Info, "Running dyn_tools_3 on {}\n", file);
-        }
-        std::string name() const override
-        {
-            return "dyn_tools_3";
-        }
     };
 
 } // namespace ctrace

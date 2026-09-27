@@ -211,6 +211,38 @@ int main()
                       "coretrace-python-analyzer: one run for all the Python inputs");
     }
 
+    // coretrace-runtime-analyzer builds and runs one program: SARIF on stdout, the per-program
+    // timeout, the binary in ctrace's private run directory, then the user's arguments, and
+    // after `--` the build context and the source.
+    {
+        ctrace::ProgramConfig config = configWithSarif(false);
+        const auto args =
+            RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program");
+        report.expect((args == std::vector<std::string>{"--format", "sarif", "--timeout", "60",
+                                                        "-o", "/run/program", "--", "a.c"}),
+                      "coretrace-runtime-analyzer: --format sarif --timeout 60 -o <run> -- a.c");
+
+        config.tools.runtime_analyzer_timeout_s = 5;
+        config.tools.args["coretrace-runtime-analyzer"] = {"--show-output"};
+        config.stack_analyzer.include_dirs = {"inc"};
+        config.stack_analyzer.defines = {"FOO=1"};
+        const auto derived =
+            RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program");
+        report.expect((derived == std::vector<std::string>{"--format", "sarif", "--timeout", "5",
+                                                           "-o", "/run/program", "--show-output",
+                                                           "--", "-Iinc", "-DFOO=1", "a.c"}),
+                      "coretrace-runtime-analyzer: timeout, user arguments, then -I/-D and the "
+                      "source after --");
+
+        const RuntimeAnalyzerToolImplementation runtime;
+        report.expect(runtime.name() == "coretrace-runtime-analyzer" &&
+                          runtime.analyzes(ctrace_defs::LanguageType::C) &&
+                          runtime.analyzes(ctrace_defs::LanguageType::CPP) &&
+                          !runtime.analyzes(ctrace_defs::LanguageType::Python) &&
+                          !runtime.supportsBatchExecution(),
+                      "coretrace-runtime-analyzer: one C or C++ program per run");
+    }
+
     // The project root is what the analyzer names modules from (app/helpers.py is app.helpers):
     // the nearest directory holding a project marker, else the file's own directory.
     {

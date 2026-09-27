@@ -82,8 +82,9 @@ namespace ctrace
             {
                 continue; // In-process, or located by the configuration.
             }
-            for (const auto& candidate : nextToExecutable(
-                     executable, std::filesystem::path("libexec/coretrace") / tool / tool))
+            for (const auto& candidate :
+                 nextToExecutable(executable, std::filesystem::path("libexec/coretrace") / tool /
+                                                  bundledExecutable(tool)))
             {
                 if (isExecutableFile(candidate))
                 {

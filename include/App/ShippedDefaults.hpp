@@ -36,8 +36,9 @@ namespace ctrace
 
     /// Points every external tool without a configured path at the copy shipped with the binary
     /// at `executable`, when there is one: the first executable of
-    /// `<exe dir>/../libexec/coretrace/<tool>/<tool>` (install prefix) and
-    /// `<exe dir>/libexec/coretrace/<tool>/<tool>` (build tree). Other tools keep being resolved
+    /// `<exe dir>/../libexec/coretrace/<tool>/<executable>` (install prefix) and
+    /// `<exe dir>/libexec/coretrace/<tool>/<executable>` (build tree), where `<executable>` is
+    /// bundledExecutable(tool). Other tools keep being resolved
     /// through PATH, so a release archive runs without anything installed.
     void applyBundledTools(ProgramConfig& config, const std::filesystem::path& executable);
 

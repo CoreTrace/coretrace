@@ -747,6 +747,10 @@ namespace ctrace
                  {"cors_origin"},
                  Kind::String,
                  setString(&ProgramConfig::server, &ServerConfig::cors_origin)},
+                {"allow_dynamic_analysis",
+                 {"allow_dynamic_analysis"},
+                 Kind::Bool,
+                 setBool(&ProgramConfig::server, &ServerConfig::allow_dynamic_analysis)},
             }};
             return spec;
         }
@@ -1088,9 +1092,31 @@ namespace ctrace
                     continue;
                 }
                 const std::string location = "tools." + std::string(tool);
-                if (!validateKnownKeys(*itTool, {"path", "args"}, location, errorMessage))
+                const bool isRuntimeAnalyzer = tool == "coretrace-runtime-analyzer";
+                if (!validateKnownKeys(*itTool,
+                                       isRuntimeAnalyzer
+                                           ? std::vector<const char*>{"path", "args", "timeout_s"}
+                                           : std::vector<const char*>{"path", "args"},
+                                       location, errorMessage))
                 {
                     return false;
+                }
+                if (const auto itTimeout = itTool->find("timeout_s");
+                    isRuntimeAnalyzer && itTimeout != itTool->end() && !itTimeout->is_null())
+                {
+                    Value value;
+                    if (!readValue(*itTimeout, Kind::Uint64, location + ".timeout_s", value,
+                                   errorMessage))
+                    {
+                        return false;
+                    }
+                    if (value.number > std::numeric_limits<std::uint32_t>::max())
+                    {
+                        errorMessage = location + ".timeout_s is too large.";
+                        return false;
+                    }
+                    ctx.config.tools.runtime_analyzer_timeout_s =
+                        static_cast<std::uint32_t>(value.number);
                 }
                 if (const auto itPath = itTool->find("path");
                     itPath != itTool->end() && !itPath->is_null())
