@@ -114,10 +114,14 @@ namespace ctrace
             {"--demangle", nullptr, "Displays demangled function names in supported tools.",
              Kind::Flag, "output", "demangle"},
             {"--static", nullptr, "Enables static analysis.", Kind::Flag, "analysis", "static"},
-            {"--dyn", nullptr, "Enables dynamic analysis.", Kind::Flag, "analysis", "dynamic"},
+            {"--dyn", nullptr,
+             "Enables dynamic analysis: builds and runs each C/C++ input as a program "
+             "(coretrace-runtime-analyzer).",
+             Kind::Flag, "analysis", "dynamic"},
             {"--invoke", "TOOLS",
              "Invokes specific tools (comma-separated). Available tools: flawfinder, ikos, "
-             "cppcheck, tscancode, ctrace_stack_analyzer.",
+             "cppcheck, tscancode, ctrace_stack_analyzer, coretrace-python-analyzer, "
+             "coretrace-runtime-analyzer.",
              Kind::List, "analysis", "invoke"},
             {"--input", "FILES", "Specifies the source files to analyse (comma-separated).",
              Kind::List, "files", "input"},
@@ -135,6 +139,10 @@ namespace ctrace
              "port"},
             {"--shutdown-token", "TOKEN", "Token required for POST /shutdown (server mode).",
              Kind::Text, "server", "shutdown_token"},
+            {"--serve-allow-dynamic", nullptr,
+             "Lets server requests run dynamic analysis, which builds and runs the client's "
+             "code on this machine.",
+             Kind::Flag, "server", "allow_dynamic_analysis"},
             {"--shutdown-timeout-ms", "MS",
              "Graceful shutdown timeout in ms (0 = wait indefinitely).", Kind::Unsigned, "server",
              "shutdown_timeout_ms"},

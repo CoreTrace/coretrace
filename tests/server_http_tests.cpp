@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -195,10 +196,72 @@ namespace
         report.expect(server.finished(std::chrono::seconds(5)),
                       "the server stops after an accepted shutdown");
     }
+
+    /// A run_analysis request for `file` with the tools `invoke`, `dynamic` or not, and a config
+    /// file of the request's own.
+    nlohmann::json analysisRequest(const std::string& file, const nlohmann::json& invoke,
+                                   bool dynamic, const std::string& configFile)
+    {
+        nlohmann::json params = {{"input", nlohmann::json::array({file})},
+                                 {"invoke", invoke},
+                                 {"dynamic_analysis", dynamic},
+                                 {"config", configFile}};
+        return {{"proto", "coretrace-1.0"},
+                {"id", 1},
+                {"type", "request"},
+                {"method", "run_analysis"},
+                {"params", params}};
+    }
+
+    [[nodiscard]] std::string errorCode(const nlohmann::json& response)
+    {
+        return response.value("error", nlohmann::json::object()).value("code", "");
+    }
+
+    // Dynamic analysis runs the client's code: a server refuses it unless it was started with
+    // the opt-in, and a request cannot grant itself the opt-in through its own config file.
+    void testDynamicAnalysisNeedsTheServerOptIn(TestReport& report, const std::string& buildDir,
+                                                const std::string& sourceDir)
+    {
+        const std::string source = sourceDir + "/tests/runtime/clean.c";
+        const std::string fakeTool = buildDir + "/fake-runtime-analyzer.json";
+        const std::string grantsItself = buildDir + "/server-grants-dynamic.json";
+        {
+            std::ofstream(grantsItself)
+                << R"({"schema_version": 1, "server": {"allow_dynamic_analysis": true}})";
+        }
+        ConsoleLogger logger;
+
+        ApiHandler closed(logger, /*executable=*/{});
+        report.expect(errorCode(closed.handle_request(
+                          analysisRequest(source, nlohmann::json::array(), true, fakeTool))) ==
+                          "DynamicAnalysisDisabled",
+                      "dynamic_analysis is refused without the server's opt-in");
+        report.expect(errorCode(closed.handle_request(analysisRequest(
+                          source, {"coretrace-runtime-analyzer"}, false, fakeTool))) ==
+                          "DynamicAnalysisDisabled",
+                      "invoking the runtime analyzer is refused without the opt-in");
+        report.expect(errorCode(closed.handle_request(
+                          analysisRequest(source, nlohmann::json::array(), true, grantsItself))) ==
+                          "DynamicAnalysisDisabled",
+                      "a request's own config cannot grant the opt-in");
+
+        ApiHandler open(logger, /*executable=*/{}, /*allowDynamicAnalysis=*/true);
+        const nlohmann::json response =
+            open.handle_request(analysisRequest(source, nlohmann::json::array(), true, fakeTool));
+        report.expect(response.value("status", "") == "ok",
+                      "with the opt-in, the dynamic analysis runs (" +
+                          response.value("error", nlohmann::json::object()).dump() + ")");
+    }
 } // namespace
 
-int main()
+int main(int argc, char* argv[])
 {
+    if (argc != 3)
+    {
+        std::cerr << "Usage: ctrace_server_http_tests <build dir> <source dir>\n";
+        return 2;
+    }
     coretrace::enable_logging();
     coretrace::set_min_level(coretrace::Level::Error);
 
@@ -207,6 +270,7 @@ int main()
     testBodyLimit(report);
     testCorsHeaders(report);
     testGracefulShutdown(report);
+    testDynamicAnalysisNeedsTheServerOptIn(report, argv[1], argv[2]);
 
     if (report.failures == 0)
     {

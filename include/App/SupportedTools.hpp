@@ -9,14 +9,26 @@
 
 namespace ctrace
 {
-    inline constexpr std::array<std::string_view, 6> SUPPORTED_TOOLS = {
+    inline constexpr std::array<std::string_view, 7> SUPPORTED_TOOLS = {
         "flawfinder",
         "ikos",
         "cppcheck",
         "tscancode",
         "ctrace_stack_analyzer",
         "coretrace-python-analyzer",
+        "coretrace-runtime-analyzer",
     };
+
+    /// Where a bundled tool's executable lies below `libexec/coretrace/<tool>/`: a tool
+    /// shipped as a release tree of its own keeps its layout, the others are one directory.
+    [[nodiscard]] inline std::string_view bundledExecutable(std::string_view tool)
+    {
+        if (tool == "coretrace-runtime-analyzer")
+        {
+            return "bin/runtime-analyzer";
+        }
+        return tool;
+    }
 
     inline bool isSupportedToolName(std::string_view name)
     {

@@ -55,8 +55,14 @@ namespace ctrace
         }
         coretrace::log(coretrace::Level::Info, "Starting in server at {}:{}\n", config.server.host,
                        std::to_string(config.server.port));
+        if (config.server.allow_dynamic_analysis)
+        {
+            coretrace::log(coretrace::Level::Warn,
+                           "Dynamic analysis is enabled: requests can build and run code on "
+                           "this machine with the server's privileges.\n");
+        }
         ConsoleLogger logger;
-        ApiHandler apiHandler(logger, executable);
+        ApiHandler apiHandler(logger, executable, config.server.allow_dynamic_analysis);
         HttpServer server(apiHandler, logger, config.server);
         server.run(config.server.host, config.server.port);
         return EXIT_SUCCESS;

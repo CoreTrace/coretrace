@@ -128,9 +128,8 @@ namespace ctrace
                          std::make_unique<StackAnalyzerToolImplementation>());
             registerTool("coretrace-python-analyzer",
                          std::make_unique<PythonAnalyzerToolImplementation>());
-            registerTool("dyn_tools_1", std::make_unique<DynTool1>());
-            registerTool("dyn_tools_2", std::make_unique<DynTool2>());
-            registerTool("dyn_tools_3", std::make_unique<DynTool3>());
+            registerTool("coretrace-runtime-analyzer",
+                         std::make_unique<RuntimeAnalyzerToolImplementation>());
 
             static_tools = {"cppcheck",
                             "flawfinder",
@@ -138,7 +137,7 @@ namespace ctrace
                             "ikos",
                             "ctrace_stack_analyzer",
                             "coretrace-python-analyzer"};
-            dynamic_tools = {"dyn_tools_1", "dyn_tools_2", "dyn_tools_3"};
+            dynamic_tools = {"coretrace-runtime-analyzer"};
 
             if (m_config.runtime.ipc == "standardIO")
             {

@@ -398,6 +398,34 @@ namespace
               "Expected unsigned integer for 'server.max_body_bytes'.");
     }
 
+    // Dynamic analysis in server mode is off unless the server is started with it; the
+    // runtime analyzer's per-program timeout is configurable and bounded.
+    void testDynamicAnalysisSettings()
+    {
+        const ctrace::ProgramConfig defaults;
+        CHECK(!defaults.server.allow_dynamic_analysis);
+        CHECK(defaults.tools.runtime_analyzer_timeout_s == 60U);
+
+        const auto fromCli = buildFromArgs({"ctrace", "--ipc", "serve", "--serve-allow-dynamic"});
+        CHECK(fromCli.config.has_value() && fromCli.config->server.allow_dynamic_analysis);
+
+        const auto cfg = loadOrDie("dynamic-settings.json", R"json(
+{"server": {"allow_dynamic_analysis": true},
+ "tools": {"coretrace-runtime-analyzer": {"timeout_s": 5, "args": ["--show-output"]}}}
+)json");
+        CHECK(cfg.server.allow_dynamic_analysis);
+        CHECK(cfg.tools.runtime_analyzer_timeout_s == 5U);
+        CHECK(cfg.tools.args.at("coretrace-runtime-analyzer") ==
+              std::vector<std::string>{"--show-output"});
+
+        CHECK(loadError("timeout-elsewhere.json", R"({"tools": {"cppcheck": {"timeout_s": 5}}})")
+                  .find("timeout_s") != std::string::npos);
+        CHECK(
+            loadError("timeout-too-large.json",
+                      R"({"tools": {"coretrace-runtime-analyzer": {"timeout_s": 99999999999}}})") ==
+            "tools.coretrace-runtime-analyzer.timeout_s is too large.");
+    }
+
     // K3: legacy spellings keep working, and the loader says which canonical key to use.
     void testLegacySpellingsAreAcceptedWithAWarning()
     {
@@ -755,6 +783,18 @@ namespace
         ctrace::applyBundledTools(bare, makeLayout("tools-bare", {}) / "bin/ctrace");
         CHECK(bare.tools.paths.empty());
 
+        // The runtime analyzer ships as its own release tree: bin/runtime-analyzer, with its
+        // LLVM libraries and Clang headers next to it.
+        const std::string runtime = "coretrace-runtime-analyzer";
+        const std::string runtimeRelative =
+            "libexec/coretrace/" + runtime + "/bin/runtime-analyzer";
+        const auto runtimeTree = makeLayout("tools-runtime", {runtimeRelative});
+        makeExecutable(runtimeTree / runtimeRelative);
+        ctrace::ProgramConfig withRuntime;
+        ctrace::applyBundledTools(withRuntime, runtimeTree / "bin/ctrace");
+        CHECK(withRuntime.tools.paths[runtime] ==
+              (runtimeTree / runtimeRelative).lexically_normal().string());
+
         // An unknown executable location ships nothing: the lookup never falls back to the
         // working directory, where `../libexec` could be anything.
         ctrace::ProgramConfig unknown;
@@ -852,6 +892,7 @@ int main()
     testDefaultModelsFillOnlyEmptyFields();
     testBuildConfigAppliesDefaultModels();
     testBundledToolsFollowTheExecutable();
+    testDynamicAnalysisSettings();
     testShippedClangHeaders();
     testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;

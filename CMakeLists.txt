@@ -41,6 +41,7 @@ set(SOURCES
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
@@ -128,6 +129,11 @@ option(ENABLE_PYTHON_ANALYZER
     "Build coretrace-python-analyzer as a standalone executable (Nuitka) shipped with ctrace" OFF)
 if(ENABLE_PYTHON_ANALYZER)
     include(${CMAKE_SOURCE_DIR}/cmake/pythonAnalyzer.cmake)
+endif()
+option(ENABLE_RUNTIME_ANALYZER
+    "Ship coretrace-runtime-analyzer's pinned Linux release next to ctrace (downloaded, hash-checked)" OFF)
+if(ENABLE_RUNTIME_ANALYZER)
+    include(${CMAKE_SOURCE_DIR}/cmake/runtimeAnalyzer.cmake)
 endif()
 # include(${CMAKE_SOURCE_DIR}/cmake/ikos.cmake)
 
@@ -217,6 +223,7 @@ add_executable(ctrace_tool_arguments_tests
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
@@ -242,6 +249,7 @@ add_executable(ctrace_tool_diagnostics_tests
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
     src/ctrace_tools/mangle.cpp
@@ -258,6 +266,7 @@ add_executable(ctrace_tool_routing_tests
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -324,6 +333,7 @@ add_executable(ctrace_server_concurrency_tests
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -351,6 +361,7 @@ add_executable(ctrace_server_http_tests
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -361,7 +372,8 @@ add_executable(ctrace_server_http_tests
 target_link_libraries(ctrace_server_http_tests
     PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
             httplib::httplib)
-add_test(NAME ctrace_server_http_tests COMMAND ctrace_server_http_tests)
+add_test(NAME ctrace_server_http_tests
+    COMMAND ctrace_server_http_tests ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
 
 # The server as `ctrace --ipc serve` runs it: an analysis over HTTP, then a clean shutdown.
 add_executable(ctrace_server_cli_tests tests/server_cli_tests.cpp)
@@ -413,6 +425,7 @@ add_executable(ctrace_stack_analyzer_bridge_tests
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
     src/Process/Tools/Sarif.cpp
     src/Process/Tools/StackAnalyzerToolImplementation.cpp
     src/Process/Tools/TscancodeToolImplementation.cpp
@@ -534,10 +547,45 @@ file(WRITE ${CMAKE_BINARY_DIR}/static-tools.json
     "{\"schema_version\": 1, \"tools\": {\"coretrace-python-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-python-analyzer.sh\"}, \"flawfinder\": {\"path\": \"/nonexistent/ctrace-flawfinder\"}, \"tscancode\": {\"path\": \"/nonexistent/ctrace-tscancode\"}, \"ikos\": {\"path\": \"/nonexistent/ctrace-ikos\"}}}\n")
 add_test(NAME ctrace_static_runs_every_static_tool
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --static --config ${CMAKE_BINARY_DIR}/static-tools.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c,${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Running static analysis on 2 file(s)' && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*double_free.c' && printf '%s\\n' \"$out\" | grep -q '(ctrace_stack_analyzer) Diagnostics summary: info=0, warning=0, error=1' && printf '%s\\n' \"$out\" | grep -q 'Running coretrace-python-analyzer on .* for 1 input file(s)' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: flawfinder,ikos,tscancode could not run' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*main.py'")
-# --dyn runs the dynamic tool slots. They are placeholders until the runtime analyzer takes
-# them (#53, #112): they run without failing and report nothing.
-add_test(NAME ctrace_dyn_runs_the_dynamic_tools
-    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input ${CMAKE_SOURCE_DIR}/tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Running dynamic analysis on 1 file(s)' && test $(printf '%s\\n' \"$out\" | grep -c 'Running dyn_tools_[123] on') -eq 3")
+# --dyn runs coretrace-runtime-analyzer, here a stand-in that checks the command line ctrace
+# builds and prints the SARIF the real tool prints (tests/fake-runtime-analyzer.sh). Each
+# program gets a private run directory, removed afterwards.
+set(ctrace_runtime_log ${CMAKE_BINARY_DIR}/fake-runtime-runs.log)
+file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-runtime-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-runtime-analyzer.sh\"}}}\n")
+add_test(NAME ctrace_dyn_reports_runtime_findings
+    COMMAND sh -c "rm -f '${ctrace_runtime_log}'; out=$(CTRACE_FAKE_RUNTIME_LOG='${ctrace_runtime_log}' $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input tests/runtime/heap_overflow.c,tests/runtime/clean.c,tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/runtime/heap_overflow.c:7:15: error: heap-buffer-overflow WRITE of size 4 \\[coretrace-runtime-analyzer/heap-buffer-overflow\\]$' && printf '%s\\n' \"$out\" | grep -q '(coretrace-runtime-analyzer) Diagnostics summary: info=0, warning=0, error=1' && test $(wc -l < '${ctrace_runtime_log}') -eq 2 && ! grep -q main.py '${ctrace_runtime_log}' && while read -r program; do test ! -e \"$(dirname \"$program\")\" || exit 1; done < '${ctrace_runtime_log}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# The finding reaches the merged SARIF log with its CWE; one the stack analyzer reports at the
+# same line and CWE (the double free) becomes one result, confirmed at run time.
+add_test(NAME ctrace_dyn_findings_merge_with_static_ones
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --dyn --invoke ctrace_stack_analyzer --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input tests/double_free.c > ${CMAKE_BINARY_DIR}/runtime-merge.sarif 2>/dev/null && grep -q '\"cwe\": \"CWE-415\"' ${CMAKE_BINARY_DIR}/runtime-merge.sarif && test $(grep -c 'coretrace/v1' ${CMAKE_BINARY_DIR}/runtime-merge.sarif) -eq 1 && grep -q 'alsoReportedBy' ${CMAKE_BINARY_DIR}/runtime-merge.sarif"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# A program that could not be built or run is an incomplete analysis, never a clean one.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-fails.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-runtime-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-runtime-analyzer.sh\", \"args\": [\"--fake-exit=2\"]}}}\n")
+add_test(NAME ctrace_dyn_unbuildable_program_is_incomplete
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-fails.json --input tests/runtime/clean.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: coretrace-runtime-analyzer could not run'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# ctrace stops a runtime analyzer that runs past twice its per-program timeout, and the other
+# tools' results stand.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-hangs.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-runtime-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-runtime-analyzer.sh\", \"args\": [\"--fake-hang\"], \"timeout_s\": 1}}}\n")
+add_test(NAME ctrace_dyn_hung_tool_is_stopped
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-runtime-hangs.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'did not finish within its time limit' && printf '%s\\n' \"$out\" | grep -q '(cppcheck) Diagnostics summary: info=0, warning=0, error=1'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(ctrace_dyn_hung_tool_is_stopped PROPERTIES TIMEOUT 30)
+if(ENABLE_RUNTIME_ANALYZER)
+    # The shipped runtime analyzer, found next to ctrace without any configuration.
+    add_test(NAME ctrace_dyn_bundled_runtime_analyzer_finds_the_overflow
+        COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input tests/runtime/heap_overflow.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/runtime/heap_overflow.c:7:[0-9]*: error: heap-buffer-overflow WRITE of size 4 \\[coretrace-runtime-analyzer/heap-buffer-overflow\\]$'"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    add_test(NAME ctrace_dyn_bundled_runtime_analyzer_clean_program
+        COMMAND ctrace --dyn --input tests/runtime/clean.c
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(ctrace_dyn_bundled_runtime_analyzer_clean_program PROPERTIES
+        PASS_REGULAR_EXPRESSION "\\(coretrace-runtime-analyzer\\) Diagnostics summary: info=0, warning=0, error=0")
+endif()
 
 # A bundled tool is found next to ctrace, from a copy of the release layout run elsewhere with
 # an empty environment. The stand-in covers the lookup everywhere; the real standalone

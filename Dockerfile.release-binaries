@@ -79,6 +79,7 @@ RUN cmake -S . -B build -G Ninja \
         -DClang_DIR=/usr/lib/llvm-${LLVM_VERSION}/lib/cmake/clang \
         -DENABLE_PYTHON_ANALYZER=ON \
         -DCORETRACE_PYTHON_ANALYZER_PREBUILT=/prebuilt/coretrace-python-analyzer \
+        -DENABLE_RUNTIME_ANALYZER=ON \
     && cmake --build build -j"$(nproc)" \
     && ./build/ctrace --version >/dev/null \
     && ./build/ctrace -h >/dev/null
@@ -124,8 +125,9 @@ RUN set -eux; \
 # targets (RHEL 9, Ubuntu 22.04, Debian 12) and on the newest, each image bare: no compiler, no
 # LLVM, no Python. The Python analyzer is checked first; then only the C library's headers are
 # added, as any C build environment has them, and a C source is analyzed with no clang
-# installed. Each stage depends on the previous one, so the artifacts are only exported when all
-# of them pass.
+# installed. Last, a C++ build environment is added, which linking an instrumented program
+# needs, and the bundled runtime analyzer runs a program with a heap overflow. Each stage depends
+# on the previous one, so the artifacts are only exported when all of them pass.
 
 FROM base AS unpacked
 
@@ -143,7 +145,9 @@ RUN set -eux; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
     if command -v clang || ls /usr/lib/llvm-*; then echo "the verification image must not have clang" >&2; exit 1; fi; \
-    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \
+    apt-get install -y --no-install-recommends g++; \
+    sh /tests/release/check-runtime-analysis.sh /opt/coretrace /tmp/check-runtime
 
 FROM debian:12 AS verify-debian-12
 
@@ -153,7 +157,9 @@ COPY tests/ /tests/
 RUN set -eux; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
-    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \
+    apt-get install -y --no-install-recommends g++; \
+    sh /tests/release/check-runtime-analysis.sh /opt/coretrace /tmp/check-runtime
 
 FROM rockylinux/rockylinux:9 AS verify-rhel-9
 
@@ -163,7 +169,9 @@ COPY tests/ /tests/
 RUN set -eux; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     dnf install -y glibc-devel; \
-    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \
+    dnf install -y gcc-c++; \
+    sh /tests/release/check-runtime-analysis.sh /opt/coretrace /tmp/check-runtime
 
 FROM ubuntu:24.04 AS verify-ubuntu-24.04
 
@@ -173,7 +181,9 @@ COPY tests/ /tests/
 RUN set -eux; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
-    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c
+    sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \
+    apt-get install -y --no-install-recommends g++; \
+    sh /tests/release/check-runtime-analysis.sh /opt/coretrace /tmp/check-runtime
 
 FROM scratch AS artifacts
 

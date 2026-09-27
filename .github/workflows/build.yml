@@ -49,6 +49,8 @@ jobs:
           sudo ./scripts/ci/install-llvm-apt.sh 20
           echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
+          # The runtime analyzer publishes Linux releases only: the tests run the real one here.
+          echo "RUNTIME_ANALYZER=-DENABLE_RUNTIME_ANALYZER=ON" >> "$GITHUB_ENV"
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -81,7 +83,8 @@ jobs:
             -DLLVM_DIR="${LLVM_DIR}" \
             -DClang_DIR="${Clang_DIR}" \
             -DENABLE_PYTHON_ANALYZER=ON \
-            -DPython3_EXECUTABLE="${{ steps.python.outputs.python-path }}"
+            -DPython3_EXECUTABLE="${{ steps.python.outputs.python-path }}" \
+            ${RUNTIME_ANALYZER:-}
 
       - name: Build
         run: |

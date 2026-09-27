@@ -57,8 +57,11 @@ class ApiHandler
 
     /// `executable` is the running ctrace binary: each request gets what ships next to it
     /// (default models, bundled tools), as the CLI does. Empty when unknown.
-    ApiHandler(ILogger& logger, std::filesystem::path executable)
-        : logger_(logger), executable_(std::move(executable))
+    /// `allowDynamicAnalysis` comes from the server's own configuration, never from a request:
+    /// without it, a request for dynamic analysis is refused.
+    ApiHandler(ILogger& logger, std::filesystem::path executable, bool allowDynamicAnalysis = false)
+        : logger_(logger), executable_(std::move(executable)),
+          allowDynamicAnalysis_(allowDynamicAnalysis)
     {
     }
 
@@ -76,6 +79,7 @@ class ApiHandler
 
     ILogger& logger_;
     std::filesystem::path executable_;
+    bool allowDynamicAnalysis_;
 };
 
 #endif // PROCESS_IPC_API_HANDLER_HPP
