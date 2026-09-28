@@ -75,6 +75,24 @@ int main(int argc, char** argv)
         const Diagnostic noRule{"ikos", "", "x.c", 3, 0, Severity::Warning, "msg", ""};
         report.expect(renderLine(noRule) == "x.c:3: warning: msg [ikos]",
                       "renderLine: no column and no rule are omitted");
+        Diagnostic withRelated{"coretrace-concurrency-analyzer",
+                               "DataRaceGlobal",
+                               "race.c",
+                               14,
+                               9,
+                               Severity::Error,
+                               "unsynchronized concurrent access to global 'counter'",
+                               "CWE-362"};
+        withRelated.relatedLocations = {{"race.c", 14, 9, "Conflicting access"},
+                                        {"other.c", 3, 0, "Lock taken here"}};
+        report.expect(renderLine(withRelated) ==
+                          "race.c:14:9: error: unsynchronized concurrent access to global "
+                          "'counter' [coretrace-concurrency-analyzer/DataRaceGlobal]\n"
+                          "race.c:14:9: note: Conflicting access "
+                          "[coretrace-concurrency-analyzer/DataRaceGlobal]\n"
+                          "other.c:3: note: Lock taken here "
+                          "[coretrace-concurrency-analyzer/DataRaceGlobal]",
+                      "renderLine: each related location is a note line after the finding");
     }
 
     // cppcheck runs with an explicit --template so its output is a contract, not a default.
@@ -236,6 +254,35 @@ int main(int argc, char** argv)
         }
         report.expect(renderSarif({})["runs"].is_array() && renderSarif({})["runs"].empty(),
                       "renderSarif: nothing to report is an empty runs array");
+    }
+
+    // The other places a finding involves, and the confidence its tool gives it, travel in the
+    // log too; a finding without them carries neither key.
+    {
+        Diagnostic race{"coretrace-concurrency-analyzer",
+                        "DataRaceGlobal",
+                        "race.c",
+                        14,
+                        9,
+                        Severity::Error,
+                        "race",
+                        "CWE-362"};
+        race.confidence = "high";
+        race.relatedLocations = {{"race.c", 14, 9, "Conflicting access"}};
+        const nlohmann::json result = renderSarif({race})["runs"][0]["results"][0];
+        report.expect(result["properties"]["confidence"] == "high",
+                      "renderSarif: the confidence travels as a property");
+        const nlohmann::json& related = result["relatedLocations"];
+        report.expect(related.is_array() && related.size() == 1 &&
+                          related[0]["physicalLocation"]["artifactLocation"]["uri"] == "race.c" &&
+                          related[0]["physicalLocation"]["region"]["startLine"] == 14 &&
+                          related[0]["physicalLocation"]["region"]["startColumn"] == 9 &&
+                          related[0]["message"]["text"] == "Conflicting access",
+                      "renderSarif: related locations are rendered with their message");
+        const Diagnostic plain{"cppcheck", "doubleFree", "a.c", 1, 1, Severity::Error, "m", ""};
+        const nlohmann::json bare = renderSarif({plain})["runs"][0]["results"][0];
+        report.expect(!bare.contains("relatedLocations") && !bare.contains("properties"),
+                      "renderSarif: no related location and no confidence are left out");
     }
 
     // One weakness seen by two tools is one SARIF result: same file (however each tool spells

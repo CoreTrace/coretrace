@@ -175,6 +175,22 @@ namespace ctrace
             return hex;
         }
 
+        [[nodiscard]] nlohmann::json physicalLocationOf(const std::string& file, unsigned line,
+                                                        unsigned column)
+        {
+            nlohmann::json physical;
+            physical["artifactLocation"]["uri"] = file;
+            if (line > 0)
+            {
+                physical["region"]["startLine"] = line;
+                if (column > 0)
+                {
+                    physical["region"]["startColumn"] = column;
+                }
+            }
+            return physical;
+        }
+
         [[nodiscard]] nlohmann::json resultOf(const Diagnostic& diagnostic)
         {
             nlohmann::json result;
@@ -186,22 +202,29 @@ namespace ctrace
             result["message"]["text"] = diagnostic.message;
             if (!diagnostic.file.empty())
             {
-                nlohmann::json physical;
-                physical["artifactLocation"]["uri"] = diagnostic.file;
-                if (diagnostic.line > 0)
+                result["locations"] = nlohmann::json::array(
+                    {{{"physicalLocation",
+                       physicalLocationOf(diagnostic.file, diagnostic.line, diagnostic.column)}}});
+            }
+            for (const RelatedLocation& related : diagnostic.relatedLocations)
+            {
+                nlohmann::json location;
+                if (!related.file.empty())
                 {
-                    physical["region"]["startLine"] = diagnostic.line;
-                    if (diagnostic.column > 0)
-                    {
-                        physical["region"]["startColumn"] = diagnostic.column;
-                    }
+                    location["physicalLocation"] =
+                        physicalLocationOf(related.file, related.line, related.column);
                 }
-                result["locations"] = nlohmann::json::array({{{"physicalLocation", physical}}});
+                location["message"]["text"] = related.message;
+                result["relatedLocations"].push_back(std::move(location));
             }
             result["partialFingerprints"]["coretrace/v1"] = fingerprintOf(diagnostic);
             if (!diagnostic.cwe.empty())
             {
                 result["properties"]["cwe"] = diagnostic.cwe;
+            }
+            if (!diagnostic.confidence.empty())
+            {
+                result["properties"]["confidence"] = diagnostic.confidence;
             }
             return result;
         }
