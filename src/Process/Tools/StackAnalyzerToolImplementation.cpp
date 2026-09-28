@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/InProcessAnalysis.hpp"
 #include "Process/Tools/InputPaths.hpp"
 #include "Process/Tools/ReportFile.hpp"
 #include "app/AnalyzerApp.hpp"
@@ -17,16 +18,6 @@
 namespace
 {
     constexpr std::string_view kStackAnalyzerModule = "stack_analyzer";
-
-    // The analyzer runs in-process and its thread-safety across concurrent runs is not
-    // documented (on-disk summary caches, LLVM global state). Server mode handles requests on
-    // a thread pool, so runs are serialized process-wide until the analyzer proves otherwise.
-    // Per-tool locks in ToolInvoker only cover one invoker, not concurrent requests.
-    std::mutex& analyzerRunMutex()
-    {
-        static std::mutex mutex;
-        return mutex;
-    }
 
     struct AnalyzerArgBuildResult
     {
@@ -579,7 +570,7 @@ namespace ctrace
         const ctrace::stack::cli::OutputFormat outputFormat = parseResult.parsed.outputFormat;
         ctrace::stack::app::ReportResult analysis;
         {
-            const std::lock_guard<std::mutex> serializedRun(analyzerRunMutex());
+            const std::lock_guard<std::mutex> serializedRun(inProcessAnalysisMutex());
             analysis = ctrace::stack::app::runAnalysis(std::move(parseResult.parsed));
         }
         if (!analysis.isOk())

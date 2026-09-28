@@ -38,6 +38,16 @@ Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and 
 Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
 the pinned tag.
 
+[coretrace-concurrency-analyzer](https://github.com/CoreTrace/coretrace-concurrency-analyzer) is
+linked into `ctrace` like the stack analyzer, and compiles in process too
+(`--invoke coretrace-concurrency-analyzer`, and part of `--static`). It reports data races on
+shared globals, lock-order deadlocks, missing joins, condition waits without a predicate, thread
+arguments escaping their frame, unsafe signal handlers and weak publication ordering, each with
+its CWE and the other location involved (the conflicting access of a race) as a note and a SARIF
+related location. With `--compile-commands`, the inputs are analyzed as one program, each built
+as the database says, so a thread started in one file is related to its body in another.
+`tools.coretrace-concurrency-analyzer.rules` selects its rules.
+
 `--dyn` runs [coretrace-runtime-analyzer](https://github.com/CoreTrace/coretrace-runtime-analyzer)
 on each C/C++ input, which must be a whole program: it is built with CoreTrace instrumentation
 and run, and the memory errors that happen (heap and stack overflows, uses after free, double

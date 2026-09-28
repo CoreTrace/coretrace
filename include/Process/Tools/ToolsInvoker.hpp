@@ -126,6 +126,8 @@ namespace ctrace
             registerTool("ikos", std::make_unique<IkosToolImplementation>());
             registerTool("ctrace_stack_analyzer",
                          std::make_unique<StackAnalyzerToolImplementation>());
+            registerTool("coretrace-concurrency-analyzer",
+                         std::make_unique<ConcurrencyAnalyzerToolImplementation>());
             registerTool("coretrace-python-analyzer",
                          std::make_unique<PythonAnalyzerToolImplementation>());
             registerTool("coretrace-runtime-analyzer",
@@ -136,6 +138,7 @@ namespace ctrace
                             "tscancode",
                             "ikos",
                             "ctrace_stack_analyzer",
+                            "coretrace-concurrency-analyzer",
                             "coretrace-python-analyzer"};
             dynamic_tools = {"coretrace-runtime-analyzer"};
 

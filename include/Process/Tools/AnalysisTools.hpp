@@ -96,6 +96,27 @@ namespace ctrace
         }
     }
 
+    /// Appends the build context every C/C++ tool receives: `-I<dir>` for each
+    /// `stack_analyzer.include_dirs` entry, then `-D<macro>` for each `stack_analyzer.defines`
+    /// entry. Empty entries are skipped: a bare `-I` would take the next argument as its value.
+    inline void appendBuildContext(std::vector<std::string>& args, const ProgramConfig& config)
+    {
+        for (const std::string& dir : config.stack_analyzer.include_dirs)
+        {
+            if (!dir.empty())
+            {
+                args.push_back("-I" + dir);
+            }
+        }
+        for (const std::string& macro : config.stack_analyzer.defines)
+        {
+            if (!macro.empty())
+            {
+                args.push_back("-D" + macro);
+            }
+        }
+    }
+
     /// Runs an external tool to completion. A tool that cannot be started is reported on the
     /// sink and yields nothing. An exit code outside `completedCodes` (by default only 0) is
     /// reported too, but the output is still returned: partial findings are not lost because
@@ -191,6 +212,31 @@ namespace ctrace
         }
         void executeBatch(const std::vector<std::string>& files,
                           const ctrace::ProgramConfig& config, ToolOutput& output) const override;
+        std::string name() const override;
+    };
+
+    /// coretrace-concurrency-analyzer (github.com/CoreTrace/coretrace-concurrency-analyzer),
+    /// linked into ctrace like the stack analyzer: data races on shared globals, lock-order
+    /// deadlocks, missing joins, condition waits without a predicate, thread arguments escaping
+    /// their frame, unsafe signal handlers, weak publication. With a compilation database the
+    /// inputs are analyzed as one program, each unit built as the database says, so that a
+    /// thread started in one unit is related to its body in another; otherwise each input is
+    /// analyzed on its own, built with `stack_analyzer.include_dirs` and `.defines`. An input
+    /// that does not compile, or that the database does not list, makes the run incomplete.
+    class ConcurrencyAnalyzerToolImplementation : public AnalysisToolBase
+    {
+      public:
+        void execute(const std::string& file, const ProgramConfig& config,
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files, const ProgramConfig& config,
+                          ToolOutput& output) const override;
         std::string name() const override;
     };
 

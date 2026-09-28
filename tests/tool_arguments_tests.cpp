@@ -2,6 +2,7 @@
 //
 // Each tool reports its own identity and builds its command line from the configuration.
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/CompileCommands.hpp"
 #include "ctrace_tools/languageType.hpp"
 
 #include <algorithm>
@@ -234,6 +235,15 @@ int main()
                       "coretrace-runtime-analyzer: timeout, user arguments, then -I/-D and the "
                       "source after --");
 
+        // A bare -I would take the next argument as its directory.
+        config.stack_analyzer.include_dirs = {"", "inc"};
+        config.stack_analyzer.defines = {"FOO=1", ""};
+        report.expect(
+            (RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program") ==
+             std::vector<std::string>{"--format", "sarif", "--timeout", "5", "-o", "/run/program",
+                                      "--show-output", "--", "-Iinc", "-DFOO=1", "a.c"}),
+            "coretrace-runtime-analyzer: an empty include directory or define is not passed");
+
         const RuntimeAnalyzerToolImplementation runtime;
         report.expect(runtime.name() == "coretrace-runtime-analyzer" &&
                           runtime.analyzes(ctrace_defs::LanguageType::C) &&
@@ -294,6 +304,69 @@ int main()
             TscancodeToolImplementation::buildArguments(configWithSarif(false), "a.c");
         report.expect(contains(args, "--enable=all") && args.back() == "a.c",
                       "tscancode: enables all checks and passes the file");
+    }
+
+    // A compilation database, reduced to what replays each unit's compilation elsewhere: the
+    // source resolved against its directory, and the arguments that say how it is interpreted,
+    // without the compiler, the source itself, output and dependency-file selection, and
+    // optimization levels. CMake's "command" strings are split as a shell would.
+    {
+        const std::filesystem::path dir =
+            std::filesystem::temp_directory_path() / "ctrace-compile-commands-tests";
+        std::filesystem::create_directories(dir);
+        const std::filesystem::path database = dir / "compile_commands.json";
+        {
+            std::ofstream out(database);
+            out << R"json([
+  {"directory": "/proj", "file": "src/a.c",
+   "arguments": ["/usr/bin/cc", "-c", "-O2", "-I/inc", "-DX=1", "-MD", "-MF", "a.d", "-o", "a.o", "src/a.c"]},
+  {"directory": "/proj", "file": "/proj/b.c",
+   "command": "cc -c -DMSG=\"hello world\" -I\"/inc dir\" -std=gnu11 -flto -Os -ob.o /proj/b.c"},
+  {"directory": "/proj", "file": "src/a.c", "arguments": ["cc", "-DSECOND", "src/a.c"]}
+])json";
+        }
+        std::string error;
+        const auto commands = readCompileCommands(database, error);
+        report.expect(commands.has_value() && error.empty() && commands->size() == 2,
+                      "compile commands: one entry per source, the first when listed twice");
+        if (commands.has_value() && commands->size() == 2)
+        {
+            report.expect((*commands)[0].file == "/proj/src/a.c" &&
+                              (*commands)[0].arguments ==
+                                  std::vector<std::string>{"-I/inc", "-DX=1"},
+                          "compile commands: the source is resolved against its directory; the "
+                          "compiler, -c, -O, dependency and output options and the source are "
+                          "left out");
+            report.expect(
+                (*commands)[1].file == "/proj/b.c" &&
+                    (*commands)[1].arguments ==
+                        std::vector<std::string>{"-DMSG=hello world", "-I/inc dir", "-std=gnu11"},
+                "compile commands: a command string is split as a shell would; -flto "
+                "and -Os are left out");
+        }
+        {
+            std::ofstream out(database);
+            out << R"json({"file": "a.c"})json";
+        }
+        report.expect(!readCompileCommands(database, error).has_value() && !error.empty(),
+                      "compile commands: a document that is not an array of entries is an error");
+        report.expect(!readCompileCommands(dir / "missing.json", error).has_value() &&
+                          !error.empty(),
+                      "compile commands: a database that cannot be read is an error");
+
+        ProgramConfig config;
+        report.expect(compileCommandsPath(config).empty(),
+                      "compile commands: nothing configured names no database");
+        config.files.compile_commands = dir.string();
+        report.expect(compileCommandsPath(config) == database,
+                      "compile commands: a directory names the database it holds");
+        config.files.compile_commands = database.string();
+        report.expect(compileCommandsPath(config) == database,
+                      "compile commands: a file is taken as is");
+        config.files.compile_commands.clear();
+        config.files.input = {"main.c", "build/compile_commands.json"};
+        report.expect(compileCommandsPath(config) == "build/compile_commands.json",
+                      "compile commands: a .json input is a database");
     }
 
     if (report.failures == 0)

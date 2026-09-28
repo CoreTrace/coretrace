@@ -16,6 +16,16 @@ namespace ctrace
         Error
     };
 
+    /// Another place a finding involves: the other access of a data race, the other lock of a
+    /// cycle. Rendered as a note after the finding, and as a SARIF related location.
+    struct RelatedLocation
+    {
+        std::string file; ///< Spelled as the finding's own file is; empty when unknown.
+        unsigned line = 0;
+        unsigned column = 0;
+        std::string message;
+    };
+
     /// One finding, whatever tool produced it. Every tool normalizes its own format to this
     /// model; counting, gating and merging only ever see this.
     struct Diagnostic
@@ -28,6 +38,10 @@ namespace ctrace
         Severity severity = Severity::Warning;
         std::string message;
         std::string cwe; ///< "CWE-415" style identifier when the tool reports one.
+        // Initialized in place so that the tools' {tool, rule, ..., cwe} initializations may
+        // stop at the CWE without -Wmissing-field-initializers.
+        std::string confidence{}; ///< "low", "medium" or "high" when the tool rates its finding.
+        std::vector<RelatedLocation> relatedLocations{};
     };
 
     struct DiagnosticSummary
@@ -72,27 +86,42 @@ namespace ctrace
         return summary;
     }
 
-    /// `file:line:col: severity: message [tool/rule]`, the gcc-style line editors and CI
-    /// annotators already understand. Unknown parts are left out rather than printed as 0.
-    [[nodiscard]] inline std::string renderLine(const Diagnostic& diagnostic)
+    /// `file:line:col`; unknown parts are left out rather than printed as 0.
+    [[nodiscard]] inline std::string renderPosition(std::string_view file, unsigned line,
+                                                    unsigned column)
     {
-        std::string line = diagnostic.file;
-        if (diagnostic.line > 0)
+        std::string position(file);
+        if (line > 0)
         {
-            line += ":" + std::to_string(diagnostic.line);
-            if (diagnostic.column > 0)
+            position += ":" + std::to_string(line);
+            if (column > 0)
             {
-                line += ":" + std::to_string(diagnostic.column);
+                position += ":" + std::to_string(column);
             }
         }
-        line += ": ";
-        line += severityName(diagnostic.severity);
-        line += ": " + diagnostic.message + " [" + diagnostic.tool;
+        return position;
+    }
+
+    /// `file:line:col: severity: message [tool/rule]`, the gcc-style line editors and CI
+    /// annotators already understand, then one `note:` line per related location.
+    [[nodiscard]] inline std::string renderLine(const Diagnostic& diagnostic)
+    {
+        std::string tag = " [" + diagnostic.tool;
         if (!diagnostic.ruleId.empty())
         {
-            line += "/" + diagnostic.ruleId;
+            tag += "/" + diagnostic.ruleId;
         }
-        line += "]";
+        tag += "]";
+
+        std::string line = renderPosition(diagnostic.file, diagnostic.line, diagnostic.column);
+        line += ": ";
+        line += severityName(diagnostic.severity);
+        line += ": " + diagnostic.message + tag;
+        for (const RelatedLocation& related : diagnostic.relatedLocations)
+        {
+            line += "\n" + renderPosition(related.file, related.line, related.column);
+            line += ": note: " + related.message + tag;
+        }
         return line;
     }
 

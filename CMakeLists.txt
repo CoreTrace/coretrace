@@ -38,6 +38,9 @@ set(SOURCES
     src/ctrace_tools/mangle.cpp
     src/ctrace_tools/languageType.cpp
     src/ctrace_tools/strings.cpp
+    src/Process/Tools/CompileCommands.cpp
+    src/Process/Tools/ConcurrencyAnalyzerBridge.cpp
+    src/Process/Tools/ConcurrencyAnalyzerToolImplementation.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
@@ -100,6 +103,9 @@ target_link_libraries(ctrace PRIVATE coretrace::logger)
 include(${CMAKE_SOURCE_DIR}/cmake/stackUsageAnalyzer.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/clangHeaders.cmake)
 target_link_libraries(ctrace PRIVATE coretrace::stack_usage_analyzer_lib)
+
+include(${CMAKE_SOURCE_DIR}/cmake/concurrencyAnalyzer.cmake)
+target_link_libraries(ctrace PRIVATE coretrace::coretrace_concurrency_analyzer_lib)
 
 include(${CMAKE_SOURCE_DIR}/cmake/httpLib.cmake)
 target_link_libraries(ctrace PRIVATE httplib::httplib)
@@ -217,9 +223,13 @@ add_test(NAME ctrace_help_lists_quiet COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_quiet PROPERTIES PASS_REGULAR_EXPRESSION "--quiet")
 add_test(NAME ctrace_help_lists_version COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSION "--version")
+add_test(NAME ctrace_help_lists_concurrency_analyzer COMMAND ctrace --help)
+set_tests_properties(ctrace_help_lists_concurrency_analyzer PROPERTIES
+    PASS_REGULAR_EXPRESSION "coretrace-concurrency-analyzer")
 
 add_executable(ctrace_tool_arguments_tests
     tests/tool_arguments_tests.cpp
+    src/Process/Tools/CompileCommands.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
@@ -263,6 +273,9 @@ add_test(NAME ctrace_tool_diagnostics_tests
 # Each file reaches only the tools of its language.
 add_executable(ctrace_tool_routing_tests
     tests/tool_routing_tests.cpp
+    src/Process/Tools/CompileCommands.cpp
+    src/Process/Tools/ConcurrencyAnalyzerBridge.cpp
+    src/Process/Tools/ConcurrencyAnalyzerToolImplementation.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
@@ -276,7 +289,8 @@ add_executable(ctrace_tool_routing_tests
     src/ctrace_tools/strings.cpp
 )
 target_link_libraries(ctrace_tool_routing_tests
-    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib)
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
+            coretrace::coretrace_concurrency_analyzer_lib)
 add_test(NAME ctrace_tool_routing_tests COMMAND ctrace_tool_routing_tests)
 
 add_executable(ctrace_exit_policy_tests tests/exit_policy_tests.cpp)
@@ -330,6 +344,9 @@ add_executable(ctrace_server_concurrency_tests
     src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
     src/App/ToolConfig.cpp
+    src/Process/Tools/CompileCommands.cpp
+    src/Process/Tools/ConcurrencyAnalyzerBridge.cpp
+    src/Process/Tools/ConcurrencyAnalyzerToolImplementation.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
@@ -344,7 +361,7 @@ add_executable(ctrace_server_concurrency_tests
 
 target_link_libraries(ctrace_server_concurrency_tests
     PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
-            httplib::httplib)
+            coretrace::coretrace_concurrency_analyzer_lib httplib::httplib)
 
 add_test(NAME ctrace_server_concurrency_tests
     COMMAND ctrace_server_concurrency_tests ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
@@ -358,6 +375,9 @@ add_executable(ctrace_server_http_tests
     src/Process/Ipc/HttpServer.cpp
     src/App/Files.cpp
     src/App/ToolConfig.cpp
+    src/Process/Tools/CompileCommands.cpp
+    src/Process/Tools/ConcurrencyAnalyzerBridge.cpp
+    src/Process/Tools/ConcurrencyAnalyzerToolImplementation.cpp
     src/Process/Tools/CppCheckToolImplementation.cpp
     src/Process/Tools/FlawfinderToolImplementation.cpp
     src/Process/Tools/PythonAnalyzerToolImplementation.cpp
@@ -371,7 +391,7 @@ add_executable(ctrace_server_http_tests
 )
 target_link_libraries(ctrace_server_http_tests
     PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
-            httplib::httplib)
+            coretrace::coretrace_concurrency_analyzer_lib httplib::httplib)
 add_test(NAME ctrace_server_http_tests
     COMMAND ctrace_server_http_tests ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
 
@@ -494,6 +514,77 @@ add_test(NAME ctrace_stack_analyzer_findings_name_rule_and_cwe
 add_test(NAME ctrace_stack_analyzer_recursion_has_a_rule
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer --input ${CMAKE_SOURCE_DIR}/tests/infinite_recursion.c > ${CMAKE_BINARY_DIR}/recursion.sarif 2>/dev/null && grep -q '\"ruleId\": \"Recursion.Unconditional\"' ${CMAKE_BINARY_DIR}/recursion.sarif && grep -q '\"cwe\": \"CWE-674\"' ${CMAKE_BINARY_DIR}/recursion.sarif && ! grep -q '\"ruleId\": \"None\"' ${CMAKE_BINARY_DIR}/recursion.sarif")
 
+# Compatibility gate with the pinned coretrace-concurrency-analyzer library: each field of its
+# Diagnostic in CoreTrace's model, and the rule names the configuration accepts.
+add_executable(ctrace_concurrency_analyzer_bridge_tests
+    tests/concurrency_analyzer_bridge_tests.cpp
+    src/Process/Tools/ConcurrencyAnalyzerBridge.cpp
+)
+target_link_libraries(ctrace_concurrency_analyzer_bridge_tests
+    PRIVATE coretrace::coretrace_concurrency_analyzer_lib)
+add_test(NAME ctrace_concurrency_analyzer_bridge_tests
+    COMMAND ctrace_concurrency_analyzer_bridge_tests)
+
+# coretrace-concurrency-analyzer is linked in, like the stack analyzer. The data race of race.c
+# is an error with its CWE; the conflicting access follows as a note, and is a related location
+# in the SARIF log; the same program under a mutex is clean.
+add_test(NAME ctrace_concurrency_analyzer_reports_the_race
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --input tests/concurrency/race.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/concurrency/race.c:14:[0-9]*: error: .*\\[coretrace-concurrency-analyzer/DataRaceGlobal\\]$' && printf '%s\\n' \"$out\" | grep -q '^tests/concurrency/race.c:14:[0-9]*: note: .*\\[coretrace-concurrency-analyzer/DataRaceGlobal\\]$' && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=1'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME ctrace_concurrency_analyzer_sarif_names_cwe_and_both_accesses
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke coretrace-concurrency-analyzer --input tests/concurrency/race.c > ${CMAKE_BINARY_DIR}/race.sarif 2>/dev/null && grep -q '\"ruleId\": \"DataRaceGlobal\"' ${CMAKE_BINARY_DIR}/race.sarif && grep -q '\"cwe\": \"CWE-362\"' ${CMAKE_BINARY_DIR}/race.sarif && grep -q '\"relatedLocations\"' ${CMAKE_BINARY_DIR}/race.sarif && grep -q '\"confidence\": \"high\"' ${CMAKE_BINARY_DIR}/race.sarif && grep -q '\"uri\": \"tests/concurrency/race.c\"' ${CMAKE_BINARY_DIR}/race.sarif && ! grep -q '\"uri\": \"/' ${CMAKE_BINARY_DIR}/race.sarif"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME ctrace_concurrency_analyzer_clean_program
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --input tests/concurrency/race_locked.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=0'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# A race across two units is found from the compilation database, where each unit is built as
+# its "command" says and the two are analyzed as one program; not from the files on their own.
+# A unit the database does not build, like a source that does not compile, leaves the analysis
+# incomplete, never clean, and the other tools still report.
+set(ctrace_concurrency_project ${CMAKE_BINARY_DIR}/concurrency-project)
+file(WRITE ${ctrace_concurrency_project}/compile_commands.json
+    "[\n  {\"directory\": \"${CMAKE_SOURCE_DIR}/tests/concurrency/project\", \"file\": \"main.c\", \"command\": \"cc -c -O2 -o main.o main.c\"},\n  {\"directory\": \"${CMAKE_SOURCE_DIR}/tests/concurrency/project\", \"file\": \"worker.c\", \"command\": \"cc -c -O2 -o worker.o worker.c\"}\n]\n")
+add_test(NAME ctrace_concurrency_analyzer_project_finds_the_cross_unit_race
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --compile-commands ${ctrace_concurrency_project} 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q 'as one program' && printf '%s\\n' \"$out\" | grep -q 'worker.c:13:[0-9]*: error: .*\\[coretrace-concurrency-analyzer/DataRaceGlobal\\]$'")
+add_test(NAME ctrace_concurrency_analyzer_separate_units_miss_the_cross_unit_race
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --input tests/concurrency/project/main.c,tests/concurrency/project/worker.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=0'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME ctrace_concurrency_analyzer_unit_missing_from_the_database_is_incomplete
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --compile-commands ${ctrace_concurrency_project} --input tests/concurrency/race_locked.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'race_locked.c is not in' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: coretrace-concurrency-analyzer could not run'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME ctrace_concurrency_analyzer_uncompilable_source_is_incomplete
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer,cppcheck --input tests/concurrency/does_not_compile.c,tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Unable to compile tests/concurrency/does_not_compile.c' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: coretrace-concurrency-analyzer could not run' && printf '%s\\n' \"$out\" | grep -q '(cppcheck) Diagnostics summary: info=0, warning=0, error=1'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# The linked analyzers compile in this process: like the release archive, where CT_CLANG names
+# ctrace itself, they must never run a clang executable. Here CT_CLANG names one that always
+# fails, next to Clang's real headers, and both analyzers still report, on one file and on a
+# project.
+set(ctrace_no_clang ${CMAKE_BINARY_DIR}/no-clang)
+file(MAKE_DIRECTORY ${ctrace_no_clang}/bin ${ctrace_no_clang}/lib/clang/${coretrace_clang_version})
+file(CREATE_LINK /usr/bin/false ${ctrace_no_clang}/bin/clang SYMBOLIC)
+file(CREATE_LINK ${coretrace_clang_resource_dir}/include
+    ${ctrace_no_clang}/lib/clang/${coretrace_clang_version}/include SYMBOLIC)
+add_test(NAME ctrace_linked_analyzers_run_no_clang_executable
+    COMMAND sh -c "out=$(CT_CLANG='${ctrace_no_clang}/bin/clang' $<TARGET_FILE:ctrace> --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer --input tests/concurrency/race.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=1' && out=$(CT_CLANG='${ctrace_no_clang}/bin/clang' $<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --compile-commands ${ctrace_concurrency_project} 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=1'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# tools.coretrace-concurrency-analyzer.rules narrows the analysis: without data-race, race.c is
+# clean. A name the analyzer has no rule for leaves the analysis incomplete.
+file(WRITE ${CMAKE_BINARY_DIR}/concurrency-rules.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-concurrency-analyzer\": {\"rules\": [\"missing-join\"]}}}\n")
+add_test(NAME ctrace_concurrency_analyzer_rules_select_the_checks
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --config ${CMAKE_BINARY_DIR}/concurrency-rules.json --invoke coretrace-concurrency-analyzer --input tests/concurrency/race.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=0'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+file(WRITE ${CMAKE_BINARY_DIR}/concurrency-unknown-rule.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-concurrency-analyzer\": {\"rules\": [\"races\"]}}}\n")
+add_test(NAME ctrace_concurrency_analyzer_unknown_rule_is_incomplete
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --config ${CMAKE_BINARY_DIR}/concurrency-unknown-rule.json --invoke coretrace-concurrency-analyzer --input tests/concurrency/race.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q \"Unknown rule 'races'\""
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# In one run with cppcheck and the stack analyzer, the log holds one run per tool: each reports
+# something, cppcheck the double free of double_free.c.
+add_test(NAME ctrace_concurrency_findings_join_the_merged_log
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer,coretrace-concurrency-analyzer --input tests/concurrency/race.c,tests/double_free.c > ${CMAKE_BINARY_DIR}/concurrency-merged.sarif 2>/dev/null && test $(grep -c '\"name\": \"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif) -eq 3 && grep -q '\"name\": \"cppcheck\"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif && grep -q '\"name\": \"ctrace_stack_analyzer\"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif && grep -q '\"name\": \"coretrace-concurrency-analyzer\"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # The CI's network steps retry with a growing delay (apt.llvm.org drops connections).
 add_test(NAME ctrace_ci_retry_helper COMMAND sh ${CMAKE_SOURCE_DIR}/tests/retry_test.sh)
 
@@ -541,12 +632,12 @@ add_test(NAME ctrace_compile_commands_include_deps_on_request
 
 # --static runs every static tool on the files of its language. flawfinder, TscanCode and IKOS
 # are pointed at missing commands, so that the result does not depend on what is installed:
-# they are reported and the analysis is incomplete (exit 3), while cppcheck and the stack
-# analyzer analyze the C file and the Python analyzer the Python one.
+# they are reported and the analysis is incomplete (exit 3), while cppcheck, the stack analyzer
+# and the concurrency analyzer analyze the C file and the Python analyzer the Python one.
 file(WRITE ${CMAKE_BINARY_DIR}/static-tools.json
     "{\"schema_version\": 1, \"tools\": {\"coretrace-python-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-python-analyzer.sh\"}, \"flawfinder\": {\"path\": \"/nonexistent/ctrace-flawfinder\"}, \"tscancode\": {\"path\": \"/nonexistent/ctrace-tscancode\"}, \"ikos\": {\"path\": \"/nonexistent/ctrace-ikos\"}}}\n")
 add_test(NAME ctrace_static_runs_every_static_tool
-    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --static --config ${CMAKE_BINARY_DIR}/static-tools.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c,${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Running static analysis on 2 file(s)' && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*double_free.c' && printf '%s\\n' \"$out\" | grep -q '(ctrace_stack_analyzer) Diagnostics summary: info=0, warning=0, error=1' && printf '%s\\n' \"$out\" | grep -q 'Running coretrace-python-analyzer on .* for 1 input file(s)' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: flawfinder,ikos,tscancode could not run' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*main.py'")
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --static --config ${CMAKE_BINARY_DIR}/static-tools.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c,${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Running static analysis on 2 file(s)' && printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*double_free.c' && printf '%s\\n' \"$out\" | grep -q '(ctrace_stack_analyzer) Diagnostics summary: info=0, warning=0, error=1' && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=0' && printf '%s\\n' \"$out\" | grep -q 'Running coretrace-python-analyzer on .* for 1 input file(s)' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: flawfinder,ikos,tscancode could not run' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck on .*main.py'")
 # --dyn runs coretrace-runtime-analyzer, here a stand-in that checks the command line ctrace
 # builds and prints the SARIF the real tool prints (tests/fake-runtime-analyzer.sh). Each
 # program gets a private run directory, removed afterwards.
@@ -624,6 +715,7 @@ set(coretrace_unit_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
     ctrace_ipc_socket_tests
+    ctrace_concurrency_analyzer_bridge_tests
     ctrace_ci_retry_helper
 )
 get_property(coretrace_tests DIRECTORY PROPERTY TESTS)
@@ -653,6 +745,7 @@ foreach(coretrace_target
     ctrace_server_cli_tests
     ctrace_mixed_language_tests
     ctrace_stack_analyzer_bridge_tests
+    ctrace_concurrency_analyzer_bridge_tests
 )
     coretrace_enable_warnings(${coretrace_target})
     coretrace_enable_coverage(${coretrace_target})

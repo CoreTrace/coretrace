@@ -163,6 +163,9 @@ namespace ctrace
         /// `tools.coretrace-runtime-analyzer.timeout_s`: how long each program may run; 0
         /// disables the limit.
         std::uint32_t runtime_analyzer_timeout_s = 60;
+        /// `tools.coretrace-concurrency-analyzer.rules`: the rules to run, by the names the
+        /// analyzer's command line uses (data-race, missing-join...); empty means every rule.
+        std::vector<std::string> concurrency_analyzer_rules;
     };
 
     struct ProgramConfig
