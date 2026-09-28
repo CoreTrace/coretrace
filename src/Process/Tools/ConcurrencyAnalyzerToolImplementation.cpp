@@ -9,7 +9,9 @@
 #include <coretrace_concurrency_analysis.hpp>
 #include <coretrace_concurrency_analyzer.hpp>
 
+#include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <filesystem>
 #include <map>
@@ -34,6 +36,10 @@ namespace
         ctrace::concurrency::CompileRequest request;
         request.inputFile = file;
         request.extraCompileArgs = std::move(arguments);
+        // In memory, as the stack analyzer compiles: coretrace-compiler then runs cc1 in this
+        // process. Its bitcode-file output goes through the clang driver, which runs a clang
+        // executable, and a release archive ships none (CT_CLANG names ctrace itself).
+        request.format = ctrace::concurrency::IRFormat::LL;
         ctrace::concurrency::CompileResult result = compiler.compile(request, context);
         if (result.success && result.module != nullptr)
         {
@@ -44,6 +50,16 @@ namespace
                                     : result.diagnostics;
         output.error("Unable to compile " + file + " for the concurrency analysis:\n" + why);
         return std::nullopt;
+    }
+
+    /// `module` as bitcode, the form a project analysis reads its units from.
+    [[nodiscard]] std::string bitcodeOf(const llvm::Module& module)
+    {
+        std::string bitcode;
+        llvm::raw_string_ostream stream(bitcode);
+        llvm::WriteBitcodeToFile(module, stream);
+        stream.flush();
+        return bitcode;
     }
 
     void collect(std::vector<ctrace::Diagnostic>& into,
@@ -122,16 +138,15 @@ namespace
                 continue;
             }
             llvm::LLVMContext llvmContext;
-            auto compiled =
+            const auto compiled =
                 compileUnit(compiler, file, command->second->arguments, llvmContext, output);
             if (!compiled)
             {
                 continue;
             }
-            // The module the compiler parsed reads from the bitcode buffer, so it goes first;
-            // the analysis parses those bytes again when it reaches the unit.
-            compiled->module.reset();
-            units.add(file, std::move(compiled->llvmBitcode));
+            // Held as bitcode, and parsed again when the analysis reaches the unit, so that only
+            // the units it works on are in memory at once.
+            units.add(file, bitcodeOf(*compiled->module));
         }
         if (units.size() == 0)
         {

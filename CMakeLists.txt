@@ -555,6 +555,18 @@ add_test(NAME ctrace_concurrency_analyzer_unit_missing_from_the_database_is_inco
 add_test(NAME ctrace_concurrency_analyzer_uncompilable_source_is_incomplete
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer,cppcheck --input tests/concurrency/does_not_compile.c,tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'Unable to compile tests/concurrency/does_not_compile.c' && printf '%s\\n' \"$out\" | grep -q 'Analysis incomplete: coretrace-concurrency-analyzer could not run' && printf '%s\\n' \"$out\" | grep -q '(cppcheck) Diagnostics summary: info=0, warning=0, error=1'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# The linked analyzers compile in this process: like the release archive, where CT_CLANG names
+# ctrace itself, they must never run a clang executable. Here CT_CLANG names one that always
+# fails, next to Clang's real headers, and both analyzers still report, on one file and on a
+# project.
+set(ctrace_no_clang ${CMAKE_BINARY_DIR}/no-clang)
+file(MAKE_DIRECTORY ${ctrace_no_clang}/bin ${ctrace_no_clang}/lib/clang/${coretrace_clang_version})
+file(CREATE_LINK /usr/bin/false ${ctrace_no_clang}/bin/clang SYMBOLIC)
+file(CREATE_LINK ${coretrace_clang_resource_dir}/include
+    ${ctrace_no_clang}/lib/clang/${coretrace_clang_version}/include SYMBOLIC)
+add_test(NAME ctrace_linked_analyzers_run_no_clang_executable
+    COMMAND sh -c "out=$(CT_CLANG='${ctrace_no_clang}/bin/clang' $<TARGET_FILE:ctrace> --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer --input tests/concurrency/race.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=1' && out=$(CT_CLANG='${ctrace_no_clang}/bin/clang' $<TARGET_FILE:ctrace> --invoke coretrace-concurrency-analyzer --compile-commands ${ctrace_concurrency_project} 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '(coretrace-concurrency-analyzer) Diagnostics summary: info=0, warning=0, error=1'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # tools.coretrace-concurrency-analyzer.rules narrows the analysis: without data-race, race.c is
 # clean. A name the analyzer has no rule for leaves the analysis incomplete.
 file(WRITE ${CMAKE_BINARY_DIR}/concurrency-rules.json
