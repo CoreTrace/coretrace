@@ -26,7 +26,9 @@ Type: `bool`
 Default: `false`
 Allowed: `true|false`
 Description: enable static analysis pipeline.
-Impact: runs static tool set when true.
+Impact: runs the static tool set when true: `cppcheck`, `flawfinder`, `tscancode`, `ikos`,
+`ctrace_stack_analyzer`, `coretrace-concurrency-analyzer` and `coretrace-python-analyzer`, each
+on the files of its language.
 CLI: `--static`
 
 - `analysis.dynamic`
@@ -45,7 +47,7 @@ CLI: `--dyn`
 - `analysis.invoke`
 Type: `string|string[]`
 Default: `[]`
-Allowed: `flawfinder|ikos|cppcheck|tscancode|ctrace_stack_analyzer|coretrace-python-analyzer`
+Allowed: `flawfinder|ikos|cppcheck|tscancode|ctrace_stack_analyzer|coretrace-concurrency-analyzer|coretrace-python-analyzer|coretrace-runtime-analyzer`
 Description: explicit tool selection.
 Impact: runs only selected tools through specific-tool path.
 CLI: `--invoke`
@@ -315,6 +317,30 @@ then `tools.coretrace-runtime-analyzer.args`, then `--` followed by `-I`/`-D` fr
 `stack_analyzer.include_dirs` and `stack_analyzer.defines` and the input. Each program is built
 in a private temporary directory, removed afterwards. Exit code 2 from the tool (the program
 could not be built or run) makes the analysis incomplete.
+
+- `tools.coretrace-concurrency-analyzer.rules`
+Type: `string|string[]`
+Default: `[]` (every rule)
+Allowed: `data-race|missing-join|deadlock-lock-order|condition-wait|fork-after-thread|unreaped-child|thread-arg-escape|unsafe-signal-handler|weak-publication|thread-arg-freed|thread-local-escape`
+Description: the rules the concurrency analyzer runs, by the names of its own `--rules` option.
+Impact: only the selected rules report. An unknown name is reported when the tool runs, and the
+analysis is incomplete (exit code 3).
+CLI: not exposed (`config/tool-config.json` only)
+
+[coretrace-concurrency-analyzer](https://github.com/CoreTrace/coretrace-concurrency-analyzer) is
+linked into `ctrace`, like the stack analyzer: it has no `path` and no `args`, and needs no clang
+installed. It reports data races on shared globals (`DataRaceGlobal`, CWE-362), lock-order
+deadlocks (`DeadlockLockOrder`, CWE-833), missing joins, condition waits without a predicate,
+thread arguments escaping their frame or freed early, unsafe signal handlers and weak publication
+ordering. With `files.compile_commands`, or a `compile_commands.json` among the inputs, the C/C++
+inputs are analyzed as one program: each unit is built with the arguments the database records
+for it (without its output, dependency-file and optimization options), so a thread started in
+one unit is related to its body in another, and a unit the database does not list makes the
+analysis incomplete. Without a database, each input is analyzed on its own, built with `-I`/`-D`
+from `stack_analyzer.include_dirs` and `stack_analyzer.defines`. A finding carries its rule, its
+CWE, the analyzer's confidence as a property, and the other locations involved (the conflicting
+access of a race, the other lock of a cycle) as `note:` lines after it and as SARIF related
+locations; a finding the analyzer rates with low confidence is a warning at most.
 
 Derived cppcheck options: `--enable=warning,style,performance,portability` and
 `--inline-suppr` always; `-I<dir>` for each `stack_analyzer.include_dirs` entry, `-D<macro>`

@@ -120,8 +120,8 @@ namespace ctrace
              Kind::Flag, "analysis", "dynamic"},
             {"--invoke", "TOOLS",
              "Invokes specific tools (comma-separated). Available tools: flawfinder, ikos, "
-             "cppcheck, tscancode, ctrace_stack_analyzer, coretrace-python-analyzer, "
-             "coretrace-runtime-analyzer.",
+             "cppcheck, tscancode, ctrace_stack_analyzer, coretrace-concurrency-analyzer, "
+             "coretrace-python-analyzer, coretrace-runtime-analyzer.",
              Kind::List, "analysis", "invoke"},
             {"--input", "FILES", "Specifies the source files to analyse (comma-separated).",
              Kind::List, "files", "input"},

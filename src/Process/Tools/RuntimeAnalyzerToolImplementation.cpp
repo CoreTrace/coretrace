@@ -75,14 +75,7 @@ namespace ctrace
         // After `--`, the compiler's arguments: the build context CoreTrace knows, then the
         // program's source.
         args.emplace_back("--");
-        for (const std::string& dir : config.stack_analyzer.include_dirs)
-        {
-            args.push_back("-I" + dir);
-        }
-        for (const std::string& define : config.stack_analyzer.defines)
-        {
-            args.push_back("-D" + define);
-        }
+        appendBuildContext(args, config);
         args.push_back(file);
         return args;
     }

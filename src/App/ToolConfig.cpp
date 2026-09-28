@@ -1059,9 +1059,10 @@ namespace ctrace
             return keys;
         }
 
-        /// Reads `tools.<name>.path` and `tools.<name>.args` for every external tool. The
-        /// analyzer entries are the legacy analyzer configuration and are handled by
-        /// findStackAnalyzerSection.
+        /// Reads `tools.<name>.path` and `tools.<name>.args` for every external tool, the
+        /// runtime analyzer's `timeout_s`, and the concurrency analyzer's `rules` (linked in,
+        /// it has no command and no arguments). The stack analyzer entries are the legacy
+        /// analyzer configuration and are handled by findStackAnalyzerSection.
         [[nodiscard]] bool applyToolsSection(const json& root, LoadContext& ctx,
                                              std::string& errorMessage)
         {
@@ -1093,13 +1094,28 @@ namespace ctrace
                 }
                 const std::string location = "tools." + std::string(tool);
                 const bool isRuntimeAnalyzer = tool == "coretrace-runtime-analyzer";
-                if (!validateKnownKeys(*itTool,
-                                       isRuntimeAnalyzer
-                                           ? std::vector<const char*>{"path", "args", "timeout_s"}
-                                           : std::vector<const char*>{"path", "args"},
-                                       location, errorMessage))
+                const bool isConcurrencyAnalyzer = tool == "coretrace-concurrency-analyzer";
+                std::vector<const char*> knownKeys = isConcurrencyAnalyzer
+                                                         ? std::vector<const char*>{"rules"}
+                                                         : std::vector<const char*>{"path", "args"};
+                if (isRuntimeAnalyzer)
+                {
+                    knownKeys.push_back("timeout_s");
+                }
+                if (!validateKnownKeys(*itTool, knownKeys, location, errorMessage))
                 {
                     return false;
+                }
+                if (const auto itRules = itTool->find("rules");
+                    isConcurrencyAnalyzer && itRules != itTool->end() && !itRules->is_null())
+                {
+                    Value value;
+                    if (!readValue(*itRules, Kind::StringList, location + ".rules", value,
+                                   errorMessage))
+                    {
+                        return false;
+                    }
+                    ctx.config.tools.concurrency_analyzer_rules = value.list;
                 }
                 if (const auto itTimeout = itTool->find("timeout_s");
                     isRuntimeAnalyzer && itTimeout != itTool->end() && !itTimeout->is_null())

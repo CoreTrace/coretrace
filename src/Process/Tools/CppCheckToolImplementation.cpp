@@ -40,20 +40,7 @@ namespace ctrace
         // checks are what a static analysis run is expected to report.
         args.push_back("--enable=warning,style,performance,portability");
         args.push_back("--inline-suppr");
-        for (const std::string& dir : config.stack_analyzer.include_dirs)
-        {
-            if (!dir.empty())
-            {
-                args.push_back("-I" + dir);
-            }
-        }
-        for (const std::string& macro : config.stack_analyzer.defines)
-        {
-            if (!macro.empty())
-            {
-                args.push_back("-D" + macro);
-            }
-        }
+        appendBuildContext(args, config);
         const std::string& jobs = config.stack_analyzer.jobs;
         if (!jobs.empty() && std::all_of(jobs.begin(), jobs.end(),
                                          [](unsigned char ch) { return std::isdigit(ch) != 0; }))

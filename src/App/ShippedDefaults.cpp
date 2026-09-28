@@ -77,7 +77,7 @@ namespace ctrace
         {
             const std::string tool(toolName);
             const auto configured = config.tools.paths.find(tool);
-            if (tool == "ctrace_stack_analyzer" ||
+            if (runsInProcess(tool) ||
                 (configured != config.tools.paths.end() && !configured->second.empty()))
             {
                 continue; // In-process, or located by the configuration.

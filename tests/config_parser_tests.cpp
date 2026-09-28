@@ -426,6 +426,31 @@ namespace
             "tools.coretrace-runtime-analyzer.timeout_s is too large.");
     }
 
+    void testConcurrencyAnalyzerSettings()
+    {
+        const ctrace::ProgramConfig defaults;
+        CHECK(defaults.tools.concurrency_analyzer_rules.empty());
+
+        const auto cfg = loadOrDie("concurrency-settings.json", R"json(
+{"tools": {"coretrace-concurrency-analyzer": {"rules": ["data-race", "missing-join"]}}}
+)json");
+        CHECK((cfg.tools.concurrency_analyzer_rules ==
+               std::vector<std::string>{"data-race", "missing-join"}));
+        CHECK(cfg.tools.paths.count("coretrace-concurrency-analyzer") == 0);
+
+        // The analyzer runs in process: it has no command to locate and no arguments to add.
+        CHECK(loadError("concurrency-path.json",
+                        R"({"tools": {"coretrace-concurrency-analyzer": {"path": "x"}}})")
+                  .find("Unknown key 'path' in 'tools.coretrace-concurrency-analyzer'") !=
+              std::string::npos);
+        CHECK(loadError("rules-elsewhere.json", R"({"tools": {"cppcheck": {"rules": ["x"]}}})")
+                  .find("Unknown key 'rules' in 'tools.cppcheck'") != std::string::npos);
+        CHECK(loadError("rules-type.json",
+                        R"({"tools": {"coretrace-concurrency-analyzer": {"rules": 7}}})") ==
+              "Expected string or array of strings for "
+              "'tools.coretrace-concurrency-analyzer.rules'.");
+    }
+
     // K3: legacy spellings keep working, and the loader says which canonical key to use.
     void testLegacySpellingsAreAcceptedWithAWarning()
     {
@@ -893,6 +918,7 @@ int main()
     testBuildConfigAppliesDefaultModels();
     testBundledToolsFollowTheExecutable();
     testDynamicAnalysisSettings();
+    testConcurrencyAnalyzerSettings();
     testShippedClangHeaders();
     testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;
