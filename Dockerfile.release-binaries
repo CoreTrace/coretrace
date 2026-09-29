@@ -66,15 +66,22 @@ RUN set -eux; \
     mkdir -p /stage/libexec/coretrace; \
     mv /out/coretrace_python.dist /stage/libexec/coretrace/coretrace-python-analyzer; \
     sh /src/release/collect-licenses.sh rpm /stage /src/release/third-party.txt \
-        libexec/coretrace/coretrace-python-analyzer
+        libexec/coretrace/coretrace-python-analyzer; \
+    rm -rf /out /analyzer
 
-FROM base AS builder
+# Everything the build needs besides CoreTrace's sources: the toolchain, and the Python analyzer
+# compiled apart. It changes only with this file, the Python analyzer's version or the release
+# scripts, so the release workflow builds this target first, from its cache when it is unchanged.
+FROM base AS toolchain
+
+COPY --from=python-analyzer /stage/libexec/coretrace/coretrace-python-analyzer /prebuilt/coretrace-python-analyzer
+
+FROM toolchain AS builder
 
 ARG LLVM_VERSION=20
 ARG VERSION=dev
 
 COPY . /repo
-COPY --from=python-analyzer /stage/libexec/coretrace/coretrace-python-analyzer /prebuilt/coretrace-python-analyzer
 
 RUN cmake -S . -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \

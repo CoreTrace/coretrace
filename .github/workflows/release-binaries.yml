@@ -61,6 +61,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # The toolchain image and the compiled Python analyzer change rarely: they are kept in the
+      # GitHub Actions cache between runs, and the full build below reuses them from this builder.
+      # A tag builds everything afresh, so that a release ships the latest package updates.
+      - name: Build the toolchain image, from the cache when unchanged
+        if: github.ref_type != 'tag'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.release-binaries
+          target: toolchain
+          platforms: ${{ matrix.platform }}
+          cache-from: type=gha,scope=release-toolchain-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-toolchain-${{ matrix.arch }}
+          outputs: type=cacheonly
+          provenance: false
+
       - name: Build packaged binary with Buildx
         shell: bash
         run: |
