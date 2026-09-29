@@ -115,6 +115,11 @@ RUN set -eux; \
     find "${staging}/lib" -name '*.so*' -type f -exec \
         patchelf --set-rpath '$ORIGIN' {} \; ; \
     \
+    # Store once the runtime analyzer's libraries and headers identical to ctrace's, now that \
+    # patchelf has given ctrace's their final bytes \
+    sh /repo/scripts/release/link-identical-files.sh "${staging}/lib" \
+        "${staging}/libexec/coretrace/coretrace-runtime-analyzer/lib"; \
+    \
     # Verify all shared libraries resolve via RPATH alone (no LD_LIBRARY_PATH) \
     ldd "${staging}/bin/${BINARY_NAME}" | { ! grep 'not found'; }; \
     \
