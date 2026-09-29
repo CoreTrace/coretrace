@@ -30,6 +30,12 @@ RHEL 9 and its rebuilds (Rocky, Alma), Amazon Linux 2023, Ubuntu 22.04+, Debian 
 built on Rocky Linux 9. Each archive is unpacked and run on bare Rocky Linux 9, Ubuntu 22.04,
 Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published.
 
+Each archive carries the license of every third-party component it ships. `licenses/` holds
+those of the code compiled into `ctrace` and of the Ubuntu libraries in `lib/`, with each
+package's exact version. Each bundled analyzer holds its own under `libexec/coretrace/`.
+`scripts/release/third-party.txt` lists what ships and where its license is. The packaging, and
+the verification on each distribution, fail on a library or an executable it does not list.
+
 Analyzing C and C++ needs no LLVM or clang installation either: Clang's own headers ship in
 `lib/clang/<version>/include` next to `bin/ctrace`, and the stack analyzer compiles in process.
 Only the C library's headers come from the system (`libc6-dev` on Debian and Ubuntu,

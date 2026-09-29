@@ -43,7 +43,9 @@ WORKDIR /repo
 
 # coretrace-python-analyzer is compiled on Rocky Linux 9 (glibc 2.34), older than Ubuntu 22.04,
 # so that the archive also runs on RHEL 9 and its rebuilds: everything else in it already needs
-# no more than glibc 2.34. The analyzer version is the one cmake/pythonAnalyzer.cmake pins.
+# no more than glibc 2.34. The analyzer version is the one cmake/pythonAnalyzer.cmake pins. It is
+# laid out as in the archive, so that the licenses of the Rocky Linux packages it carries are
+# collected into its licenses/ directory here, where their package database is.
 FROM rockylinux/rockylinux:9 AS python-analyzer
 
 ARG NUITKA_VERSION=4.2.2
@@ -54,12 +56,17 @@ RUN dnf install -y python3.12 python3.12-devel gcc git zlib-devel \
 ENV PATH=/opt/nuitka/bin:${PATH}
 
 COPY cmake/pythonAnalyzer.cmake scripts/build-python-analyzer.sh /src/
+COPY scripts/release/ /src/release/
 RUN set -eux; \
     tag="$(sed -n 's/^set(CORETRACE_PYTHON_ANALYZER_TAG "\([^"]*\)".*/\1/p' /src/pythonAnalyzer.cmake)"; \
     test -n "${tag}"; \
     git clone --quiet --depth 1 --branch "${tag}" \
         https://github.com/CoreTrace/coretrace-python-analyzer.git /analyzer; \
-    PYTHON=/opt/nuitka/bin/python sh /src/build-python-analyzer.sh /analyzer /out
+    PYTHON=/opt/nuitka/bin/python sh /src/build-python-analyzer.sh /analyzer /out; \
+    mkdir -p /stage/libexec/coretrace; \
+    mv /out/coretrace_python.dist /stage/libexec/coretrace/coretrace-python-analyzer; \
+    sh /src/release/collect-licenses.sh rpm /stage /src/release/third-party.txt \
+        libexec/coretrace/coretrace-python-analyzer
 
 FROM base AS builder
 
@@ -67,7 +74,7 @@ ARG LLVM_VERSION=20
 ARG VERSION=dev
 
 COPY . /repo
-COPY --from=python-analyzer /out/coretrace_python.dist /prebuilt/coretrace-python-analyzer
+COPY --from=python-analyzer /stage/libexec/coretrace/coretrace-python-analyzer /prebuilt/coretrace-python-analyzer
 
 RUN cmake -S . -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
@@ -115,6 +122,12 @@ RUN set -eux; \
     install -m 0644 /repo/README.md "${staging}/README.md"; \
     install -m 0644 /repo/LICENSE "${staging}/LICENSE"; \
     \
+    # Licenses of the Ubuntu packages the libraries come from, then every shipped library and \
+    # executable against the inventory of third-party code \
+    sh /repo/scripts/release/collect-licenses.sh dpkg "${staging}" \
+        /repo/scripts/release/third-party.txt lib libexec/coretrace/coretrace-runtime-analyzer; \
+    sh /repo/scripts/release/check-licenses.sh "${staging}" /repo/scripts/release/third-party.txt; \
+    \
     # Create archive and checksum \
     mkdir -p /out; \
     tar -C /staging -czf "/out/${package_name}.tar.gz" "${package_name}"; \
@@ -123,7 +136,8 @@ RUN set -eux; \
 
 # The archive as users receive it, unpacked once and then run on the oldest distributions it
 # targets (RHEL 9, Ubuntu 22.04, Debian 12) and on the newest, each image bare: no compiler, no
-# LLVM, no Python. The Python analyzer is checked first; then only the C library's headers are
+# LLVM, no Python. Its licenses are checked against the inventory of the third-party code it
+# ships, then the Python analyzer runs; then only the C library's headers are
 # added, as any C build environment has them, and a C source is analyzed with no clang
 # installed, by the stack analyzer and then by the concurrency analyzer, which finds a data
 # race. Last, a C++ build environment is added, which linking an instrumented program needs, and
@@ -141,8 +155,10 @@ FROM ubuntu:22.04 AS verify-ubuntu-22.04
 COPY --from=unpacked /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
 COPY tests/ /tests/
+COPY scripts/release/ /scripts/release/
 RUN set -eux; \
     if command -v python3; then echo "the verification image must not have Python" >&2; exit 1; fi; \
+    sh /scripts/release/check-licenses.sh /opt/coretrace /scripts/release/third-party.txt; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
     if command -v clang || ls /usr/lib/llvm-*; then echo "the verification image must not have clang" >&2; exit 1; fi; \
@@ -156,7 +172,9 @@ FROM debian:12 AS verify-debian-12
 COPY --from=verify-ubuntu-22.04 /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
 COPY tests/ /tests/
+COPY scripts/release/ /scripts/release/
 RUN set -eux; \
+    sh /scripts/release/check-licenses.sh /opt/coretrace /scripts/release/third-party.txt; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
     sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \
@@ -169,7 +187,9 @@ FROM rockylinux/rockylinux:9 AS verify-rhel-9
 COPY --from=verify-debian-12 /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
 COPY tests/ /tests/
+COPY scripts/release/ /scripts/release/
 RUN set -eux; \
+    sh /scripts/release/check-licenses.sh /opt/coretrace /scripts/release/third-party.txt; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     dnf install -y glibc-devel; \
     sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \
@@ -182,7 +202,9 @@ FROM ubuntu:24.04 AS verify-ubuntu-24.04
 COPY --from=verify-rhel-9 /out/ /out/
 COPY --from=unpacked /opt/coretrace/ /opt/coretrace/
 COPY tests/ /tests/
+COPY scripts/release/ /scripts/release/
 RUN set -eux; \
+    sh /scripts/release/check-licenses.sh /opt/coretrace /scripts/release/third-party.txt; \
     sh /tests/python/check-installed.sh /opt/coretrace /tmp/check-installed; \
     apt-get update && apt-get install -y --no-install-recommends libc6-dev; \
     sh /tests/release/check-c-analysis.sh /opt/coretrace /tmp/check-c; \

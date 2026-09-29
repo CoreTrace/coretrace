@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The third-party code the Linux release archives ship, and where its license is. One line per
+# group of files: a glob relative to the archive root (`*` also matches `/`, and the first line
+# that matches a file applies to it), then the licenses of what those files contain, each a file
+# or a directory relative to the archive root.
+#
+# check-licenses.sh fails the packaging, and every release verification, when a shared library
+# or an executable of the archive matches no line, or when a license named by a matching line is
+# missing. A new dependency, another LLVM or another base image therefore fails until its license
+# is reviewed and its line added or updated here.
+#
+# Where the licenses come from:
+#   <...>licenses/<distribution>/<package>  collect-licenses.sh copies them from the package
+#       database of the image that built the files, with the package's exact VERSION, after
+#       checking that the package provides each shared library of the line;
+#   licenses/<component>  installed by CMake from the sources compiled into ctrace;
+#   the others  shipped by the bundled tools, or copied with them (Dockerfile.release-binaries).
+
+# ctrace, and the code compiled into it.
+bin/ctrace  LICENSE licenses/coretrace-stack-analyzer licenses/coretrace-concurrency-analyzer licenses/coretrace-compiler licenses/coretrace-log licenses/cpp-httplib licenses/nlohmann-json licenses/CLI11
+config/models/*  licenses/coretrace-stack-analyzer
+
+# Libraries from the Ubuntu 22.04 packages of the build image: ctrace's in lib/, and the same ones
+# in the runtime analyzer's tree, which `*lib/` also matches. Clang's headers come with them.
+*lib/libLLVM.so.*  licenses/ubuntu/libllvm20
+*lib/libclang-cpp.so.*  licenses/ubuntu/libclang-cpp20
+*lib/clang/*/include/*  licenses/ubuntu/libclang-common-20-dev
+*lib/libicudata.so.*  licenses/ubuntu/libicu70
+*lib/libicuuc.so.*  licenses/ubuntu/libicu70
+*lib/libxml2.so.*  licenses/ubuntu/libxml2
+*lib/libzstd.so.*  licenses/ubuntu/libzstd1
+*lib/libz.so.*  licenses/ubuntu/zlib1g
+*lib/liblzma.so.*  licenses/ubuntu/liblzma5
+*lib/libffi.so.*  licenses/ubuntu/libffi8
+*lib/libedit.so.*  licenses/ubuntu/libedit2
+*lib/libtinfo.so.*  licenses/ubuntu/libtinfo6
+*lib/libbsd.so.*  licenses/ubuntu/libbsd0
+*lib/libmd.so.*  licenses/ubuntu/libmd0
+*lib/libstdc++.so.*  licenses/ubuntu/libstdc++6
+*lib/libgcc_s.so.*  licenses/ubuntu/libgcc-s1
+
+# coretrace-runtime-analyzer, shipped as its own release tree; its Ubuntu libraries are above.
+libexec/coretrace/coretrace-runtime-analyzer/bin/runtime-analyzer  libexec/coretrace/coretrace-runtime-analyzer/LICENSE libexec/coretrace/coretrace-runtime-analyzer/NOTICE
+libexec/coretrace/coretrace-runtime-analyzer/bin/cc  licenses/coretrace-compiler
+libexec/coretrace/coretrace-runtime-analyzer/lib/libcompilerlib.so*  licenses/coretrace-compiler
+
+# coretrace-python-analyzer, compiled by Nuitka on Rocky Linux 9 with the Python runtime and the
+# libraries it loads, all from Rocky Linux 9 packages. Nuitka's runtime library is compiled into
+# the executable.
+libexec/coretrace/coretrace-python-analyzer/coretrace-python-analyzer  libexec/coretrace/coretrace-python-analyzer/licenses/coretrace-python-analyzer libexec/coretrace/coretrace-python-analyzer/licenses/nuitka libexec/coretrace/coretrace-python-analyzer/licenses/rocky/python3.12-libs
+libexec/coretrace/coretrace-python-analyzer/libpython3*.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/python3.12-libs
+libexec/coretrace/coretrace-python-analyzer/libcrypto.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/openssl-libs
+libexec/coretrace/coretrace-python-analyzer/libssl.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/openssl-libs
+libexec/coretrace/coretrace-python-analyzer/libexpat.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/expat
+libexec/coretrace/coretrace-python-analyzer/libbz2.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/bzip2-libs
+libexec/coretrace/coretrace-python-analyzer/libffi.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/libffi
+libexec/coretrace/coretrace-python-analyzer/liblzma.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/xz-libs
+libexec/coretrace/coretrace-python-analyzer/libmpdec.so.*  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/mpdecimal
+libexec/coretrace/coretrace-python-analyzer/*.so  libexec/coretrace/coretrace-python-analyzer/licenses/rocky/python3.12-libs
