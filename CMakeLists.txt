@@ -192,6 +192,33 @@ else()
     )
 endif()
 
+# The license of each component compiled into ctrace, from its sources: Apache-2.0 components
+# with their NOTICE. The release packaging adds the licenses of the libraries it ships
+# (scripts/release/collect-licenses.sh).
+function(coretrace_install_licenses component content)
+    FetchContent_GetProperties(${content} SOURCE_DIR source_dir)
+    list(TRANSFORM ARGN PREPEND "${source_dir}/" OUTPUT_VARIABLE files)
+    install(FILES ${files} DESTINATION licenses/${component} COMPONENT third-party-licenses)
+endfunction()
+coretrace_install_licenses(coretrace-stack-analyzer stack_analyzer LICENSE NOTICE)
+coretrace_install_licenses(coretrace-concurrency-analyzer concurrency_analyzer LICENSE NOTICE)
+coretrace_install_licenses(coretrace-compiler cc LICENSE NOTICE)
+coretrace_install_licenses(coretrace-log coretrace-logger LICENSE)
+coretrace_install_licenses(cpp-httplib cpp_httplib LICENSE)
+coretrace_install_licenses(nlohmann-json json LICENSE.MIT)
+# CLI11 is vendored as a single header, whose opening comment is its license.
+file(READ ${CMAKE_SOURCE_DIR}/external/CLI11.hpp coretrace_cli11_header LIMIT 8192)
+string(REGEX MATCH "// CLI11 [^\n]* Copyright.*SUCH DAMAGE\\." coretrace_cli11_license
+    "${coretrace_cli11_header}")
+if(NOT coretrace_cli11_license)
+    message(FATAL_ERROR "No license comment at the top of external/CLI11.hpp")
+endif()
+string(REGEX REPLACE "\n// ?" "\n" coretrace_cli11_license "${coretrace_cli11_license}")
+string(REGEX REPLACE "^// ?" "" coretrace_cli11_license "${coretrace_cli11_license}")
+file(WRITE ${CMAKE_BINARY_DIR}/licenses/CLI11/LICENSE "${coretrace_cli11_license}\n")
+install(FILES ${CMAKE_BINARY_DIR}/licenses/CLI11/LICENSE
+    DESTINATION licenses/CLI11 COMPONENT third-party-licenses)
+
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/config/
     DESTINATION config
     FILES_MATCHING
@@ -588,6 +615,18 @@ add_test(NAME ctrace_concurrency_findings_join_the_merged_log
 # The CI's network steps retry with a growing delay (apt.llvm.org drops connections).
 add_test(NAME ctrace_ci_retry_helper COMMAND sh ${CMAKE_SOURCE_DIR}/tests/retry_test.sh)
 
+# The release archives carry the licenses of the third-party code they ship. The code compiled
+# into ctrace installs its licenses in licenses/<component>/; the release packaging adds those
+# of the libraries, then checks every shipped library and executable against the reviewed
+# inventory, scripts/release/third-party.txt.
+add_test(NAME ctrace_release_license_check
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/check-licenses-test.sh)
+add_test(NAME ctrace_release_license_collection
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/collect-licenses-test.sh)
+set(ctrace_license_install ${CMAKE_BINARY_DIR}/license-install)
+add_test(NAME ctrace_install_ships_third_party_licenses
+    COMMAND sh -c "rm -rf '${ctrace_license_install}' && '${CMAKE_COMMAND}' --install '${CMAKE_BINARY_DIR}' --component third-party-licenses --prefix '${ctrace_license_install}' > /dev/null && cd '${ctrace_license_install}/licenses' && for component in coretrace-stack-analyzer coretrace-concurrency-analyzer coretrace-compiler; do grep -q 'Apache License' $component/LICENSE && test -s $component/NOTICE || { echo \"no license or notice for $component\"; exit 1; }; done && grep -q 'MIT License' cpp-httplib/LICENSE && grep -q 'MIT License' nlohmann-json/LICENSE.MIT && grep -q 'MIT License' coretrace-log/LICENSE && grep -q 'CLI11 .* Copyright' CLI11/LICENSE && grep -q 'Redistribution and use' CLI11/LICENSE && grep -q 'SUCH DAMAGE' CLI11/LICENSE && ! grep -q '^//' CLI11/LICENSE")
+
 # Python sources go to the Python analyzer only; the C/C++ tools never see them.
 add_test(NAME ctrace_python_file_skips_c_tools
     COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/python/project/app/main.py --invoke cppcheck,ctrace_stack_analyzer; test $? -eq 0")
@@ -717,6 +756,8 @@ set(coretrace_unit_tests
     ctrace_ipc_socket_tests
     ctrace_concurrency_analyzer_bridge_tests
     ctrace_ci_retry_helper
+    ctrace_release_license_check
+    ctrace_release_license_collection
 )
 get_property(coretrace_tests DIRECTORY PROPERTY TESTS)
 foreach(coretrace_test IN LISTS coretrace_tests)
