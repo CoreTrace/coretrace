@@ -108,6 +108,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+      # A provenance attestation for each archive: the job's OIDC token obtains a signing
+      # certificate, then the attestation and its storage record are kept by GitHub.
+      id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Download build artifacts
@@ -122,6 +127,11 @@ jobs:
         run: |
           set -euo pipefail
           ls -la dist
+
+      - name: Attest the provenance of the archives
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*.tar.gz
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v3
