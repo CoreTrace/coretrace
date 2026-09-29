@@ -628,6 +628,9 @@ add_test(NAME ctrace_release_license_check
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/check-licenses-test.sh)
 add_test(NAME ctrace_release_license_collection
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/collect-licenses-test.sh)
+# The runtime analyzer's libraries identical to ctrace's are stored once in the release archive.
+add_test(NAME ctrace_release_identical_libraries_linked
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/link-identical-files-test.sh)
 set(ctrace_license_install ${CMAKE_BINARY_DIR}/license-install)
 add_test(NAME ctrace_install_ships_third_party_licenses
     COMMAND sh -c "rm -rf '${ctrace_license_install}' && '${CMAKE_COMMAND}' --install '${CMAKE_BINARY_DIR}' --component third-party-licenses --prefix '${ctrace_license_install}' > /dev/null && cd '${ctrace_license_install}/licenses' && for component in coretrace-stack-analyzer coretrace-concurrency-analyzer coretrace-compiler; do grep -q 'Apache License' $component/LICENSE && test -s $component/NOTICE || { echo \"no license or notice for $component\"; exit 1; }; done && grep -q 'MIT License' cpp-httplib/LICENSE && grep -q 'MIT License' nlohmann-json/LICENSE.MIT && grep -q 'MIT License' coretrace-log/LICENSE && grep -q 'CLI11 .* Copyright' CLI11/LICENSE && grep -q 'Redistribution and use' CLI11/LICENSE && grep -q 'SUCH DAMAGE' CLI11/LICENSE && ! grep -q '^//' CLI11/LICENSE")
@@ -764,6 +767,7 @@ set(coretrace_unit_tests
     ctrace_ci_retry_helper
     ctrace_release_license_check
     ctrace_release_license_collection
+    ctrace_release_identical_libraries_linked
 )
 get_property(coretrace_tests DIRECTORY PROPERTY TESTS)
 foreach(coretrace_test IN LISTS coretrace_tests)

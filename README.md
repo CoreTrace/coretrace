@@ -60,7 +60,9 @@ and run, and the memory errors that happen (heap and stack overflows, uses after
 frees, leaks) join the other tools' findings, merged with a static finding at the same line and
 CWE. The Linux release archives ship the tool in `libexec/coretrace/coretrace-runtime-analyzer/`
 (`-DENABLE_RUNTIME_ANALYZER=ON` downloads its pinned release and checks it against the SHA-256
-recorded in `cmake/runtimeAnalyzer.cmake`). Linking an instrumented program needs a C++ build
+recorded in `cmake/runtimeAnalyzer.cmake`). Its libraries and headers identical to those of
+`lib/` are stored once, as hard links, which keeps the archive about 75 MiB smaller. Linking an
+instrumented program needs a C++ build
 environment (`g++` on Debian and Ubuntu, `gcc-c++` on RHEL). The program runs with `ctrace`'s
 privileges, in a separate process but not in a sandbox, so the HTTP server refuses dynamic
 analysis unless it is started with `--serve-allow-dynamic`.
