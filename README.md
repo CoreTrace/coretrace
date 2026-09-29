@@ -77,6 +77,19 @@ so it follows data across modules, but it only reports findings located in the f
 `requirements.txt`. The project root is the nearest directory above the file that holds
 `pyproject.toml`, `setup.py`, `setup.cfg` or `.git`, else the file's own directory.
 
+### RELEASES
+
+Each release attaches the Linux archives with their `.sha256`, and a build provenance
+attestation for each archive: a signed statement that this repository's release workflow built
+it from the tagged commit. Check a downloaded archive with the GitHub CLI:
+
+```bash
+gh attestation verify coretrace-<version>-linux-amd64.tar.gz -R CoreTrace/coretrace
+```
+
+Every dependency the build fetches is pinned to a version tag or a commit, and every download
+to its SHA-256 (`scripts/release/check-pinned-dependencies.sh`, run by `ctest`).
+
 ### TESTS
 
 ```bash

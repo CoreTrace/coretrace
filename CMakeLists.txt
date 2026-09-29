@@ -612,6 +612,11 @@ add_test(NAME ctrace_concurrency_findings_join_the_merged_log
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer,coretrace-concurrency-analyzer --input tests/concurrency/race.c,tests/double_free.c > ${CMAKE_BINARY_DIR}/concurrency-merged.sarif 2>/dev/null && test $(grep -c '\"name\": \"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif) -eq 3 && grep -q '\"name\": \"cppcheck\"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif && grep -q '\"name\": \"ctrace_stack_analyzer\"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif && grep -q '\"name\": \"coretrace-concurrency-analyzer\"' ${CMAKE_BINARY_DIR}/concurrency-merged.sarif"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# What the build fetches is pinned: a version tag or a commit, never a branch, and a download
+# with its hash, so that a release holds only reviewed code and can be rebuilt identically.
+add_test(NAME ctrace_fetched_dependencies_are_pinned
+    COMMAND sh ${CMAKE_SOURCE_DIR}/scripts/release/check-pinned-dependencies.sh ${CMAKE_SOURCE_DIR})
+
 # The CI's network steps retry with a growing delay (apt.llvm.org drops connections).
 add_test(NAME ctrace_ci_retry_helper COMMAND sh ${CMAKE_SOURCE_DIR}/tests/retry_test.sh)
 
@@ -753,6 +758,7 @@ set(coretrace_unit_tests
     ctrace_tool_routing_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
+    ctrace_fetched_dependencies_are_pinned
     ctrace_ipc_socket_tests
     ctrace_concurrency_analyzer_bridge_tests
     ctrace_ci_retry_helper

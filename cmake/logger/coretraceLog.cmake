@@ -17,7 +17,7 @@ include(FetchContent)
 
 FetchContent_Declare(coretrace-logger
   GIT_REPOSITORY https://github.com/CoreTrace/coretrace-log.git
-  GIT_TAG        main
+  GIT_TAG        v1.0.0
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(coretrace-logger)
