@@ -51,6 +51,12 @@ int main()
     report.expect(demangle(mangleFunction("", "foo", {"int", "char"})) == "foo(int, char)",
                   "a free function demangles back to its signature");
 
+    // The nested name N...E holds the qualified name only; the parameters follow it.
+    report.expect(mangleFunction("ns", "func", {"void"}) == "_ZN2ns4funcEv",
+                  "a namespaced function closes its nested name before the parameters");
+    report.expect(demangle(mangleFunction("ns", "func", {"int"})) == "ns::func(int)",
+                  "a namespaced function demangles back to its signature");
+
     if (report.failures == 0)
     {
         std::cout << "mangle_tests: all checks passed\n";

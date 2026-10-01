@@ -24,6 +24,12 @@ namespace ctrace_tools::mangle
         // Ajouter le nom de la fonction avec sa longueur
         mangled << functionName.length() << functionName;
 
+        // Fermer le namespace avec 'E' si utilisé
+        if (!namespaceName.empty())
+        {
+            mangled << "E";
+        }
+
         // Encoder les types de paramètres
         for (const std::string& param : paramTypes)
         {
@@ -60,12 +66,6 @@ namespace ctrace_tools::mangle
                 // Pour les types complexes ou non reconnus, encoder avec longueur + nom
                 mangled << param.length() << param;
             }
-        }
-
-        // Fermer le namespace avec 'E' si utilisé
-        if (!namespaceName.empty())
-        {
-            mangled << "E";
         }
 
         return mangled.str();
