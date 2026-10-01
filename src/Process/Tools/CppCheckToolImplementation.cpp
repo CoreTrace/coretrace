@@ -41,12 +41,22 @@ namespace ctrace
         args.push_back("--enable=warning,style,performance,portability");
         args.push_back("--inline-suppr");
         appendBuildContext(args, config);
-        const std::string& jobs = config.stack_analyzer.jobs;
-        if (!jobs.empty() && std::all_of(jobs.begin(), jobs.end(),
-                                         [](unsigned char ch) { return std::isdigit(ch) != 0; }))
+        if (config.tools.cppcheck_jobs != 0)
         {
             args.push_back("-j");
-            args.push_back(jobs);
+            args.push_back(std::to_string(config.tools.cppcheck_jobs));
+        }
+        else
+        {
+            // Preserve schema v1 configurations that used the stack analyzer's jobs value.
+            const std::string& legacyJobs = config.stack_analyzer.jobs;
+            if (!legacyJobs.empty() &&
+                std::all_of(legacyJobs.begin(), legacyJobs.end(),
+                            [](unsigned char ch) { return std::isdigit(ch) != 0; }))
+            {
+                args.push_back("-j");
+                args.push_back(legacyJobs);
+            }
         }
         appendToolArguments(args, config, "cppcheck");
         args.push_back(file);

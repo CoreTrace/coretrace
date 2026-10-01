@@ -3,6 +3,7 @@
 #define CONFIG_HPP
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -149,7 +150,8 @@ namespace ctrace
         std::string compile_ir_format; ///< bc|ll.
         bool include_stl = false;
         std::uint64_t stack_limit = 8ULL * 1024ULL * 1024ULL;
-        std::string base_dir; ///< SARIF URI normalization base.
+        std::string assume_external_frame; ///< Bytes or size with KiB/MiB/GiB suffix.
+        std::string base_dir;              ///< SARIF URI normalization base.
         std::string dump_ir;
         bool dump_filter = false;
         bool warnings_only = false;
@@ -169,6 +171,9 @@ namespace ctrace
         /// `tools.<name>.timeout_s` of the external tools but the runtime analyzer: how long one
         /// run may take before it is stopped and reported as failed; 0 disables the limit.
         std::map<std::string, std::uint32_t> timeouts_s;
+        std::uint32_t cppcheck_jobs = 0; ///< Zero keeps cppcheck's default.
+        std::vector<std::string> runtime_analyzer_compile_args;
+        std::size_t concurrency_analyzer_max_live_units = 0; ///< Zero keeps analyzer default.
         /// `tools.coretrace-runtime-analyzer.timeout_s`: how long each program may run; 0
         /// disables the limit.
         std::uint32_t runtime_analyzer_timeout_s = 60;

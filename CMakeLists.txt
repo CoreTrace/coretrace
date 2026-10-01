@@ -276,6 +276,9 @@ add_executable(ctrace_files_tests tests/files_tests.cpp src/App/Files.cpp src/ct
 target_link_libraries(ctrace_files_tests PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
 
+add_executable(ctrace_strings_tests tests/strings_tests.cpp src/ctrace_tools/strings.cpp)
+add_test(NAME ctrace_strings_tests COMMAND ctrace_strings_tests)
+
 add_executable(ctrace_tool_output_tests tests/tool_output_tests.cpp)
 add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 
@@ -385,6 +388,9 @@ set_tests_properties(ctrace_uninterpreted_tool_is_reported PROPERTIES
 add_executable(ctrace_process_tests tests/process_tests.cpp)
 target_link_libraries(ctrace_process_tests PRIVATE coretrace::logger)
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
+
+add_executable(ctrace_mangle_tests tests/mangle_tests.cpp src/ctrace_tools/mangle.cpp)
+add_test(NAME ctrace_mangle_tests COMMAND ctrace_mangle_tests)
 
 # Server mode: concurrent run_analysis requests through the API handler (ROADMAP C3).
 add_executable(ctrace_server_concurrency_tests
@@ -780,6 +786,7 @@ set(coretrace_unit_tests
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
+    ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
@@ -787,6 +794,7 @@ set(coretrace_unit_tests
     ctrace_tool_scheduling_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
+    ctrace_mangle_tests
     ctrace_fetched_dependencies_are_pinned
     ctrace_ipc_socket_tests
     ctrace_concurrency_analyzer_bridge_tests
@@ -810,6 +818,7 @@ foreach(coretrace_target
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
+    ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
@@ -817,6 +826,7 @@ foreach(coretrace_target
     ctrace_tool_scheduling_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
+    ctrace_mangle_tests
     ctrace_ipc_socket_tests
     ctrace_server_concurrency_tests
     ctrace_server_http_tests

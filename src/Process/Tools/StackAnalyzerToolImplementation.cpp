@@ -180,6 +180,9 @@ namespace
             appendBridgeDecision(report, "--jobs", false,
                                  "empty stack_analyzer.jobs; analyzer default kept");
         }
+        appendValueOption(args, report, "--assume-external-frame",
+                          config.stack_analyzer.assume_external_frame,
+                          "empty stack_analyzer.assume_external_frame; analyzer default kept");
 
         appendValueOption(args, report, "--resource-summary-cache-dir",
                           config.stack_analyzer.resource_summary_cache_dir,
