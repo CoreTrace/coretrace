@@ -1,8 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ctrace_tools/strings.hpp"
 
+#include <algorithm>
+
 namespace ctrace_tools
 {
+
+    namespace
+    {
+        /// Appends `token` to `result` without its enclosing quotes and surrounding spaces,
+        /// unless nothing is left of it.
+        void appendToken(std::vector<std::string_view>& result, std::string_view token)
+        {
+            if (!token.empty() && token.front() == '"' && token.back() == '"')
+            {
+                token.remove_prefix(1);
+                token.remove_suffix(1);
+            }
+            token.remove_prefix(std::min(token.find_first_not_of(" "), token.size()));
+            token.remove_suffix(
+                std::min(token.size() - token.find_last_not_of(" ") - 1, token.size()));
+            if (!token.empty())
+            {
+                result.push_back(token);
+            }
+        }
+    } // namespace
 
     namespace strings
     {
@@ -21,19 +44,7 @@ namespace ctrace_tools
                 }
                 else if (input[pos] == ',' && !in_quotes)
                 {
-                    std::string_view token = input.substr(start, pos - start);
-                    if (!token.empty() && token.front() == '"' && token.back() == '"')
-                    {
-                        token.remove_prefix(1);
-                        token.remove_suffix(1);
-                    }
-                    token.remove_prefix(std::min(token.find_first_not_of(" "), token.size()));
-                    token.remove_suffix(
-                        std::min(token.size() - token.find_last_not_of(" ") - 1, token.size()));
-                    if (!token.empty())
-                    {
-                        result.push_back(token);
-                    }
+                    appendToken(result, input.substr(start, pos - start));
                     start = pos + 1;
                 }
                 ++pos;
@@ -41,19 +52,7 @@ namespace ctrace_tools
 
             if (start < input.size())
             {
-                std::string_view token = input.substr(start);
-                if (!token.empty() && token.front() == '"' && token.back() == '"')
-                {
-                    token.remove_prefix(1);
-                    token.remove_suffix(1);
-                }
-                token.remove_prefix(std::min(token.find_first_not_of(" "), token.size()));
-                token.remove_suffix(
-                    std::min(token.size() - token.find_last_not_of(" ") - 1, token.size()));
-                if (!token.empty())
-                {
-                    result.push_back(token);
-                }
+                appendToken(result, input.substr(start));
             }
 
             return result;
