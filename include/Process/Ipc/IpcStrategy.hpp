@@ -2,6 +2,7 @@
 #ifndef IPC_STRATEGY_HPP
 #define IPC_STRATEGY_HPP
 
+#include <mutex>
 #include <regex>
 
 #include "../ProcessFactory.hpp"
@@ -38,6 +39,8 @@ class UnixSocketStrategy : public IpcStrategy
   private:
     int sock;
     std::string path;
+    /// Tools running at the same time share one strategy: one message is sent at a time.
+    std::mutex m_mutex;
 
 #ifdef MSG_NOSIGNAL
     static constexpr int kSendFlags = MSG_NOSIGNAL;
@@ -74,20 +77,34 @@ class UnixSocketStrategy : public IpcStrategy
     {
         close();
     }
+    /// Sends `data` whole: a stream socket may take a message in several sends.
     void write(const std::string& data) override
     {
+        const std::lock_guard<std::mutex> lock(m_mutex);
         if (sock == -1)
         {
             throw ctrace::ipc::SocketError(std::string("Socket is not connected: ") +
                                            strerror(errno));
         }
-        if (send(sock, data.c_str(), data.size(), kSendFlags) == -1)
+        std::size_t sent = 0;
+        while (sent < data.size())
         {
-            throw ctrace::ipc::SocketError(std::string("Connection failed: ") + strerror(errno));
+            const ssize_t count = send(sock, data.data() + sent, data.size() - sent, kSendFlags);
+            if (count == -1)
+            {
+                if (errno == EINTR)
+                {
+                    continue;
+                }
+                throw ctrace::ipc::SocketError(std::string("Connection failed: ") +
+                                               strerror(errno));
+            }
+            sent += static_cast<std::size_t>(count);
         }
     }
     void close() override
     {
+        const std::lock_guard<std::mutex> lock(m_mutex);
         if (sock != -1)
         {
             ::close(sock);

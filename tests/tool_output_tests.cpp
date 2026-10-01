@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace
@@ -76,6 +77,33 @@ int main()
         report.expect(!out.failed(), "ToolOutput: no error reported means not failed");
         out.error("cppcheck exited with exit code 1");
         report.expect(out.failed(), "ToolOutput: error() marks the execution as failed");
+    }
+
+    // Tool runs may overlap: each run's console output is printed as one block when the run
+    // ends, never mixed with another run's lines.
+    {
+        std::ostringstream console;
+        std::ostringstream errors;
+        std::streambuf* const savedOut = std::cout.rdbuf(console.rdbuf());
+        std::streambuf* const savedErr = std::cerr.rdbuf(errors.rdbuf());
+        bool printedEarly = false;
+        {
+            ctrace::ToolOutput first(nullptr, "first", /*mirrorToConsole=*/true);
+            {
+                ctrace::ToolOutput second(nullptr, "second", /*mirrorToConsole=*/true);
+                first.result("first 1");
+                second.result("second 1");
+                first.error("first failed");
+                first.result("first 2");
+                printedEarly = !console.str().empty() || !errors.str().empty();
+            }
+        }
+        std::cout.rdbuf(savedOut);
+        std::cerr.rdbuf(savedErr);
+        report.expect(!printedEarly, "ToolOutput: nothing is printed while the run goes on");
+        report.expect(console.str() == "second 1\nfirst 1\nfirst 2\n" &&
+                          errors.str() == "first failed\n",
+                      "ToolOutput: each run's output is printed as one block when it ends");
     }
 
     if (report.failures == 0)

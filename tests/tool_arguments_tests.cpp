@@ -64,6 +64,11 @@ int main()
         report.expect(contains(args, "--format=json") && !contains(args, "--format=text"),
                       "ikos: a SARIF request asks for the structured format");
         report.expect(contains(args, "a.c"), "ikos: the source file is passed");
+        // ikos prints its report on stdout, which each run captures: a report file would be
+        // shared by concurrent runs and would overwrite CoreTrace's own report.
+        report.expect(std::none_of(args.begin(), args.end(), [](const std::string& arg)
+                                   { return arg.starts_with("--report-file"); }),
+                      "ikos: the report is read from stdout, not from a shared report file");
     }
     {
         const auto args = IkosToolImplementation::buildArguments(configWithSarif(false), "a.c");
