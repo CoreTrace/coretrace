@@ -338,6 +338,12 @@ namespace ctrace
                        const std::filesystem::path& program);
         void execute(const std::string& file, const ProgramConfig& config,
                      ToolOutput& output) const override;
+        /// One program at a time: programs built and run together would compete for the
+        /// machine and against their own timeouts.
+        [[nodiscard]] std::size_t maxConcurrentRuns() const override
+        {
+            return 1;
+        }
         std::string name() const override;
     };
 

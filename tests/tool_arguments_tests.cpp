@@ -59,6 +59,13 @@ int main()
     report.expect(TscancodeToolImplementation().name() == "tscancode",
                   "tscancode reports its own name");
 
+    // The runtime analyzer builds and runs the user's programs: one at a time, so that they
+    // do not compete for the machine against their own timeouts.
+    report.expect(RuntimeAnalyzerToolImplementation().maxConcurrentRuns() == 1,
+                  "coretrace-runtime-analyzer: one run at a time");
+    report.expect(IkosToolImplementation().maxConcurrentRuns() == 0,
+                  "ikos: runs are bounded by the pool only");
+
     // --sarif-format asks each tool for its structured output, never for text.
     {
         const auto args =
