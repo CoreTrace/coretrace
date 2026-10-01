@@ -7,12 +7,14 @@
 
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <future>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -115,6 +117,77 @@ namespace
         bool m_batch;
     };
 
+    using Clock = std::chrono::steady_clock;
+
+    /// When each file's run started and ended.
+    struct Timeline
+    {
+        std::mutex mutex;
+        std::map<std::string, std::pair<Clock::time_point, Clock::time_point>> runs;
+
+        [[nodiscard]] bool anyOverlap()
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            for (const auto& [file, run] : runs)
+            {
+                for (const auto& [other, otherRun] : runs)
+                {
+                    if (file < other && run.first < otherRun.second && otherRun.first < run.second)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        [[nodiscard]] Clock::time_point end(const std::string& file)
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            return runs.at(file).second;
+        }
+    };
+
+    /// Takes a while on each file, much longer on slow.c, records when, and reports one
+    /// finding per file.
+    class TimedTool : public ctrace::AnalysisToolBase
+    {
+      public:
+        explicit TimedTool(std::shared_ptr<Timeline> timeline) : m_timeline(std::move(timeline)) {}
+
+        void execute(const std::string& file, const ctrace::ProgramConfig&,
+                     ctrace::ToolOutput& output) const override
+        {
+            const Clock::time_point start = Clock::now();
+            std::this_thread::sleep_for(file == "slow.c" ? std::chrono::milliseconds(1000)
+                                                         : std::chrono::milliseconds(150));
+            {
+                const std::lock_guard<std::mutex> lock(m_timeline->mutex);
+                m_timeline->runs[file] = {start, Clock::now()};
+            }
+            output.diagnostics(
+                {{"timed", "rule", file, 1, 1, ctrace::Severity::Warning, "finding", ""}});
+        }
+
+        std::string name() const override
+        {
+            return "timed";
+        }
+
+      private:
+        std::shared_ptr<Timeline> m_timeline;
+    };
+
+    std::vector<ctrace::Diagnostic> runTimedTool(std::launch policy, std::size_t workers,
+                                                 const std::vector<std::string>& files,
+                                                 const std::shared_ptr<Timeline>& timeline)
+    {
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, workers, policy);
+        invoker.registerTool("timed", std::make_unique<TimedTool>(timeline));
+        invoker.runSpecificTools({"timed"}, files);
+        return invoker.diagnostics();
+    }
+
     /// `tool:file:line` for each finding, in reported order.
     std::vector<std::string> positions(const std::vector<ctrace::Diagnostic>& diagnostics)
     {
@@ -181,6 +254,35 @@ namespace
                           ctrace::renderSarif(runReportingTools(std::launch::async, files)),
                       "the SARIF document is the same for a sequential and an async run");
     }
+
+    // On the pool, one tool analyzes several files at the same time.
+    void testFilesRunAtTheSameTime(TestReport& report)
+    {
+        auto timeline = std::make_shared<Timeline>();
+        (void)runTimedTool(std::launch::async, 4, {"a.c", "b.c", "c.c", "d.c"}, timeline);
+        report.expect(timeline->anyOverlap(), "an async run analyzes different files at once");
+
+        auto sequential = std::make_shared<Timeline>();
+        (void)runTimedTool(std::launch::deferred, 4, {"a.c", "b.c"}, sequential);
+        report.expect(!sequential->anyOverlap(), "a sequential run analyzes one file at a time");
+    }
+
+    // A file that takes long holds one worker; the other files go through the others.
+    void testSlowFileDoesNotBlockTheOthers(TestReport& report)
+    {
+        const std::vector<std::string> files = {"slow.c", "a.c", "b.c", "c.c"};
+        auto timeline = std::make_shared<Timeline>();
+        const auto async = runTimedTool(std::launch::async, 2, files, timeline);
+        const Clock::time_point slowEnd = timeline->end("slow.c");
+        report.expect(timeline->end("a.c") < slowEnd && timeline->end("b.c") < slowEnd &&
+                          timeline->end("c.c") < slowEnd,
+                      "the other files are analyzed while a slow file is");
+
+        const auto sequential =
+            runTimedTool(std::launch::deferred, 2, files, std::make_shared<Timeline>());
+        report.expect(ctrace::renderSarif(async) == ctrace::renderSarif(sequential),
+                      "the SARIF document is the same when files finish out of order");
+    }
 } // namespace
 
 int main()
@@ -190,6 +292,8 @@ int main()
     testToolOrderIsFixed(report);
     testFindingsAreSortedByPosition(report);
     testSarifDoesNotDependOnScheduling(report);
+    testFilesRunAtTheSameTime(report);
+    testSlowFileDoesNotBlockTheOthers(report);
 
     if (report.failures == 0)
     {
