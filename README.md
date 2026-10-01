@@ -1,5 +1,14 @@
 # ctrace
 
+### Repository documents
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [AUTHORS.md](AUTHORS.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [LICENSE](LICENSE)
+- [SECURITY.md](SECURITY.md)
+
 ### BUILD
 
 Builds from source need Git, CMake 3.28 or newer, Ninja, a C++20 compiler, and the LLVM 20 and

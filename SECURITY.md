@@ -5,11 +5,8 @@
 Do not open a public issue for vulnerabilities that could expose users, partners,
 or private code.
 
-Report privately to the current maintainer:
-
-- Maintainer: Hugo Payet
-- Contact: replace this line with the private security email before publishing
-  the repository broadly.
+Report privately to maintainer Hugo Payet through
+[GitHub private vulnerability reporting](https://github.com/CoreTrace/coretrace/security/advisories/new).
 
 Include:
 
