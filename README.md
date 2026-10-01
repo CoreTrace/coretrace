@@ -2,27 +2,82 @@
 
 ### BUILD
 
-```bash
-mkdir -p build && cd build
-```
+Builds from source need Git, CMake 3.28 or newer, Ninja, a C++20 compiler, and the LLVM 20 and
+Clang 20 development packages. The build is tested on Ubuntu 24.04 and macOS 14. Use matching
+LLVM and Clang installations: `LLVM_DIR` and `Clang_DIR` select their CMake packages, while
+`CLANG_EXECUTABLE` selects the Clang 20 executable whose resource headers are bundled with
+`ctrace`. These paths are build-time settings; an installed or released `ctrace` does not need
+LLVM or Clang on the machine where it runs.
 
-Depending on your configuration, you can pass these parameters to cmake. The parameters will be documented here.
-
-```bash
-cmake ..                        \
-    -DUSE_THREAD_SANITIZER=ON   \
-    -DUSE_ADDRESS_SANITIZER=OFF
-```
+On Ubuntu 24.04, install the build tools and the same LLVM/Clang 20 packages as CI, then
+configure from the repository root:
 
 ```bash
-make -j4
+sudo apt-get update
+sudo apt-get install -y build-essential cmake ninja-build git curl ca-certificates gnupg
+sudo ./scripts/ci/install-llvm-apt.sh 20
+cmake -S . -B build -G Ninja \
+  -DLLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm \
+  -DClang_DIR=/usr/lib/llvm-20/lib/cmake/clang \
+  -DCLANG_EXECUTABLE=/usr/bin/clang-20 \
+  -DENABLE_PYTHON_ANALYZER=OFF
 ```
 
-`-DENABLE_PYTHON_ANALYZER=ON` also builds [coretrace-python-analyzer](https://github.com/CoreTrace/coretrace-python-analyzer)
-into a standalone executable with [Nuitka](https://nuitka.net), staged in
-`build/libexec/coretrace/` and installed to `<prefix>/libexec/coretrace/`. It embeds its own
-Python runtime: people running `ctrace` need neither Python nor any package. The Linux release
-archives ship it this way.
+On macOS, use Homebrew's versioned LLVM formula:
+
+```bash
+brew install cmake ninja llvm@20
+cmake -S . -B build -G Ninja \
+  -DLLVM_DIR="$(brew --prefix llvm@20)/lib/cmake/llvm" \
+  -DClang_DIR="$(brew --prefix llvm@20)/lib/cmake/clang" \
+  -DCLANG_EXECUTABLE="$(brew --prefix llvm@20)/bin/clang" \
+  -DENABLE_PYTHON_ANALYZER=OFF
+```
+
+Python is optional: the configuration above builds `ctrace` without the Python analyzer, so
+it needs no Python virtual environment or Nuitka. `ENABLE_PYTHON_ANALYZER` defaults to `OFF`;
+passing it explicitly also turns it off when reusing a build directory configured with Python.
+To include [coretrace-python-analyzer](https://github.com/CoreTrace/coretrace-python-analyzer),
+install Python 3.11 or newer (CI uses 3.12): `brew install python@3.12` on macOS, or
+`sudo apt-get install -y patchelf python3.12-venv` on Ubuntu 24.04. Use the **same interpreter**
+for Nuitka and `Python3_EXECUTABLE`. Run the following commands after the initial CMake
+configuration above:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install nuitka==4.2.2
+cmake -S . -B build \
+  -DENABLE_PYTHON_ANALYZER=ON \
+  -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
+```
+
+Nuitka 4.2.2 is the version tested in CI. CMake downloads the Python analyzer's pinned
+`v0.12.0` tag by default; set `-DCORETRACE_PYTHON_ANALYZER_TAG=<tag>` to select another release,
+or `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` to build a local checkout. The build
+needs Python and a C compiler, but the resulting standalone analyzer includes its Python runtime.
+It is staged in `build/libexec/coretrace/` and installed to
+`<prefix>/libexec/coretrace/`; users of the built or installed `ctrace` need no Python installation.
+
+Build and verify the selected configuration:
+
+```bash
+cmake --build build --parallel 4
+./build/ctrace --help
+ctest --test-dir build --output-on-failure
+```
+
+With the Python analyzer enabled, for example:
+
+```bash
+./build/ctrace --input app.py --invoke coretrace-python-analyzer
+```
+
+Each input goes to the tools of its language: `.py` files to `coretrace-python-analyzer`, C
+and C++ files to the others. The Python analyzer checks the whole project a file belongs to,
+so it follows data across modules, but it only reports findings located in the files given to
+`--input`, plus those about the project itself, such as a vulnerable version pinned in
+`requirements.txt`. The project root is the nearest directory above the file that holds
+`pyproject.toml`, `setup.py`, `setup.cfg` or `.git`, else the file's own directory.
 
 The Linux release archives (amd64, arm64) run on any distribution with glibc 2.34 or newer:
 RHEL 9 and its rebuilds (Rocky, Alma), Amazon Linux 2023, Ubuntu 22.04+, Debian 12+, Fedora
@@ -39,10 +94,7 @@ the verification on each distribution, fail on a library or an executable it doe
 Analyzing C and C++ needs no LLVM or clang installation either: Clang's own headers ship in
 `lib/clang/<version>/include` next to `bin/ctrace`, and the stack analyzer compiles in process.
 Only the C library's headers come from the system (`libc6-dev` on Debian and Ubuntu,
-`glibc-devel` on RHEL), as for any C build. `CT_CLANG` still selects another clang when set. Building it needs
-Python >= 3.11 with Nuitka (`python3 -m pip install nuitka`), a C compiler, and `patchelf` on
-Linux. `-DCORETRACE_PYTHON_ANALYZER_SOURCE_DIR=<checkout>` builds a local checkout instead of
-the pinned tag.
+`glibc-devel` on RHEL), as for any C build. `CT_CLANG` still selects another clang when set.
 
 [coretrace-concurrency-analyzer](https://github.com/CoreTrace/coretrace-concurrency-analyzer) is
 linked into `ctrace` like the stack analyzer, and compiles in process too
@@ -66,18 +118,6 @@ instrumented program needs a C++ build
 environment (`g++` on Debian and Ubuntu, `gcc-c++` on RHEL). The program runs with `ctrace`'s
 privileges, in a separate process but not in a sandbox, so the HTTP server refuses dynamic
 analysis unless it is started with `--serve-allow-dynamic`.
-
-```bash
-cmake .. -DENABLE_PYTHON_ANALYZER=ON -DPython3_EXECUTABLE=/path/to/python3
-./ctrace --input app.py,src/main.c --invoke coretrace-python-analyzer,cppcheck
-```
-
-Each input goes to the tools of its language: `.py` files to `coretrace-python-analyzer`, C
-and C++ files to the others. The Python analyzer checks the whole project a file belongs to,
-so it follows data across modules, but it only reports findings located in the files given to
-`--input`, plus those about the project itself, such as a vulnerable version pinned in
-`requirements.txt`. The project root is the nearest directory above the file that holds
-`pyproject.toml`, `setup.py`, `setup.cfg` or `.git`, else the file's own directory.
 
 ### RELEASES
 
@@ -294,17 +334,4 @@ std::vector<std::string> params3;
 std::string mangled3 = ctrace_tools::mangle::mangleFunction("utils", "init", params3);
 std::cout << "Mangled utils::init(): " << mangled3 << "\n";
 
-```
-
-## TODO
-
-```
-- Mangle function with parameters
-- Thread execution : datarace condition detected
-- 'Format log' function needs to be implement
-- Handle multi-file parsing
-- Add mangling for windows
-- Add lvl verbosity to --verbose like : --verbose=[1|2|3|4]
-- sanitazier explication ...
-- passer du code au lieu du fichier
 ```
