@@ -25,7 +25,8 @@ class EntryPoint
     {
         m_isMangled = ctrace_tools::mangle::isMangled(name);
 
-        if (m_isMangled)
+        // C++ never mangles main: its symbol is the plain name.
+        if (m_isMangled || name == "main")
         {
             mangledName = name;
         }
