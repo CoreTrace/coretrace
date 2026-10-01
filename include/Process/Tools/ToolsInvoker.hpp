@@ -191,7 +191,8 @@ namespace ctrace
             runToolList(deduplicateToolNames(tool_names), files);
         }
 
-        /// Every finding collected so far, grouped by tool name (sorted).
+        /// Every finding collected so far, in reportedBefore order: reports do not depend on
+        /// the order tool runs finished in.
         [[nodiscard]] std::vector<Diagnostic> diagnostics() const
         {
             std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
@@ -200,6 +201,7 @@ namespace ctrace
             {
                 all.insert(all.end(), collected.items.begin(), collected.items.end());
             }
+            std::stable_sort(all.begin(), all.end(), reportedBefore);
             return all;
         }
 

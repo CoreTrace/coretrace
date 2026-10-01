@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 namespace ctrace
@@ -63,6 +64,15 @@ namespace ctrace
             return "error";
         }
         return "warning";
+    }
+
+    /// The order findings are reported in, whatever order the tools finished in: by tool,
+    /// file, position and rule, then severity and message so that findings at one position are
+    /// ordered too.
+    [[nodiscard]] inline bool reportedBefore(const Diagnostic& a, const Diagnostic& b)
+    {
+        return std::tie(a.tool, a.file, a.line, a.column, a.ruleId, a.severity, a.message) <
+               std::tie(b.tool, b.file, b.line, b.column, b.ruleId, b.severity, b.message);
     }
 
     [[nodiscard]] inline DiagnosticSummary summarize(const std::vector<Diagnostic>& diagnostics)

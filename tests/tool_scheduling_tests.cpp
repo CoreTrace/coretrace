@@ -92,12 +92,36 @@ namespace
                        std::vector<std::string>{"alpha:a.c:1", "zeta:a.c:1"}),
                       "findings are grouped by tool name, not by the order tools ran in");
     }
+
+    // Within a tool, findings are ordered by file then position, not by the order the files
+    // were given in or the order the tool reported them in.
+    void testFindingsAreSortedByPosition(TestReport& report)
+    {
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 4, std::launch::deferred);
+        invoker.registerTool("tool", std::make_unique<ReportingTool>("tool", std::vector{9U, 2U}));
+        invoker.runSpecificTools({"tool"}, {"b.c", "a.c"});
+        report.expect((positions(invoker.diagnostics()) ==
+                       std::vector<std::string>{"tool:a.c:2", "tool:a.c:9", "tool:b.c:2",
+                                                "tool:b.c:9"}),
+                      "findings are sorted by file, then line");
+    }
+
+    // The merged SARIF document is the report users diff and baseline against.
+    void testSarifDoesNotDependOnScheduling(TestReport& report)
+    {
+        const std::vector<std::string> files = {"c.c", "a.c", "b.c"};
+        report.expect(ctrace::renderSarif(runReportingTools(std::launch::deferred, files)) ==
+                          ctrace::renderSarif(runReportingTools(std::launch::async, files)),
+                      "the SARIF document is the same for a sequential and an async run");
+    }
 } // namespace
 
 int main()
 {
     TestReport report;
     testToolOrderIsFixed(report);
+    testFindingsAreSortedByPosition(report);
+    testSarifDoesNotDependOnScheduling(report);
 
     if (report.failures == 0)
     {
