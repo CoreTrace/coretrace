@@ -413,12 +413,12 @@ namespace
 
         const auto cfg = loadOrDie("dynamic-settings.json", R"json(
 {"server": {"allow_dynamic_analysis": true},
- "tools": {"coretrace-runtime-analyzer": {"timeout_s": 5, "args": ["--show-output"]}}}
+ "tools": {"coretrace-runtime-analyzer": {"timeout_s": 5, "args": ["--run-arg", "input"]}}}
 )json");
         CHECK(cfg.server.allow_dynamic_analysis);
         CHECK(cfg.tools.runtime_analyzer_timeout_s == 5U);
         CHECK(cfg.tools.args.at("coretrace-runtime-analyzer") ==
-              std::vector<std::string>{"--show-output"});
+              (std::vector<std::string>{"--run-arg", "input"}));
 
         // Every external tool takes a timeout; a tool linked into ctrace cannot be stopped.
         CHECK(defaults.tools.timeouts_s.empty());
@@ -562,6 +562,42 @@ namespace
                   .find("Unknown key 'pat' in 'tools.cppcheck'") != std::string::npos);
         CHECK(loadError("tool-type.json", R"({"tools": {"cppcheck": {"path": 7}}})") ==
               "Expected string for 'tools.cppcheck.path'.");
+    }
+
+    void testToolSpecificOptions()
+    {
+        const auto cfg = loadOrDie("tool-specific.json", R"json({
+  "tools": {
+    "cppcheck": {"jobs": 3},
+    "coretrace-runtime-analyzer": {"compile_args": ["-std=c++20", "-Wall"]},
+    "coretrace-concurrency-analyzer": {"max_live_units": 2}
+  },
+  "stack_analyzer": {"assume_external_frame": "512"}
+})json");
+        CHECK(cfg.tools.cppcheck_jobs == 3);
+        CHECK((cfg.tools.runtime_analyzer_compile_args ==
+               std::vector<std::string>{"-std=c++20", "-Wall"}));
+        CHECK(cfg.tools.concurrency_analyzer_max_live_units == 2);
+        CHECK(cfg.stack_analyzer.assume_external_frame == "512");
+        CHECK(loadError("invalid-jobs.json", R"({"tools":{"cppcheck":{"jobs":0}}})") ==
+              "tools.cppcheck.jobs must be positive.");
+        CHECK(loadError("invalid-live.json",
+                        R"({"tools":{"coretrace-concurrency-analyzer":{"max_live_units":0}}})") ==
+              "tools.coretrace-concurrency-analyzer.max_live_units must be positive.");
+        CHECK(loadError("python-format.json",
+                        R"({"tools":{"coretrace-python-analyzer":{"args":["--format=text"]}}})") ==
+              "tools.coretrace-python-analyzer.args cannot override --format=text.");
+        CHECK(loadError("python-mode.json",
+                        R"({"tools":{"coretrace-python-analyzer":{"args":["--emit-ir"]}}})") ==
+              "tools.coretrace-python-analyzer.args cannot override --emit-ir.");
+        CHECK(loadError("runtime-mode.json",
+                        R"({"tools":{"coretrace-runtime-analyzer":{"args":["--no-run"]}}})") ==
+              "tools.coretrace-runtime-analyzer.args cannot override --no-run.");
+        const auto runtimeValue = loadOrDie(
+            "runtime-value.json",
+            R"({"tools":{"coretrace-runtime-analyzer":{"args":["--run-arg","--format"]}}})");
+        CHECK((runtimeValue.tools.args.at("coretrace-runtime-analyzer") ==
+               std::vector<std::string>{"--run-arg", "--format"}));
     }
 
     void testCanonicalRepoConfigLoads()
@@ -913,6 +949,7 @@ int main()
     testInvalidPortIsAnError();
     testSocketIpcIsDeprecated();
     testToolPathsAreConfigurable();
+    testToolSpecificOptions();
     testLegacySpellingsAreAcceptedWithAWarning();
     testServerHardeningIsConfigurable();
     testCliValuesShareTheLoaderRules();

@@ -36,6 +36,8 @@ namespace ctrace
         // program's source.
         args.emplace_back("--");
         appendBuildContext(args, config);
+        args.insert(args.end(), config.tools.runtime_analyzer_compile_args.begin(),
+                    config.tools.runtime_analyzer_compile_args.end());
         args.push_back(file);
         return args;
     }

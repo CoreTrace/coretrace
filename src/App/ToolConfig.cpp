@@ -60,6 +60,27 @@ namespace ctrace
             return std::string(input.substr(start, end - start));
         }
 
+        [[nodiscard]] bool overridesBridgeOption(std::string_view tool, std::string_view arg)
+        {
+            const auto option = arg.substr(0, arg.find('='));
+            if (option == "--format" || option == "-h" || option == "--help" ||
+                option == "--version" || option == "--")
+            {
+                return true;
+            }
+            if (tool == "coretrace-python-analyzer")
+            {
+                return option == "--emit-ir" || option == "--ssa" || option == "--check";
+            }
+            if (tool == "coretrace-runtime-analyzer")
+            {
+                return option == "--no-run" || option == "--test-dir" || option == "--output-dir" ||
+                       option == "--output" || option == "-o" || option == "--timeout" ||
+                       option == "--show-output" || option == "--show-events";
+            }
+            return false;
+        }
+
         [[nodiscard]] std::string joinKeys(const std::vector<const char*>& keys)
         {
             std::string joined;
@@ -824,6 +845,10 @@ namespace ctrace
                  {"stack_limit", "stack-limit"},
                  Kind::Uint64,
                  setUint64(sa, &SA::stack_limit)},
+                {"assume_external_frame",
+                 {"assume_external_frame", "assume-external-frame"},
+                 Kind::ScalarString,
+                 setString(sa, &SA::assume_external_frame)},
                 {"jobs",
                  {"jobs"},
                  Kind::ScalarString,
@@ -1095,9 +1120,21 @@ namespace ctrace
                 const std::string location = "tools." + std::string(tool);
                 const bool isRuntimeAnalyzer = tool == "coretrace-runtime-analyzer";
                 const bool isConcurrencyAnalyzer = tool == "coretrace-concurrency-analyzer";
-                const std::vector<const char*> knownKeys =
+                std::vector<const char*> knownKeys =
                     isConcurrencyAnalyzer ? std::vector<const char*>{"rules"}
                                           : std::vector<const char*>{"path", "args", "timeout_s"};
+                if (isRuntimeAnalyzer)
+                {
+                    knownKeys.push_back("compile_args");
+                }
+                if (isConcurrencyAnalyzer)
+                {
+                    knownKeys.push_back("max_live_units");
+                }
+                if (tool == "cppcheck")
+                {
+                    knownKeys.push_back("jobs");
+                }
                 if (!validateKnownKeys(*itTool, knownKeys, location, errorMessage))
                 {
                     return false;
@@ -1137,6 +1174,52 @@ namespace ctrace
                         ctx.config.tools.timeouts_s[std::string(tool)] = seconds;
                     }
                 }
+                if (const auto itCompileArgs = itTool->find("compile_args");
+                    isRuntimeAnalyzer && itCompileArgs != itTool->end() &&
+                    !itCompileArgs->is_null())
+                {
+                    Value value;
+                    if (!readValue(*itCompileArgs, Kind::StringList, location + ".compile_args",
+                                   value, errorMessage))
+                    {
+                        return false;
+                    }
+                    ctx.config.tools.runtime_analyzer_compile_args = std::move(value.list);
+                }
+                for (const char* key : {"jobs", "max_live_units"})
+                {
+                    const bool relevant =
+                        (tool == "cppcheck" && std::string_view(key) == "jobs") ||
+                        (isConcurrencyAnalyzer && std::string_view(key) == "max_live_units");
+                    const auto itNumber = itTool->find(key);
+                    if (!relevant || itNumber == itTool->end() || itNumber->is_null())
+                    {
+                        continue;
+                    }
+                    Value value;
+                    if (!readValue(*itNumber, Kind::Uint64, location + "." + key, value,
+                                   errorMessage))
+                    {
+                        return false;
+                    }
+                    const auto maximum = std::string_view(key) == "jobs"
+                                             ? std::numeric_limits<std::uint32_t>::max()
+                                             : std::numeric_limits<std::size_t>::max();
+                    if (value.number == 0 || value.number > maximum)
+                    {
+                        errorMessage = location + "." + key + " must be positive.";
+                        return false;
+                    }
+                    if (std::string_view(key) == "jobs")
+                    {
+                        ctx.config.tools.cppcheck_jobs = static_cast<std::uint32_t>(value.number);
+                    }
+                    else
+                    {
+                        ctx.config.tools.concurrency_analyzer_max_live_units =
+                            static_cast<std::size_t>(value.number);
+                    }
+                }
                 if (const auto itPath = itTool->find("path");
                     itPath != itTool->end() && !itPath->is_null())
                 {
@@ -1155,6 +1238,27 @@ namespace ctrace
                                    errorMessage))
                     {
                         return false;
+                    }
+                    if (isRuntimeAnalyzer || tool == "coretrace-python-analyzer")
+                    {
+                        for (std::size_t index = 0; index < value.list.size(); ++index)
+                        {
+                            const std::string& arg = value.list[index];
+                            // These runtime options consume the next token as data, even when
+                            // that token looks like an option of the analyzer itself.
+                            if (isRuntimeAnalyzer &&
+                                (arg == "--run-arg" || arg == "--env" || arg == "--cwd") &&
+                                index + 1 < value.list.size())
+                            {
+                                ++index;
+                                continue;
+                            }
+                            if (overridesBridgeOption(tool, arg))
+                            {
+                                errorMessage = location + ".args cannot override " + arg + ".";
+                                return false;
+                            }
+                        }
                     }
                     ctx.config.tools.args[std::string(tool)] = value.list;
                 }
