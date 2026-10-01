@@ -368,8 +368,9 @@ runtime analyzer options. The binary output remains in the private run directory
 Type: positive integer
 Default: unset (cppcheck default)
 Description: cppcheck worker count, forwarded as `-j N`.
-Impact: when unset, a numeric `stack_analyzer.jobs` still supplies `-j N` for compatibility
-with existing schema v1 configurations. The cppcheck setting takes precedence.
+Impact: the only source of cppcheck's `-j`. When unset, no `-j` is passed and cppcheck keeps its
+own default: neither `stack_analyzer.jobs` (the stack analyzer's) nor `runtime.jobs` (how many
+tool runs go on at the same time) applies to cppcheck.
 
 - `tools.coretrace-concurrency-analyzer.rules`
 Type: `string|string[]`
@@ -405,8 +406,7 @@ locations; a finding the analyzer rates with low confidence is a warning at most
 
 Derived cppcheck options: `--enable=warning,style,performance,portability` and
 `--inline-suppr` always; `-I<dir>` for each `stack_analyzer.include_dirs` entry, `-D<macro>`
-for each `stack_analyzer.defines` entry, and `-j N` from `tools.cppcheck.jobs` or the legacy
-numeric `stack_analyzer.jobs` fallback.
+for each `stack_analyzer.defines` entry, and `-j N` from `tools.cppcheck.jobs` when set.
 
 `tools.ctrace_stack_analyzer` and `tools.stack_analyzer` keep their legacy meaning: they are
 alternative spellings of the `stack_analyzer` section below. The stack analyzer runs in
