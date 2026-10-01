@@ -283,7 +283,7 @@ curl -X POST http://127.0.0.1:8080/api \
       "output_file": "ctrace.out",
       "ipc": "serve",
       "ipc_path": "/tmp/coretrace_ipc",
-      "async": false,
+      "jobs": 1,
       "verbose": true
     }
   }'

@@ -8,9 +8,12 @@
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <utility>
 
 #include <string>
+
+class ThreadPool;
 
 class ILogger
 {
@@ -59,9 +62,13 @@ class ApiHandler
     /// (default models, bundled tools), as the CLI does. Empty when unknown.
     /// `allowDynamicAnalysis` comes from the server's own configuration, never from a request:
     /// without it, a request for dynamic analysis is refused.
-    ApiHandler(ILogger& logger, std::filesystem::path executable, bool allowDynamicAnalysis = false)
+    /// `pool` runs the tools of every request, so that concurrent requests share its workers
+    /// instead of each starting as many; without one, or for a request with `jobs` 1, tools
+    /// run one after another.
+    ApiHandler(ILogger& logger, std::filesystem::path executable, bool allowDynamicAnalysis = false,
+               std::shared_ptr<ThreadPool> pool = nullptr)
         : logger_(logger), executable_(std::move(executable)),
-          allowDynamicAnalysis_(allowDynamicAnalysis)
+          allowDynamicAnalysis_(allowDynamicAnalysis), pool_(std::move(pool))
     {
     }
 
@@ -80,6 +87,7 @@ class ApiHandler
     ILogger& logger_;
     std::filesystem::path executable_;
     bool allowDynamicAnalysis_;
+    std::shared_ptr<ThreadPool> pool_;
 };
 
 #endif // PROCESS_IPC_API_HANDLER_HPP

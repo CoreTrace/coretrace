@@ -20,6 +20,12 @@
 
 namespace
 {
+    /// A pool of `workers` for an async run, none for a sequential one.
+    std::shared_ptr<ThreadPool> poolFor(std::launch policy, std::size_t workers)
+    {
+        return policy == std::launch::async ? std::make_shared<ThreadPool>(workers) : nullptr;
+    }
+
     struct TestReport
     {
         int failures = 0;
@@ -214,7 +220,7 @@ namespace
                                                  const std::vector<std::string>& files,
                                                  const std::shared_ptr<Timeline>& timeline)
     {
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, workers, policy);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(policy, workers));
         invoker.registerTool("timed", std::make_unique<TimedTool>(timeline));
         invoker.runSpecificTools({"timed"}, files);
         return invoker.diagnostics();
@@ -235,7 +241,7 @@ namespace
     std::vector<ctrace::Diagnostic> runReportingTools(std::launch policy,
                                                       const std::vector<std::string>& files)
     {
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 4, policy);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(policy, 4));
         invoker.registerTool("zeta", std::make_unique<ReportingTool>("zeta", std::vector{1U}));
         invoker.registerTool("alpha", std::make_unique<ReportingTool>("alpha", std::vector{1U}));
         invoker.runSpecificTools({"zeta", "alpha"}, files);
@@ -254,7 +260,7 @@ namespace
     void testSequentialRunOrder(TestReport& report)
     {
         auto log = std::make_shared<RunLog>();
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 4, std::launch::deferred);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(std::launch::deferred, 4));
         invoker.registerTool("second", std::make_unique<LoggingTool>("second", log, false));
         invoker.registerTool("first", std::make_unique<LoggingTool>("first", log, false));
         invoker.registerTool("batch", std::make_unique<LoggingTool>("batch", log, true));
@@ -269,7 +275,7 @@ namespace
     // were given in or the order the tool reported them in.
     void testFindingsAreSortedByPosition(TestReport& report)
     {
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 4, std::launch::deferred);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(std::launch::deferred, 4));
         invoker.registerTool("tool", std::make_unique<ReportingTool>("tool", std::vector{9U, 2U}));
         invoker.runSpecificTools({"tool"}, {"b.c", "a.c"});
         report.expect(
@@ -321,7 +327,7 @@ namespace
     {
         auto limited = std::make_shared<Timeline>();
         auto timed = std::make_shared<Timeline>();
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 2, std::launch::async);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(std::launch::async, 2));
         invoker.registerTool("one_at_a_time", std::make_unique<OneAtATimeTool>(limited));
         invoker.registerTool("timed", std::make_unique<TimedTool>(timed));
         invoker.runSpecificTools({"one_at_a_time", "timed"}, {"a.c", "b.c", "c.c"});
@@ -331,6 +337,25 @@ namespace
         report.expect(timed->end("a.c") < limitedEnd && timed->end("b.c") < limitedEnd &&
                           timed->end("c.c") < limitedEnd,
                       "the other tools run while the limited tool works through its files");
+    }
+
+    // Invokers sharing a pool, as server requests do, are bounded by it together.
+    void testSharedPoolBoundsEveryInvoker(TestReport& report)
+    {
+        const auto pool = std::make_shared<ThreadPool>(1);
+        auto timeline = std::make_shared<Timeline>();
+        const auto request = [&](const std::string& file)
+        {
+            ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, pool);
+            invoker.registerTool("timed", std::make_unique<TimedTool>(timeline));
+            invoker.runSpecificTools({"timed"}, {file});
+        };
+        std::thread first(request, "a.c");
+        std::thread second(request, "b.c");
+        first.join();
+        second.join();
+        report.expect(!timeline->anyOverlap(),
+                      "invokers sharing a one-worker pool never run two tools at once");
     }
 } // namespace
 
@@ -344,6 +369,7 @@ int main()
     testFilesRunAtTheSameTime(report);
     testSlowFileDoesNotBlockTheOthers(report);
     testToolConcurrencyLimit(report);
+    testSharedPoolBoundsEveryInvoker(report);
 
     if (report.failures == 0)
     {

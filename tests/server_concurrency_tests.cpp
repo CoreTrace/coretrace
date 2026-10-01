@@ -4,6 +4,7 @@
 // come back complete and correct, with the logging configured the way run_server does it.
 #include "App/Runner.hpp"
 #include "Process/Ipc/ApiHandler.hpp"
+#include "Process/Tools/ToolsInvoker.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -185,6 +187,7 @@ namespace
                                  {"smt_timeout_ms", 80U},
                                  {"stack_analyzer_mode", "abi"},
                                  {"ipc", "server"},
+                                 {"jobs", 1U},
                                  {"not_a_known_param", 42}};
             const bool ok = ApiHandler::build_config_from_params(params, config, err);
             report.expect(ok, "params: valid request is accepted (" + err.message + ")");
@@ -192,6 +195,7 @@ namespace
                           "params: input splits comma-separated strings");
             report.expect((config.files.entry_points == std::vector<std::string>{"main", "helper"}),
                           "params: entry_points array is kept");
+            report.expect(config.runtime.jobs == 1U, "params: jobs sets runtime.jobs");
             report.expect((config.analysis.invoke ==
                            std::vector<std::string>{"cppcheck", "ctrace_stack_analyzer"}),
                           "params: invoke splits comma-separated strings");
@@ -266,7 +270,9 @@ int main(int argc, char** argv)
     testParamsToConfig(report);
 
     ConsoleLogger logger;
-    ApiHandler handler(logger, executable);
+    // As run_server does: every request runs its tools on one shared pool.
+    ApiHandler handler(logger, executable, /*allowDynamicAnalysis=*/false,
+                       std::make_shared<ThreadPool>(2));
 
     constexpr int kRounds = 3;
     constexpr int kConcurrentRequests = 4;

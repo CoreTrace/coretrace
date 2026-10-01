@@ -159,16 +159,25 @@ CLI: `--demangle`
 
 ## runtime
 
+- `runtime.jobs`
+Type: `uint`
+Default: `0` (one per core)
+Allowed: `0` to `1024`
+Description: how many tool runs go on at the same time.
+Impact: each file is one run of each per-file tool, so different files are analyzed at the same
+time, and a slow file holds one worker, not the others. `1` runs the tools one after another, file
+by file, as earlier releases did by default. `coretrace-runtime-analyzer` runs one program at a
+time whatever the value. Findings are reported in the same order whatever the value (by tool,
+file, line and column). In server mode, the server's value sizes one pool shared by every
+request; a request's `jobs` of `1` runs its tools one after another, any other value uses the
+shared pool.
+CLI: `-j`, `--jobs`
+
 - `runtime.async`
 Type: `bool`
-Default: `false`
-Allowed: `true|false`
-Description: async execution policy.
-Impact: runs the tool runs on a thread pool with one worker per core: each file is one run of
-each per-file tool, so different files are analyzed at the same time, and a slow file holds
-one worker, not the others. `coretrace-runtime-analyzer` runs one program at a time. Findings
-are reported in the same order as in a sequential run (by tool, file, line and column).
-CLI: `--async`
+Deprecated: use `runtime.jobs`. `true` is the default, `false` is `jobs: 1`; `jobs` wins when
+both are set. A warning names the replacement.
+CLI: `--async` (deprecated, same as the default)
 
 - `runtime.ipc`
 Type: `string`

@@ -86,7 +86,11 @@ namespace ctrace
 
     struct RuntimeConfig
     {
-        bool async = false;                               ///< Thread-pool tool scheduling.
+        /// The largest `jobs` accepted: each one is a thread.
+        static constexpr std::uint64_t kMaxJobs = 1024;
+        /// `-j/--jobs`: how many tool runs go on at the same time; 0 for one per core, 1 for a
+        /// sequential run. `runtime.async` and `--async` are deprecated spellings.
+        std::uint64_t jobs = 0;
         std::string ipc = ctrace_defs::IPC_TYPES.front(); ///< standardIO|socket|serve.
         std::string ipc_path = "/tmp/coretrace_ipc";
     };

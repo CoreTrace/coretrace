@@ -110,6 +110,31 @@ jobs:
           python3 tests/BTP-STACK-ANALYZER-F7 --ctrace-bin ./build/ctrace \
             --iterations 1 --warmups 0 --min-speedup-ratio 0
 
+      # -j1 against one job per core on a real multi-file project, curl's lib/vauth and
+      # lib/vtls through its compile_commands.json: wall-clock time and ctrace's peak RSS go to
+      # the job summary, to see the gain and notice a regression. Informational: only a run
+      # that does not complete fails it (tools not installed here make it incomplete, exit 3).
+      - name: Benchmark -j (curl subset)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          bench="${RUNNER_TEMP}/bench"
+          git clone --quiet --depth 1 --branch curl-8_11_1 \
+            https://github.com/curl/curl.git "${bench}/curl"
+          cmake -S "${bench}/curl" -B "${bench}/curl-build" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCURL_ENABLE_SSL=OFF -DCURL_USE_LIBPSL=OFF -DUSE_LIBIDN2=OFF -DCURL_ZLIB=OFF \
+            -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_NGHTTP2=OFF -DCURL_USE_LIBSSH2=OFF \
+            -DBUILD_CURL_EXE=OFF -DBUILD_TESTING=OFF > /dev/null
+          jq '[.[] | select(.file | test("/lib/(vauth|vtls)/"))]' \
+            "${bench}/curl-build/compile_commands.json" > "${bench}/subset.json"
+          {
+            echo "### -j benchmark: --static on curl lib/vauth and lib/vtls"
+            echo
+            python3 scripts/ci/benchmark-jobs.py --ctrace ./build/ctrace --jobs 1 \
+              --jobs "$(nproc)" -- --static --compile-commands "${bench}/subset.json" \
+              --fail-on none
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # How much of CoreTrace's own code the unit and the integration tests run: a table in the job
   # summary and the full report as an artifact (scripts/ci/coverage.sh). No threshold fails it.
   coverage:

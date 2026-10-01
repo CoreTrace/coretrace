@@ -15,6 +15,12 @@
 
 namespace
 {
+    /// A pool of `workers` for an async run, none for a sequential one.
+    std::shared_ptr<ThreadPool> poolFor(std::launch policy, std::size_t workers)
+    {
+        return policy == std::launch::async ? std::make_shared<ThreadPool>(workers) : nullptr;
+    }
+
     struct TestReport
     {
         int failures = 0;
@@ -117,7 +123,7 @@ namespace
     void checkThrowingToolFails(TestReport& report, std::launch policy, bool batch,
                                 const std::string& label)
     {
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 2, policy);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(policy, 2));
         auto seen = std::make_shared<Seen>();
         invoker.registerTool("fake_throws", std::make_unique<ThrowingTool>(batch));
         invoker.registerTool("fake_c",
@@ -142,7 +148,7 @@ namespace
 
     void checkRouting(TestReport& report, std::launch policy, bool batch, const std::string& label)
     {
-        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 2, policy);
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(policy, 2));
         auto cSeen = std::make_shared<Seen>();
         auto pySeen = std::make_shared<Seen>();
         invoker.registerTool("fake_c",
@@ -158,7 +164,7 @@ namespace
                       label + ": the Python tool gets only Python files");
 
         auto idle = std::make_shared<Seen>();
-        ctrace::ToolInvoker onlyC(ctrace::ProgramConfig{}, 2, policy);
+        ctrace::ToolInvoker onlyC(ctrace::ProgramConfig{}, poolFor(policy, 2));
         onlyC.registerTool("fake_py",
                            std::make_unique<RecordingTool>("fake_py", idle, true, batch));
         onlyC.runSpecificTools({"fake_py"}, std::vector<std::string>{"a.c"});

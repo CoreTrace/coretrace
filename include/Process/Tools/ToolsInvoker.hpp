@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <future>
@@ -80,6 +81,11 @@ class ThreadPool
         }
     }
 
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return workers.size();
+    }
+
     template <typename F> auto enqueue(F&& f) -> std::future<std::invoke_result_t<std::decay_t<F>>>
     {
         using return_type = std::invoke_result_t<std::decay_t<F>>;
@@ -111,13 +117,26 @@ class ThreadPool
 
 namespace ctrace
 {
+    /// How many tool runs `jobs` (runtime.jobs) lets go on at the same time: one per core for 0.
+    [[nodiscard]] inline std::size_t workerCount(std::uint64_t jobs)
+    {
+        if (jobs != 0)
+        {
+            return static_cast<std::size_t>(jobs);
+        }
+        const unsigned cores = std::thread::hardware_concurrency();
+        return cores == 0 ? 1 : cores;
+    }
+
     class ToolInvoker
     {
       public:
-        ToolInvoker(ctrace::ProgramConfig config, std::size_t nbThreadPool, std::launch policy,
+        /// Tool runs go on `pool`, which may be shared with other invokers: its workers bound
+        /// the runs of all of them together. Without a pool, runs go one after another.
+        ToolInvoker(ctrace::ProgramConfig config, std::shared_ptr<ThreadPool> pool,
                     std::shared_ptr<ctrace::CaptureBuffer> output_capture = nullptr)
-            : m_config(std::move(config)), m_nbThreadPool(nbThreadPool == 0 ? 1 : nbThreadPool),
-              m_policy(policy), m_output_capture(output_capture)
+            : m_config(std::move(config)), m_output_capture(std::move(output_capture)),
+              m_threadPool(std::move(pool))
         {
             coretrace::log(coretrace::Level::Debug, "Initializing ToolInvoker...\n");
 
@@ -162,14 +181,6 @@ namespace ctrace
                 {
                     tool->setIpcStrategy(m_ipc);
                 }
-            }
-
-            if (m_policy == std::launch::async)
-            {
-                m_threadPool = std::make_unique<ThreadPool>(m_nbThreadPool);
-                coretrace::log(coretrace::Level::Debug,
-                               "ToolInvoker thread pool enabled with {} workers.\n",
-                               m_nbThreadPool);
             }
         }
 
@@ -312,7 +323,7 @@ namespace ctrace
                          const std::vector<std::string>& files)
         {
             const std::vector<Job> jobs = planJobs(tool_names, files);
-            if (m_policy != std::launch::async || !m_threadPool)
+            if (!m_threadPool)
             {
                 for (const Job& job : jobs)
                 {
@@ -357,7 +368,8 @@ namespace ctrace
             for (auto& [tool_name, queue] : queues)
             {
                 const std::size_t limit = tools.at(tool_name)->maxConcurrentRuns();
-                queue.lanes = std::min(queue.pending.size(), limit == 0 ? m_nbThreadPool : limit);
+                queue.lanes =
+                    std::min(queue.pending.size(), limit == 0 ? m_threadPool->size() : limit);
             }
 
             std::vector<std::future<void>> lanes;
@@ -524,11 +536,9 @@ namespace ctrace
         std::vector<std::string> static_tools;
         std::vector<std::string> dynamic_tools;
         ctrace::ProgramConfig m_config;
-        std::size_t m_nbThreadPool;
-        std::launch m_policy;
         std::shared_ptr<IpcStrategy> m_ipc;
         std::shared_ptr<ctrace::CaptureBuffer> m_output_capture;
-        std::unique_ptr<ThreadPool> m_threadPool;
+        std::shared_ptr<ThreadPool> m_threadPool;
         mutable std::mutex m_diagnosticsMutex;
         std::map<std::string, CollectedDiagnostics> m_diagnosticsByTool;
     };
