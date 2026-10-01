@@ -274,6 +274,9 @@ add_executable(ctrace_files_tests tests/files_tests.cpp src/App/Files.cpp src/ct
 target_link_libraries(ctrace_files_tests PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
 
+add_executable(ctrace_strings_tests tests/strings_tests.cpp src/ctrace_tools/strings.cpp)
+add_test(NAME ctrace_strings_tests COMMAND ctrace_strings_tests)
+
 add_executable(ctrace_tool_output_tests tests/tool_output_tests.cpp)
 add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 
@@ -755,6 +758,7 @@ set(coretrace_unit_tests
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
+    ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
@@ -784,6 +788,7 @@ foreach(coretrace_target
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
+    ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
