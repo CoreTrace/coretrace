@@ -61,10 +61,13 @@ int main()
 
     // --sarif-format asks each tool for its structured output, never for text.
     {
-        const auto args = IkosToolImplementation::buildArguments(configWithSarif(true), "a.c");
+        const auto args =
+            IkosToolImplementation::buildArguments(configWithSarif(true), "a.c", "run/output.db");
         report.expect(contains(args, "--format=json") && !contains(args, "--format=text"),
                       "ikos: a SARIF request asks for the structured format");
         report.expect(contains(args, "a.c"), "ikos: the source file is passed");
+        report.expect(contains(args, "--output-db=run/output.db"),
+                      "ikos: the run's database goes where the caller says");
         // ikos prints its report on stdout, which each run captures: a report file would be
         // shared by concurrent runs and would overwrite CoreTrace's own report.
         report.expect(std::none_of(args.begin(), args.end(), [](const std::string& arg)
@@ -72,46 +75,52 @@ int main()
                       "ikos: the report is read from stdout, not from a shared report file");
     }
     {
-        const auto args = IkosToolImplementation::buildArguments(configWithSarif(false), "a.c");
+        const auto args =
+            IkosToolImplementation::buildArguments(configWithSarif(false), "a.c", "run/output.db");
         report.expect(contains(args, "--format=text") && !contains(args, "--format=json"),
                       "ikos: without SARIF the text format is used");
     }
     // ikos names entry points as the binary does: plain in C, Itanium-mangled in C++ except
     // main, which C++ never mangles, and an already mangled name is kept.
     {
-        report.expect(
-            contains(IkosToolImplementation::buildArguments(configWithSarif(false), "a.c"),
-                     "--entry-points=main"),
-            "ikos: a C entry point keeps its name");
-        report.expect(
-            contains(IkosToolImplementation::buildArguments(configWithSarif(false), "a.cpp"),
-                     "--entry-points=main"),
-            "ikos: the C++ main entry point is not mangled");
+        report.expect(contains(IkosToolImplementation::buildArguments(configWithSarif(false), "a.c",
+                                                                      "run/output.db"),
+                               "--entry-points=main"),
+                      "ikos: a C entry point keeps its name");
+        report.expect(contains(IkosToolImplementation::buildArguments(configWithSarif(false),
+                                                                      "a.cpp", "run/output.db"),
+                               "--entry-points=main"),
+                      "ikos: the C++ main entry point is not mangled");
         ctrace::ProgramConfig function = configWithSarif(false);
         function.files.entry_points = {"run"};
-        report.expect(contains(IkosToolImplementation::buildArguments(function, "a.cpp"),
-                               "--entry-points=_Z3runv"),
-                      "ikos: a C++ entry point is mangled");
+        report.expect(
+            contains(IkosToolImplementation::buildArguments(function, "a.cpp", "run/output.db"),
+                     "--entry-points=_Z3runv"),
+            "ikos: a C++ entry point is mangled");
         ctrace::ProgramConfig mangled = configWithSarif(false);
         mangled.files.entry_points = {"_Z3runi"};
-        report.expect(contains(IkosToolImplementation::buildArguments(mangled, "a.cpp"),
-                               "--entry-points=_Z3runi"),
-                      "ikos: an already mangled C++ entry point is kept");
+        report.expect(
+            contains(IkosToolImplementation::buildArguments(mangled, "a.cpp", "run/output.db"),
+                     "--entry-points=_Z3runi"),
+            "ikos: an already mangled C++ entry point is kept");
 
         // Each entry point is named on its own, then the names are joined.
         ctrace::ProgramConfig several = configWithSarif(false);
         several.files.entry_points = {"main", "foo", "_Z3runi"};
-        report.expect(contains(IkosToolImplementation::buildArguments(several, "a.cpp"),
-                               "--entry-points=main,_Z3foov,_Z3runi"),
-                      "ikos: several C++ entry points are mangled one by one");
-        report.expect(contains(IkosToolImplementation::buildArguments(several, "a.c"),
-                               "--entry-points=main,foo,_Z3runi"),
-                      "ikos: several C entry points keep their names");
+        report.expect(
+            contains(IkosToolImplementation::buildArguments(several, "a.cpp", "run/output.db"),
+                     "--entry-points=main,_Z3foov,_Z3runi"),
+            "ikos: several C++ entry points are mangled one by one");
+        report.expect(
+            contains(IkosToolImplementation::buildArguments(several, "a.c", "run/output.db"),
+                     "--entry-points=main,foo,_Z3runi"),
+            "ikos: several C entry points keep their names");
 
         // Without a configured entry point, ikos keeps its own default, main.
         ctrace::ProgramConfig none = configWithSarif(false);
         none.files.entry_points.clear();
-        const auto noEntryArgs = IkosToolImplementation::buildArguments(none, "a.cpp");
+        const auto noEntryArgs =
+            IkosToolImplementation::buildArguments(none, "a.cpp", "run/output.db");
         report.expect(std::none_of(noEntryArgs.begin(), noEntryArgs.end(),
                                    [](const std::string& arg)
                                    { return arg.starts_with("--entry-points"); }),
@@ -193,7 +202,7 @@ int main()
         config.tools.args["ikos"] = {"--opt=1"};
         const auto flaw = FlawfinderToolImplementation::buildArguments(config, "a.c");
         const auto tscan = TscancodeToolImplementation::buildArguments(config, "a.c");
-        const auto ikos = IkosToolImplementation::buildArguments(config, "a.c");
+        const auto ikos = IkosToolImplementation::buildArguments(config, "a.c", "run/output.db");
         report.expect(contains(flaw, "--minlevel=3") && flaw.back() == "a.c",
                       "flawfinder: pass-through arguments precede the file");
         report.expect(contains(tscan, "--xml") && tscan.back() == "a.c",
@@ -397,6 +406,33 @@ int main()
         config.files.input = {"main.c", "build/compile_commands.json"};
         report.expect(compileCommandsPath(config) == "build/compile_commands.json",
                       "compile commands: a .json input is a database");
+    }
+
+    // ikos writes a database for each run (output.db in the working directory by default):
+    // runs at the same time must not share it, and none is left behind. `echo` stands for ikos
+    // and shows the arguments of the run.
+    {
+        ctrace::ProgramConfig config;
+        config.tools.paths["ikos"] = "echo";
+        auto buffer = std::make_shared<ctrace::CaptureBuffer>();
+        {
+            ToolOutput output(buffer, "ikos", /*mirrorToConsole=*/false);
+            IkosToolImplementation().execute("a.c", config, output);
+        }
+        const auto captured = buffer->snapshot();
+        const std::string echoed =
+            captured.count("ikos") == 1 ? captured.at("ikos").front().message : std::string();
+        const std::string option = "--output-db=";
+        const auto at = echoed.find(option);
+        const std::filesystem::path database =
+            at == std::string::npos
+                ? std::filesystem::path()
+                : std::filesystem::path(echoed.substr(
+                      at + option.size(), echoed.find_first_of(" \n", at) - at - option.size()));
+        report.expect(database.is_absolute() && !std::filesystem::exists(database.parent_path()),
+                      "ikos: each run writes its database in a directory of its own, removed after "
+                      "the run (" +
+                          echoed + ")");
     }
 
     // An external tool still running after its timeout is stopped and reported as failed, so
