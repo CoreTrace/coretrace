@@ -48,8 +48,8 @@ namespace
             std::vector<ctrace::Diagnostic> found;
             for (const unsigned line : m_lines)
             {
-                found.push_back({m_name, "rule", file, line, 1, ctrace::Severity::Warning,
-                                 "finding", ""});
+                found.push_back(
+                    {m_name, "rule", file, line, 1, ctrace::Severity::Warning, "finding", ""});
             }
             output.diagnostics(std::move(found));
         }
@@ -100,10 +100,10 @@ namespace
         ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 4, std::launch::deferred);
         invoker.registerTool("tool", std::make_unique<ReportingTool>("tool", std::vector{9U, 2U}));
         invoker.runSpecificTools({"tool"}, {"b.c", "a.c"});
-        report.expect((positions(invoker.diagnostics()) ==
-                       std::vector<std::string>{"tool:a.c:2", "tool:a.c:9", "tool:b.c:2",
-                                                "tool:b.c:9"}),
-                      "findings are sorted by file, then line");
+        report.expect(
+            (positions(invoker.diagnostics()) ==
+             std::vector<std::string>{"tool:a.c:2", "tool:a.c:9", "tool:b.c:2", "tool:b.c:9"}),
+            "findings are sorted by file, then line");
     }
 
     // The merged SARIF document is the report users diff and baseline against.
