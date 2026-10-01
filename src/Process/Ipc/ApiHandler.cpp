@@ -158,6 +158,7 @@ namespace
             {"compile_commands", "files", "compile_commands", false},
             {"include_compdb_deps", "files", "include_compdb_deps", false},
             {"async", "runtime", "async", false},
+            {"jobs", "runtime", "jobs", false},
             {"ipc_path", "runtime", "ipc_path", false},
             {"timing", "stack_analyzer", "timing", false},
             {"analysis_profile", "stack_analyzer", "analysis_profile", false},
@@ -280,20 +281,11 @@ namespace
             return false;
         }
 
-        unsigned int threads = std::thread::hardware_concurrency();
-        if (threads == 0)
-        {
-            threads = 1;
-        }
-        if (threads > 255)
-        {
-            threads = 255;
-        }
-        const uint8_t pool_size = static_cast<uint8_t>(threads);
+        const std::size_t workers = ctrace::workerCount(config.runtime.jobs);
         auto output_capture = std::make_shared<ctrace::CaptureBuffer>();
-        ctrace::ToolInvoker invoker(
-            config, pool_size, (config.runtime.async ? std::launch::async : std::launch::deferred),
-            output_capture);
+        ctrace::ToolInvoker invoker(config, workers,
+                                    workers > 1 ? std::launch::async : std::launch::deferred,
+                                    output_capture);
         const ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
         if (!resolution.ok())
         {

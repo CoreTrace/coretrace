@@ -3,6 +3,7 @@
 #include "App/ShippedDefaults.hpp"
 #include "App/ToolConfig.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -317,7 +318,7 @@ namespace
         CHECK(
             (cfg.analysis.invoke == std::vector<std::string>{"cppcheck", "ctrace_stack_analyzer"}));
         CHECK(cfg.analysis.static_enabled);
-        CHECK(cfg.runtime.async);
+        CHECK(cfg.runtime.jobs == 0U); // --async: the deprecated spelling of the default.
         CHECK(cfg.runtime.ipc == "serve");
         CHECK(cfg.server.port == 8081);
     }
@@ -436,6 +437,44 @@ namespace
             loadError("timeout-too-large.json",
                       R"({"tools": {"coretrace-runtime-analyzer": {"timeout_s": 99999999999}}})") ==
             "tools.coretrace-runtime-analyzer.timeout_s is too large.");
+    }
+
+    [[nodiscard]] bool anyContains(const std::vector<std::string>& lines, const std::string& text)
+    {
+        return std::any_of(lines.begin(), lines.end(), [&](const std::string& line)
+                           { return line.find(text) != std::string::npos; });
+    }
+
+    // -j/--jobs sets how many tool runs go on at the same time: one per core by default (0),
+    // 1 for a sequential run. --async and runtime.async are its deprecated spellings.
+    void testJobs()
+    {
+        CHECK(ctrace::ProgramConfig{}.runtime.jobs == 0U);
+
+        const auto shortForm = buildFromArgs({"ctrace", "-j", "3"});
+        CHECK(shortForm.config.has_value() && shortForm.config->runtime.jobs == 3U);
+        const auto longForm = buildFromArgs({"ctrace", "--jobs", "1"});
+        CHECK(longForm.config.has_value() && longForm.config->runtime.jobs == 1U);
+
+        const auto async = buildFromArgs({"ctrace", "--async"});
+        CHECK(async.config.has_value() && async.config->runtime.jobs == 0U);
+        CHECK(anyContains(async.warnings, "--async is deprecated") &&
+              anyContains(async.warnings, "-j"));
+        const auto both = buildFromArgs({"ctrace", "--async", "-j", "2"});
+        CHECK(both.config.has_value() && both.config->runtime.jobs == 2U);
+
+        const auto path = makeTempConfigPath("runtime-async.json");
+        writeTextFile(path, R"({"runtime": {"async": false}})");
+        ctrace::ProgramConfig sequential;
+        std::string err;
+        std::vector<std::string> warnings;
+        CHECK(ctrace::applyToolConfigFile(sequential, path.string(), err, &warnings));
+        CHECK(sequential.runtime.jobs == 1U);
+        CHECK(anyContains(warnings, "'async'") && anyContains(warnings, "'jobs'"));
+
+        const auto cfg =
+            loadOrDie("runtime-jobs.json", R"({"runtime": {"async": true, "jobs": 4}})");
+        CHECK(cfg.runtime.jobs == 4U);
     }
 
     void testConcurrencyAnalyzerSettings()
@@ -931,6 +970,7 @@ int main()
     testBundledToolsFollowTheExecutable();
     testDynamicAnalysisSettings();
     testConcurrencyAnalyzerSettings();
+    testJobs();
     testShippedClangHeaders();
     testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;

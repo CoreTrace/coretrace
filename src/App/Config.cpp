@@ -146,7 +146,11 @@ namespace ctrace
             {"--shutdown-timeout-ms", "MS",
              "Graceful shutdown timeout in ms (0 = wait indefinitely).", Kind::Unsigned, "server",
              "shutdown_timeout_ms"},
-            {"--async", nullptr, "Enables asynchronous execution.", Kind::Flag, "runtime", "async"},
+            {"--jobs,-j", "N",
+             "Tool runs at the same time (default: one per core; 1 runs them one by one).",
+             Kind::Unsigned, "runtime", "jobs"},
+            {"--async", nullptr, "Deprecated: tools run in parallel by default; see --jobs.",
+             Kind::Flag, "runtime", "async"},
         };
 
         /// "--report-file,-r" -> "--report-file".
@@ -374,7 +378,8 @@ namespace ctrace
         applyShippedDefaults(config, result.executable, result.warnings);
         if (wasGiven(app, "--async"))
         {
-            result.output += "Asynchronous execution enabled.\n";
+            result.warnings.push_back("--async is deprecated: tools run on one worker per core by "
+                                      "default; use -j/--jobs to choose how many.");
         }
 
         if (valueOf(app, "--ipc") != "serve" &&

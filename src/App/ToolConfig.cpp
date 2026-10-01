@@ -698,13 +698,34 @@ namespace ctrace
             return spec;
         }
 
+        /// `runtime.async`, the deprecated spelling of `runtime.jobs`: true is the default (one
+        /// run per core), false a sequential run. Applied before `jobs`, which wins over it.
+        [[nodiscard]] bool applyAsync(const Value& v, LoadContext& ctx, const std::string&,
+                                      std::string&)
+        {
+            ctx.deprecated("async", "runtime", "jobs");
+            ctx.config.runtime.jobs = v.boolean ? 0U : 1U;
+            return true;
+        }
+
+        [[nodiscard]] bool applyJobs(const Value& v, LoadContext& ctx, const std::string& location,
+                                     std::string& error)
+        {
+            if (v.number > RuntimeConfig::kMaxJobs)
+            {
+                error = location + " is too large (at most " +
+                        std::to_string(RuntimeConfig::kMaxJobs) + ").";
+                return false;
+            }
+            ctx.config.runtime.jobs = v.number;
+            return true;
+        }
+
         const SectionSpec& runtimeSection()
         {
             static const SectionSpec spec{{
-                {"async",
-                 {"async"},
-                 Kind::Bool,
-                 setBool(&ProgramConfig::runtime, &RuntimeConfig::async)},
+                {"async", {"async"}, Kind::Bool, applyAsync},
+                {"jobs", {"jobs"}, Kind::Uint64, applyJobs},
                 {"ipc",
                  {"ipc"},
                  Kind::String,

@@ -92,20 +92,16 @@ namespace ctrace
 
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config)
     {
-        const auto availableThreads = std::thread::hardware_concurrency();
-        const auto poolSize = (availableThreads == 0) ? 1U : availableThreads;
-        ctrace::ToolInvoker invoker(
-            config, poolSize, (config.runtime.async ? std::launch::async : std::launch::deferred));
-
-        if (config.runtime.async)
+        const std::size_t workers = workerCount(config.runtime.jobs);
+        ctrace::ToolInvoker invoker(config, workers,
+                                    workers > 1 ? std::launch::async : std::launch::deferred);
+        if (workers > 1)
         {
             coretrace::set_thread_safe(true);
-            coretrace::log(coretrace::Level::Debug, "Asynchronous execution enabled.\n");
         }
 
         coretrace::log(coretrace::Level::Debug, "Verbose mode enabled.\n");
-        coretrace::log(coretrace::Level::Debug, "Asynchronous execution: {}\n",
-                       (config.runtime.async ? "enabled" : "disabled"));
+        coretrace::log(coretrace::Level::Debug, "Tool runs at the same time: {}\n", workers);
         coretrace::log(coretrace::Level::Debug, "Verbose mode: {}\n",
                        (config.output.verbose ? "enabled" : "disabled"));
         coretrace::log(coretrace::Level::Debug, "Static analysis: {}\n",

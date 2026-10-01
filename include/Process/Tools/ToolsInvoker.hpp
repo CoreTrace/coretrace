@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <future>
@@ -111,6 +112,17 @@ class ThreadPool
 
 namespace ctrace
 {
+    /// How many tool runs `jobs` (runtime.jobs) lets go on at the same time: one per core for 0.
+    [[nodiscard]] inline std::size_t workerCount(std::uint64_t jobs)
+    {
+        if (jobs != 0)
+        {
+            return static_cast<std::size_t>(jobs);
+        }
+        const unsigned cores = std::thread::hardware_concurrency();
+        return cores == 0 ? 1 : cores;
+    }
+
     class ToolInvoker
     {
       public:

@@ -250,6 +250,8 @@ add_test(NAME ctrace_help_lists_quiet COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_quiet PROPERTIES PASS_REGULAR_EXPRESSION "--quiet")
 add_test(NAME ctrace_help_lists_version COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_version PROPERTIES PASS_REGULAR_EXPRESSION "--version")
+add_test(NAME ctrace_help_lists_jobs COMMAND ctrace --help)
+set_tests_properties(ctrace_help_lists_jobs PROPERTIES PASS_REGULAR_EXPRESSION "-j, +--jobs")
 add_test(NAME ctrace_help_lists_concurrency_analyzer COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_concurrency_analyzer PROPERTIES
     PASS_REGULAR_EXPRESSION "coretrace-concurrency-analyzer")
