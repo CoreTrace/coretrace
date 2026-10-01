@@ -4,6 +4,7 @@
 // come back complete and correct, with the logging configured the way run_server does it.
 #include "App/Runner.hpp"
 #include "Process/Ipc/ApiHandler.hpp"
+#include "Process/Tools/ToolsInvoker.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -268,7 +270,9 @@ int main(int argc, char** argv)
     testParamsToConfig(report);
 
     ConsoleLogger logger;
-    ApiHandler handler(logger, executable);
+    // As run_server does: every request runs its tools on one shared pool.
+    ApiHandler handler(logger, executable, /*allowDynamicAnalysis=*/false,
+                       std::make_shared<ThreadPool>(2));
 
     constexpr int kRounds = 3;
     constexpr int kConcurrentRequests = 4;
