@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
 #include "Process/Tools/InputPaths.hpp"
+#include "Process/Tools/RunDirectory.hpp"
 #include "Process/Tools/Sarif.hpp"
 
 #include <coretrace/logger.hpp>
-
-#include <cerrno>
-#include <cstring>
-#include <system_error>
-
-#include <unistd.h>
 
 namespace ctrace
 {
@@ -26,41 +21,6 @@ namespace ctrace
         /// ctrace stops the tool once it has taken this many times the program's own timeout:
         /// building a single program gets as long as running it.
         constexpr unsigned kDeadlineFactor = 2;
-
-        /// A directory of its own for one program's build, removed with this object: runs in
-        /// parallel never share a path, and nothing lands in the working directory.
-        class RunDirectory
-        {
-          public:
-            RunDirectory()
-            {
-                std::string pattern =
-                    (fs::temp_directory_path() / "ctrace-runtime-XXXXXX").string();
-                if (::mkdtemp(pattern.data()) == nullptr)
-                {
-                    throw std::runtime_error("cannot create a run directory: " +
-                                             std::string(std::strerror(errno)));
-                }
-                path_ = pattern;
-            }
-
-            ~RunDirectory()
-            {
-                std::error_code err;
-                fs::remove_all(path_, err);
-            }
-
-            RunDirectory(const RunDirectory&) = delete;
-            RunDirectory& operator=(const RunDirectory&) = delete;
-
-            [[nodiscard]] const fs::path& path() const noexcept
-            {
-                return path_;
-            }
-
-          private:
-            fs::path path_;
-        };
     } // namespace
 
     std::vector<std::string> RuntimeAnalyzerToolImplementation::buildArguments(
@@ -87,7 +47,7 @@ namespace ctrace
                                                     ToolOutput& output) const
     {
         coretrace::log(coretrace::Level::Info, "Running {} on {}\n", kToolName, file);
-        const RunDirectory runDirectory;
+        const RunDirectory runDirectory("ctrace-runtime");
         const std::chrono::seconds deadline(
             std::chrono::seconds::rep{config.tools.runtime_analyzer_timeout_s} * kDeadlineFactor);
         const auto run = runExternalTool(

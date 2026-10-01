@@ -74,6 +74,13 @@ namespace ctrace
             }
         }
 
+        /// How many runs of the tool may go on at the same time; 0 leaves the bound to the
+        /// invoker's pool.
+        [[nodiscard]] virtual std::size_t maxConcurrentRuns() const
+        {
+            return 0;
+        }
+
         /// Whether the tool analyzes sources of `language`. The invoker hands a tool only the
         /// files it analyzes. Every tool so far is a C/C++ analyzer.
         [[nodiscard]] virtual bool analyzes(ctrace_defs::LanguageType language) const

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <future>
 #include <map>
@@ -250,7 +251,6 @@ namespace ctrace
         /// Adds or replaces the tool run under `name`. Must be called before any run.
         void registerTool(const std::string& name, std::unique_ptr<IAnalysisTool> tool)
         {
-            toolLocks[name] = std::make_shared<std::mutex>();
             tools[name] = std::move(tool);
         }
 
@@ -271,9 +271,9 @@ namespace ctrace
                     { tool.executeBatch(files, m_config, output); });
         }
 
-        /// Runs `tool_name` under its lock and records what it reported. A tool that throws
-        /// failed, like one that could not start: its error goes to its sink, the run is
-        /// incomplete, and the other tools still run.
+        /// Runs `tool_name` and records what it reported. A tool that throws failed, like one
+        /// that could not start: its error goes to its sink, the run is incomplete, and the
+        /// other tools still run. Runs of one tool may go on at the same time.
         template <typename Execute> void runTool(const std::string& tool_name, Execute&& execute)
         {
             auto tool_it = tools.find(tool_name);
@@ -284,12 +284,6 @@ namespace ctrace
             }
 
             ToolOutput output(m_output_capture, tool_name, /*mirrorToConsole=*/true);
-            std::unique_lock<std::mutex> lock;
-            if (auto lock_it = toolLocks.find(tool_name);
-                lock_it != toolLocks.end() && lock_it->second)
-            {
-                lock = std::unique_lock<std::mutex>(*lock_it->second);
-            }
             try
             {
                 execute(*tool_it->second, output);
@@ -302,106 +296,162 @@ namespace ctrace
             recordDiagnostics(tool_name, output);
         }
 
-        /// Runs, on `file`, the tools of `tool_names` that analyze its language.
-        void runToolList(const std::vector<std::string>& all_tool_names, const std::string& file)
+        /// One tool run: a per-file tool on one file, or a batch tool on all of its files.
+        struct Job
         {
-            const std::vector<std::string> tool_names = toolsAnalyzing(all_tool_names, file);
-            if (tool_names.empty())
-            {
-                return;
-            }
+            std::string tool;
+            std::vector<std::string> files;
+            bool batch = false;
+        };
 
-            if (m_policy != std::launch::async || !m_threadPool || tool_names.size() == 1)
+        /// Runs every tool of `tool_names` over the files of its language. Sequentially, the
+        /// runs go in planJobs order; on the pool, they all start as soon as a worker and their
+        /// tool allow, so that files are analyzed at the same time and a slow run holds one
+        /// worker, not the others.
+        void runToolList(const std::vector<std::string>& tool_names,
+                         const std::vector<std::string>& files)
+        {
+            const std::vector<Job> jobs = planJobs(tool_names, files);
+            if (m_policy != std::launch::async || !m_threadPool)
             {
-                for (const auto& tool_name : tool_names)
+                for (const Job& job : jobs)
                 {
-                    executeTool(tool_name, file);
+                    runJob(job);
                 }
                 return;
             }
 
-            std::vector<std::future<void>> results;
-            results.reserve(tool_names.size());
+            runOnPool(jobs);
+        }
 
-            for (const auto& tool_name : tool_names)
+        /// The jobs of one tool not started yet, taken in order by the tool's lanes.
+        struct ToolQueue
+        {
+            std::mutex mutex;
+            std::deque<const Job*> pending;
+            std::size_t lanes = 0;
+
+            [[nodiscard]] const Job* next()
             {
-                results.push_back(m_threadPool->enqueue([this, tool_name, file]
-                                                        { executeTool(tool_name, file); }));
+                const std::lock_guard<std::mutex> lock(mutex);
+                if (pending.empty())
+                {
+                    return nullptr;
+                }
+                const Job* job = pending.front();
+                pending.pop_front();
+                return job;
+            }
+        };
+
+        /// Each tool gets up to maxConcurrentRuns lanes, each one pool task that runs the
+        /// tool's next job until none is left. A tool at its limit therefore holds no worker
+        /// waiting for its turn: workers only ever run jobs.
+        void runOnPool(const std::vector<Job>& jobs)
+        {
+            std::map<std::string, ToolQueue> queues;
+            for (const Job& job : jobs)
+            {
+                queues[job.tool].pending.push_back(&job);
+            }
+            for (auto& [tool_name, queue] : queues)
+            {
+                const std::size_t limit = tools.at(tool_name)->maxConcurrentRuns();
+                queue.lanes = std::min(queue.pending.size(), limit == 0 ? m_nbThreadPool : limit);
             }
 
-            for (auto& result : results)
+            std::vector<std::future<void>> lanes;
+            // Interleaved across tools, so that every tool starts before one gets a second lane.
+            for (std::size_t lane = 0;; ++lane)
             {
-                result.get();
+                bool added = false;
+                for (auto& [_, queue] : queues)
+                {
+                    if (lane < queue.lanes)
+                    {
+                        added = true;
+                        lanes.push_back(m_threadPool->enqueue(
+                            [this, &queue]
+                            {
+                                while (const Job* job = queue.next())
+                                {
+                                    runJob(*job);
+                                }
+                            }));
+                    }
+                }
+                if (!added)
+                {
+                    break;
+                }
+            }
+            // Every lane refers to `queues` and `jobs`: all of them end before an error is
+            // rethrown.
+            for (auto& lane : lanes)
+            {
+                lane.wait();
+            }
+            for (auto& lane : lanes)
+            {
+                lane.get();
             }
         }
 
-        void runToolList(const std::vector<std::string>& tool_names,
-                         const std::vector<std::string>& files)
+        /// The runs of `tool_names` over `files`, in the order a sequential run takes them:
+        /// file by file through the per-file tools, in the requested order, then each batch
+        /// tool once over its files. Unknown tools are reported and left out.
+        [[nodiscard]] std::vector<Job> planJobs(const std::vector<std::string>& tool_names,
+                                                const std::vector<std::string>& files) const
         {
-            if (tool_names.empty() || files.empty())
-            {
-                return;
-            }
-
             std::vector<std::string> perFileTools;
-            std::vector<std::string> batchTools;
-            std::vector<std::string> unknownTools;
-
-            perFileTools.reserve(tool_names.size());
-            batchTools.reserve(tool_names.size());
-            unknownTools.reserve(tool_names.size());
-
+            std::vector<Job> batchJobs;
             for (const auto& tool_name : tool_names)
             {
                 const auto tool_it = tools.find(tool_name);
                 if (tool_it == tools.end())
                 {
-                    unknownTools.push_back(tool_name);
+                    coretrace::log(coretrace::Level::Error, "Unknown tool: {}\n", tool_name);
                     continue;
                 }
-
-                if (tool_it->second->supportsBatchExecution())
-                {
-                    batchTools.push_back(tool_name);
-                }
-                else
+                if (!tool_it->second->supportsBatchExecution())
                 {
                     perFileTools.push_back(tool_name);
+                    continue;
+                }
+                std::vector<std::string> selected = filesAnalyzedBy(*tool_it->second, files);
+                if (!selected.empty())
+                {
+                    batchJobs.push_back({tool_name, std::move(selected), true});
                 }
             }
 
-            for (const auto& tool_name : unknownTools)
-            {
-                coretrace::log(coretrace::Level::Error, "Unknown tool: {}\n", tool_name);
-            }
-
+            std::vector<Job> jobs;
             for (const auto& file : files)
             {
-                runToolList(perFileTools, file);
-            }
-
-            for (const auto& tool_name : batchTools)
-            {
-                executeBatchTool(tool_name, filesAnalyzedBy(*tools.at(tool_name), files));
-            }
-        }
-
-        /// The tools of `tool_names` that analyze `file`'s language; unknown names are kept,
-        /// so that executeTool reports them.
-        [[nodiscard]] std::vector<std::string>
-        toolsAnalyzing(const std::vector<std::string>& tool_names, const std::string& file) const
-        {
-            const ctrace_defs::LanguageType language = ctrace_tools::detectLanguage(file);
-            std::vector<std::string> selected;
-            for (const auto& tool_name : tool_names)
-            {
-                const auto tool_it = tools.find(tool_name);
-                if (tool_it == tools.end() || tool_it->second->analyzes(language))
+                const ctrace_defs::LanguageType language = ctrace_tools::detectLanguage(file);
+                for (const auto& tool_name : perFileTools)
                 {
-                    selected.push_back(tool_name);
+                    if (tools.at(tool_name)->analyzes(language))
+                    {
+                        jobs.push_back({tool_name, {file}, false});
+                    }
                 }
             }
-            return selected;
+            jobs.insert(jobs.end(), std::make_move_iterator(batchJobs.begin()),
+                        std::make_move_iterator(batchJobs.end()));
+            return jobs;
+        }
+
+        void runJob(const Job& job)
+        {
+            if (job.batch)
+            {
+                executeBatchTool(job.tool, job.files);
+            }
+            else
+            {
+                executeTool(job.tool, job.files.front());
+            }
         }
 
         /// The files of `files` whose language `tool` analyzes.
@@ -471,7 +521,6 @@ namespace ctrace
         }
 
         std::unordered_map<std::string, std::unique_ptr<IAnalysisTool>> tools;
-        std::unordered_map<std::string, std::shared_ptr<std::mutex>> toolLocks;
         std::vector<std::string> static_tools;
         std::vector<std::string> dynamic_tools;
         ctrace::ProgramConfig m_config;

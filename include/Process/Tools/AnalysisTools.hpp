@@ -5,6 +5,7 @@
 #include "AnalysisToolsBase.hpp"
 #include "ctrace_tools/languageType.hpp"
 #include "ctrace_tools/mangle.hpp"
+#include "RunDirectory.hpp"
 #include "../ProcessFactory.hpp"
 #include "ToolOutput.hpp"
 
@@ -165,11 +166,14 @@ namespace ctrace
       public:
         /// ikos has no SARIF writer: a SARIF request maps to its structured JSON output,
         /// which the bridge can convert, and plain runs keep the human-readable text.
+        /// `database` is where the run writes its results database, ikos's own work file.
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file)
+        buildArguments(const ctrace::ProgramConfig& config, const std::string& file,
+                       const std::filesystem::path& database)
         {
             std::vector<std::string> args;
             args.push_back(config.output.sarif_format ? "--format=json" : "--format=text");
+            args.push_back("--output-db=" + database.string());
             args.push_back("-a=upa,dfa,pcmp,poa,nullity,fca");
             args.push_back("-d=congruence");
             args.push_back("--partitioning=return");
@@ -199,7 +203,10 @@ namespace ctrace
                      ToolOutput& output) const override
         {
             coretrace::log(coretrace::Level::Info, "Running ikos on {}\n", file);
-            const auto run = runExternalTool(config, *this, buildArguments(config, file), output);
+            const RunDirectory runDirectory("ctrace-ikos");
+            const auto run = runExternalTool(
+                config, *this, buildArguments(config, file, runDirectory.path() / "output.db"),
+                output);
             if (!run)
             {
                 return;
@@ -331,6 +338,12 @@ namespace ctrace
                        const std::filesystem::path& program);
         void execute(const std::string& file, const ProgramConfig& config,
                      ToolOutput& output) const override;
+        /// One program at a time: programs built and run together would compete for the
+        /// machine and against their own timeouts.
+        [[nodiscard]] std::size_t maxConcurrentRuns() const override
+        {
+            return 1;
+        }
         std::string name() const override;
     };
 
