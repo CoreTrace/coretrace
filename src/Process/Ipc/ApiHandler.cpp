@@ -270,8 +270,8 @@ namespace
                          "coretrace-runtime-analyzer") != config.analysis.invoke.end();
     }
 
-    bool run_analysis(const ctrace::ProgramConfig& config, ILogger& logger, json& result,
-                      ParseError& err)
+    bool run_analysis(const ctrace::ProgramConfig& config, const std::shared_ptr<ThreadPool>& pool,
+                      ILogger& logger, json& result, ParseError& err)
     {
         if (!config.analysis.static_enabled && !config.analysis.dynamic_enabled &&
             config.analysis.invoke.empty())
@@ -281,10 +281,9 @@ namespace
             return false;
         }
 
-        const std::size_t workers = ctrace::workerCount(config.runtime.jobs);
         auto output_capture = std::make_shared<ctrace::CaptureBuffer>();
-        ctrace::ToolInvoker invoker(
-            config, workers > 1 ? std::make_shared<ThreadPool>(workers) : nullptr, output_capture);
+        ctrace::ToolInvoker invoker(config, config.runtime.jobs == 1 ? nullptr : pool,
+                                    output_capture);
         const ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
         if (!resolution.ok())
         {
@@ -500,7 +499,7 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     }
 
     json result;
-    if (!run_analysis(config, logger_, result, err))
+    if (!run_analysis(config, pool_, logger_, result, err))
     {
         baseResponse["status"] = "error";
         baseResponse["error"] = {{"code", err.code}, {"message", err.message}};

@@ -62,7 +62,10 @@ namespace ctrace
                            "this machine with the server's privileges.\n");
         }
         ConsoleLogger logger;
-        ApiHandler apiHandler(logger, executable, config.server.allow_dynamic_analysis);
+        // One pool for every request: concurrent requests share its workers.
+        const std::size_t workers = workerCount(config.runtime.jobs);
+        ApiHandler apiHandler(logger, executable, config.server.allow_dynamic_analysis,
+                              workers > 1 ? std::make_shared<ThreadPool>(workers) : nullptr);
         HttpServer server(apiHandler, logger, config.server);
         server.run(config.server.host, config.server.port);
         return EXIT_SUCCESS;
