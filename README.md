@@ -19,7 +19,8 @@ sudo ./scripts/ci/install-llvm-apt.sh 20
 cmake -S . -B build -G Ninja \
   -DLLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm \
   -DClang_DIR=/usr/lib/llvm-20/lib/cmake/clang \
-  -DCLANG_EXECUTABLE=/usr/bin/clang-20
+  -DCLANG_EXECUTABLE=/usr/bin/clang-20 \
+  -DENABLE_PYTHON_ANALYZER=OFF
 ```
 
 On macOS, use Homebrew's versioned LLVM formula:
@@ -29,11 +30,13 @@ brew install cmake ninja llvm@20
 cmake -S . -B build -G Ninja \
   -DLLVM_DIR="$(brew --prefix llvm@20)/lib/cmake/llvm" \
   -DClang_DIR="$(brew --prefix llvm@20)/lib/cmake/clang" \
-  -DCLANG_EXECUTABLE="$(brew --prefix llvm@20)/bin/clang"
+  -DCLANG_EXECUTABLE="$(brew --prefix llvm@20)/bin/clang" \
+  -DENABLE_PYTHON_ANALYZER=OFF
 ```
 
 Python is optional: the configuration above builds `ctrace` without the Python analyzer, so
-it needs no Python virtual environment or Nuitka (`ENABLE_PYTHON_ANALYZER` defaults to `OFF`).
+it needs no Python virtual environment or Nuitka. `ENABLE_PYTHON_ANALYZER` defaults to `OFF`;
+passing it explicitly also turns it off when reusing a build directory configured with Python.
 To include [coretrace-python-analyzer](https://github.com/CoreTrace/coretrace-python-analyzer),
 install Python 3.11 or newer (CI uses 3.12): `brew install python@3.12` on macOS, or
 `sudo apt-get install -y patchelf python3.12-venv` on Ubuntu 24.04. Use the **same interpreter**
