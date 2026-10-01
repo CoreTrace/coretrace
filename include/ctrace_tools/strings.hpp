@@ -19,6 +19,9 @@ namespace ctrace_tools
      * using commas (`,`) as the delimiter. The function returns a vector of
      * `std::string_view` objects, which are lightweight views into the original string.
      *
+     * Each token is trimmed of spaces, then of one pair of enclosing double quotes, if
+     * any; a comma between quotes does not split. Tokens left empty are dropped.
+     *
      * @param input The input string to be split, provided as a `std::string_view`.
      * @return A `std::vector<std::string_view>` containing the parts of the string
      *         split by commas. If the input string is empty, the returned vector
