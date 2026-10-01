@@ -23,7 +23,7 @@
     "demangle": true
   },
   "runtime": {
-    "async": false,
+    "jobs": 0,
     "ipc": "standardIO",
     "ipc_path": "/tmp/coretrace_ipc"
   },
