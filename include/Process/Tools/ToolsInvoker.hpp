@@ -298,6 +298,7 @@ namespace ctrace
             {
                 output.error(e.what());
             }
+            output.flush();
             recordDiagnostics(tool_name, output);
         }
 

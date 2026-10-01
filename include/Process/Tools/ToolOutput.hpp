@@ -43,7 +43,8 @@ namespace ctrace
     };
 
     /// The sink a tool writes to during one execution. Results and errors are recorded in the
-    /// capture buffer (when there is one) and mirrored to stdout/stderr (when asked to);
+    /// capture buffer (when there is one) and mirrored to stdout/stderr (when asked to), as one
+    /// block when the execution ends so that runs at the same time do not mix their lines;
     /// structured findings are kept on the sink for the invoker to collect.
     /// Status and progress messages are not tool output: they go through the logger.
     class ToolOutput
@@ -54,13 +55,21 @@ namespace ctrace
         {
         }
 
+        ~ToolOutput()
+        {
+            flush();
+        }
+
+        ToolOutput(const ToolOutput&) = delete;
+        ToolOutput& operator=(const ToolOutput&) = delete;
+
         /// The tool's report text.
         void result(const std::string& text)
         {
             record("stdout", text);
             if (mirror_)
             {
-                print(std::cout, text);
+                console_.push_back({&std::cout, text});
             }
         }
 
@@ -71,7 +80,7 @@ namespace ctrace
             record("stderr", text);
             if (mirror_)
             {
-                print(std::cerr, text);
+                console_.push_back({&std::cerr, text});
             }
         }
 
@@ -114,20 +123,32 @@ namespace ctrace
             return tool_;
         }
 
-      private:
-        static void print(std::ostream& target, const std::string& text)
+        /// Prints what the execution mirrored to the console so far, in order, as one block.
+        void flush()
         {
+            if (console_.empty())
+            {
+                return;
+            }
             static std::mutex consoleMutex;
             const std::lock_guard<std::mutex> lock(consoleMutex);
-            target << text << std::endl;
+            for (const auto& [target, text] : console_)
+            {
+                *target << text << '\n';
+            }
+            std::cout.flush();
+            std::cerr.flush();
+            console_.clear();
         }
 
+      private:
         std::shared_ptr<CaptureBuffer> buffer_;
         std::string tool_;
         bool mirror_;
         bool interpreted_ = false;
         bool failed_ = false;
         std::vector<Diagnostic> diagnostics_;
+        std::vector<std::pair<std::ostream*, std::string>> console_;
     };
 } // namespace ctrace
 
