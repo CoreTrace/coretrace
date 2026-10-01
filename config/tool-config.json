@@ -17,7 +17,6 @@
   "output": {
     "sarif_format": false,
     "report_file": "coretrace-results.json",
-    "output_file": "ctrace.out",
     "verbose": false,
     "quiet": false,
     "demangle": true
@@ -42,6 +41,7 @@
     "include_compdb_deps": false,
     "compdb_fast": false,
     "jobs": "",
+    "assume_external_frame": "",
     "include_dirs": [],
     "defines": [],
     "compile_args": [],
