@@ -364,6 +364,9 @@ add_executable(ctrace_process_tests tests/process_tests.cpp)
 target_link_libraries(ctrace_process_tests PRIVATE coretrace::logger)
 add_test(NAME ctrace_process_tests COMMAND ctrace_process_tests)
 
+add_executable(ctrace_mangle_tests tests/mangle_tests.cpp src/ctrace_tools/mangle.cpp)
+add_test(NAME ctrace_mangle_tests COMMAND ctrace_mangle_tests)
+
 # Server mode: concurrent run_analysis requests through the API handler (ROADMAP C3).
 add_executable(ctrace_server_concurrency_tests
     tests/server_concurrency_tests.cpp
@@ -765,6 +768,7 @@ set(coretrace_unit_tests
     ctrace_tool_routing_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
+    ctrace_mangle_tests
     ctrace_fetched_dependencies_are_pinned
     ctrace_ipc_socket_tests
     ctrace_concurrency_analyzer_bridge_tests
@@ -795,6 +799,7 @@ foreach(coretrace_target
     ctrace_tool_routing_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
+    ctrace_mangle_tests
     ctrace_ipc_socket_tests
     ctrace_server_concurrency_tests
     ctrace_server_http_tests
