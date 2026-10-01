@@ -338,6 +338,25 @@ namespace
                           timed->end("c.c") < limitedEnd,
                       "the other tools run while the limited tool works through its files");
     }
+
+    // Invokers sharing a pool, as server requests do, are bounded by it together.
+    void testSharedPoolBoundsEveryInvoker(TestReport& report)
+    {
+        const auto pool = std::make_shared<ThreadPool>(1);
+        auto timeline = std::make_shared<Timeline>();
+        const auto request = [&](const std::string& file)
+        {
+            ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, pool);
+            invoker.registerTool("timed", std::make_unique<TimedTool>(timeline));
+            invoker.runSpecificTools({"timed"}, {file});
+        };
+        std::thread first(request, "a.c");
+        std::thread second(request, "b.c");
+        first.join();
+        second.join();
+        report.expect(!timeline->anyOverlap(),
+                      "invokers sharing a one-worker pool never run two tools at once");
+    }
 } // namespace
 
 int main()
@@ -350,6 +369,7 @@ int main()
     testFilesRunAtTheSameTime(report);
     testSlowFileDoesNotBlockTheOthers(report);
     testToolConcurrencyLimit(report);
+    testSharedPoolBoundsEveryInvoker(report);
 
     if (report.failures == 0)
     {
