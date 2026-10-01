@@ -126,9 +126,11 @@ CLI: `--report-file`
 - `output.output_file`
 Type: `string`
 Default: `"ctrace.out"`
-Allowed: writable path.
-Description: generic output artifact path.
-Impact: unified output target for integrations that use this field.
+Allowed: path string.
+Description: legacy output artifact path.
+Impact: retained for schema compatibility; no current tool bridge consumes this field, so it
+does not create an artifact. Use `output.report_file` for the analysis report. The runtime
+analyzer uses a private temporary binary that is removed after each run.
 CLI: `--output-file`
 
 - `output.verbose`
@@ -284,13 +286,16 @@ CLI: not exposed (`config/tool-config.json` only)
 - `tools.<name>.args`
 Type: `string|string[]`
 Default: `[]`
-Allowed: any arguments the tool accepts.
+Allowed: arguments for the selected tool that preserve the output CoreTrace parses.
 Description: extra command-line arguments for that tool.
 Impact: appended verbatim after the options CoreTrace derives and before the input file, so
 they can override a derived option (for cppcheck, `--disable=style` turns the style checks
-back off, `--suppress=<id>` silences a rule). This is the escape hatch for what the schema
-does not model; project includes and defines belong in `stack_analyzer.include_dirs` and
-`stack_analyzer.defines`, which every tool that understands them receives.
+back off, `--suppress=<id>` silences a rule). The Python and runtime bridges reject options
+that change their required SARIF report or execution mode. This covers `--format`,
+`--emit-ir` for Python, and `--no-run` or `--show-output` for runtime. Other tool options
+remain available through this escape hatch. Project includes and defines belong in
+`stack_analyzer.include_dirs` and `stack_analyzer.defines`, which every tool that understands
+them receives.
 CLI: not exposed (`config/tool-config.json` only)
 
 ```json
@@ -314,9 +319,24 @@ CLI: not exposed (`config/tool-config.json` only)
 
 The runtime analyzer receives `--format sarif --timeout <timeout_s> -o <run directory>/program`,
 then `tools.coretrace-runtime-analyzer.args`, then `--` followed by `-I`/`-D` from
-`stack_analyzer.include_dirs` and `stack_analyzer.defines` and the input. Each program is built
+`stack_analyzer.include_dirs` and `stack_analyzer.defines`,
+`tools.coretrace-runtime-analyzer.compile_args`, and the input. Each program is built
 in a private temporary directory, removed afterwards. Exit code 2 from the tool (the program
 could not be built or run) makes the analysis incomplete.
+
+- `tools.coretrace-runtime-analyzer.compile_args`
+Type: `string|string[]`
+Default: `[]`
+Description: extra C/C++ compiler arguments after the runtime analyzer's `--` separator.
+Impact: supports flags such as `-std=c++20` and `-Wall`; these are compiler arguments, not
+runtime analyzer options. The binary output remains in the private run directory.
+
+- `tools.cppcheck.jobs`
+Type: positive integer
+Default: unset (cppcheck default)
+Description: cppcheck worker count, forwarded as `-j N`.
+Impact: when unset, a numeric `stack_analyzer.jobs` still supplies `-j N` for compatibility
+with existing schema v1 configurations. The cppcheck setting takes precedence.
 
 - `tools.coretrace-concurrency-analyzer.rules`
 Type: `string|string[]`
@@ -326,6 +346,14 @@ Description: the rules the concurrency analyzer runs, by the names of its own `-
 Impact: only the selected rules report. An unknown name is reported when the tool runs, and the
 analysis is incomplete (exit code 3).
 CLI: not exposed (`config/tool-config.json` only)
+
+- `tools.coretrace-concurrency-analyzer.max_live_units`
+Type: positive integer
+Default: unset (analyzer default)
+Description: upper bound on concurrently loaded project units in the in-process analyzer.
+Impact: applies to project analysis with a compilation database; it does not change the
+number of worker threads. The bridge already uses no disk cache, so the analyzer's CLI
+`--no-cache` mode needs no separate configuration key.
 
 [coretrace-concurrency-analyzer](https://github.com/CoreTrace/coretrace-concurrency-analyzer) is
 linked into `ctrace`, like the stack analyzer: it has no `path` and no `args`, and needs no clang
@@ -344,7 +372,8 @@ locations; a finding the analyzer rates with low confidence is a warning at most
 
 Derived cppcheck options: `--enable=warning,style,performance,portability` and
 `--inline-suppr` always; `-I<dir>` for each `stack_analyzer.include_dirs` entry, `-D<macro>`
-for each `stack_analyzer.defines` entry, and `-j N` when `stack_analyzer.jobs` is a number.
+for each `stack_analyzer.defines` entry, and `-j N` from `tools.cppcheck.jobs` or the legacy
+numeric `stack_analyzer.jobs` fallback.
 
 `tools.ctrace_stack_analyzer` and `tools.stack_analyzer` keep their legacy meaning: they are
 alternative spellings of the `stack_analyzer` section below. The stack analyzer runs in
@@ -448,6 +477,14 @@ Allowed: `0..UINT64_MAX`
 Description: stack bound limit in bytes.
 Impact: forwarded as `--stack-limit` when > 0.
 CLI: `--stack-limit`
+
+- `stack_analyzer.assume_external_frame`
+Type: `string|uint`
+Default: unset (unresolved calls keep the stack bound unknown)
+Allowed: non-negative bytes, optionally with a KiB/MiB/GiB suffix accepted by the analyzer.
+Description: estimated frame size charged for each unresolved external call.
+Impact: forwarded as `--assume-external-frame` when set. `0` ignores those frames.
+CLI: not exposed (`config/tool-config.json` only)
 
 - `stack_analyzer.resource_model`
 Type: `string`

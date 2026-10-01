@@ -177,12 +177,13 @@ namespace ctrace
                                                              ToolOutput& output) const
     {
         std::string error;
-        const auto options = concurrencyRules(config.tools.concurrency_analyzer_rules, error);
+        auto options = concurrencyRules(config.tools.concurrency_analyzer_rules, error);
         if (!options)
         {
             output.error(error);
             return;
         }
+        options->maxLiveUnits = config.tools.concurrency_analyzer_max_live_units;
 
         const std::filesystem::path database = compileCommandsPath(config);
         if (database.empty())
