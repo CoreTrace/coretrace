@@ -161,13 +161,15 @@ namespace ctrace
             args.push_back("-d=congruence");
             args.push_back("--partitioning=return");
 
-            const std::string entry_points =
-                ctrace_tools::strings::joinByComma(config.files.entry_points);
-            const EntryPoint entryPoint(entry_points, {"void"}); // TODO parse function parameters
             const bool isC = ctrace_tools::detectLanguage(file) == ctrace_defs::LanguageType::C;
-            args.push_back("--entry-points=" +
-                           std::string(isC ? entryPoint.getEntryPointNameCMode()
-                                           : entryPoint.getEntryPointNameCCMode()));
+            std::vector<std::string> entry_points;
+            for (const std::string& name : config.files.entry_points)
+            {
+                const EntryPoint entryPoint(name, {"void"}); // TODO parse function parameters
+                entry_points.emplace_back(isC ? entryPoint.getEntryPointNameCMode()
+                                              : entryPoint.getEntryPointNameCCMode());
+            }
+            args.push_back("--entry-points=" + ctrace_tools::strings::joinByComma(entry_points));
             args.push_back("--report-file=" + config.output.report_file);
             appendToolArguments(args, config, "ikos");
             args.push_back(file);

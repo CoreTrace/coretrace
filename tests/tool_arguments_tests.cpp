@@ -91,6 +91,16 @@ int main()
         report.expect(contains(IkosToolImplementation::buildArguments(mangled, "a.cpp"),
                                "--entry-points=_Z3runi"),
                       "ikos: an already mangled C++ entry point is kept");
+
+        // Each entry point is named on its own, then the names are joined.
+        ctrace::ProgramConfig several = configWithSarif(false);
+        several.files.entry_points = {"main", "foo", "_Z3runi"};
+        report.expect(contains(IkosToolImplementation::buildArguments(several, "a.cpp"),
+                               "--entry-points=main,_Z3foov,_Z3runi"),
+                      "ikos: several C++ entry points are mangled one by one");
+        report.expect(contains(IkosToolImplementation::buildArguments(several, "a.c"),
+                               "--entry-points=main,foo,_Z3runi"),
+                      "ikos: several C entry points keep their names");
     }
     {
         // The merged SARIF document is rendered by CoreTrace from the model, so cppcheck
