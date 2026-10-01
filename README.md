@@ -335,16 +335,3 @@ std::string mangled3 = ctrace_tools::mangle::mangleFunction("utils", "init", par
 std::cout << "Mangled utils::init(): " << mangled3 << "\n";
 
 ```
-
-## TODO
-
-```
-- Mangle function with parameters
-- Thread execution : datarace condition detected
-- 'Format log' function needs to be implement
-- Handle multi-file parsing
-- Add mangling for windows
-- Add lvl verbosity to --verbose like : --verbose=[1|2|3|4]
-- sanitazier explication ...
-- passer du code au lieu du fichier
-```
