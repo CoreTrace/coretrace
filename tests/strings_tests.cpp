@@ -48,6 +48,11 @@ int main()
     report.expect(splitsInto("\"", {"\""}), "a lone quote is kept as is");
     report.expect(splitsInto("\"\"", {}), "an empty quoted token is dropped");
 
+    // Spaces are trimmed before unquoting; spaces inside the quotes belong to the value.
+    report.expect(splitsInto("a, \"b c\" ,d", {"a", "b c", "d"}),
+                  "quotes are removed from a token surrounded by spaces");
+    report.expect(splitsInto(" \" b \" ", {" b "}), "spaces inside quotes are kept");
+
     if (report.failures == 0)
     {
         std::cout << "strings_tests: all checks passed\n";

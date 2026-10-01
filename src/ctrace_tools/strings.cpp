@@ -8,18 +8,18 @@ namespace ctrace_tools
 
     namespace
     {
-        /// Appends `token` to `result` without its enclosing quotes and surrounding spaces,
-        /// unless nothing is left of it.
+        /// Appends `token` to `result` without its surrounding spaces, then without its
+        /// enclosing quotes, unless nothing is left of it. Spaces inside quotes are kept.
         void appendToken(std::vector<std::string_view>& result, std::string_view token)
         {
+            token.remove_prefix(std::min(token.find_first_not_of(" "), token.size()));
+            token.remove_suffix(
+                std::min(token.size() - token.find_last_not_of(" ") - 1, token.size()));
             if (token.size() >= 2 && token.front() == '"' && token.back() == '"')
             {
                 token.remove_prefix(1);
                 token.remove_suffix(1);
             }
-            token.remove_prefix(std::min(token.find_first_not_of(" "), token.size()));
-            token.remove_suffix(
-                std::min(token.size() - token.find_last_not_of(" ") - 1, token.size()));
             if (!token.empty())
             {
                 result.push_back(token);
