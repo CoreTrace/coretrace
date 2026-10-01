@@ -162,6 +162,11 @@ namespace ctrace
     {
         std::map<std::string, std::string> paths;
         std::map<std::string, std::vector<std::string>> args;
+        /// The timeout of an external tool without `tools.<name>.timeout_s`.
+        static constexpr std::uint32_t kDefaultTimeoutSeconds = 600;
+        /// `tools.<name>.timeout_s` of the external tools but the runtime analyzer: how long one
+        /// run may take before it is stopped and reported as failed; 0 disables the limit.
+        std::map<std::string, std::uint32_t> timeouts_s;
         std::uint32_t cppcheck_jobs = 0; ///< Zero keeps cppcheck's default.
         std::vector<std::string> runtime_analyzer_compile_args;
         std::size_t concurrency_analyzer_max_live_units = 0; ///< Zero keeps analyzer default.

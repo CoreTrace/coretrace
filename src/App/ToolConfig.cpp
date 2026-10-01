@@ -1084,9 +1084,9 @@ namespace ctrace
             return keys;
         }
 
-        /// Reads `tools.<name>.path` and `tools.<name>.args` for every external tool, the
-        /// runtime analyzer's `timeout_s`, and the concurrency analyzer's `rules` (linked in,
-        /// it has no command and no arguments). The stack analyzer entries are the legacy
+        /// Reads `tools.<name>.path`, `tools.<name>.args` and `tools.<name>.timeout_s` for
+        /// every external tool, and the concurrency analyzer's `rules` (linked in, it has no
+        /// command, no arguments and cannot be stopped). The stack analyzer entries are the legacy
         /// analyzer configuration and are handled by findStackAnalyzerSection.
         [[nodiscard]] bool applyToolsSection(const json& root, LoadContext& ctx,
                                              std::string& errorMessage)
@@ -1120,12 +1120,11 @@ namespace ctrace
                 const std::string location = "tools." + std::string(tool);
                 const bool isRuntimeAnalyzer = tool == "coretrace-runtime-analyzer";
                 const bool isConcurrencyAnalyzer = tool == "coretrace-concurrency-analyzer";
-                std::vector<const char*> knownKeys = isConcurrencyAnalyzer
-                                                         ? std::vector<const char*>{"rules"}
-                                                         : std::vector<const char*>{"path", "args"};
+                std::vector<const char*> knownKeys =
+                    isConcurrencyAnalyzer ? std::vector<const char*>{"rules"}
+                                          : std::vector<const char*>{"path", "args", "timeout_s"};
                 if (isRuntimeAnalyzer)
                 {
-                    knownKeys.push_back("timeout_s");
                     knownKeys.push_back("compile_args");
                 }
                 if (isConcurrencyAnalyzer)
@@ -1152,7 +1151,7 @@ namespace ctrace
                     ctx.config.tools.concurrency_analyzer_rules = value.list;
                 }
                 if (const auto itTimeout = itTool->find("timeout_s");
-                    isRuntimeAnalyzer && itTimeout != itTool->end() && !itTimeout->is_null())
+                    itTimeout != itTool->end() && !itTimeout->is_null())
                 {
                     Value value;
                     if (!readValue(*itTimeout, Kind::Uint64, location + ".timeout_s", value,
@@ -1165,8 +1164,15 @@ namespace ctrace
                         errorMessage = location + ".timeout_s is too large.";
                         return false;
                     }
-                    ctx.config.tools.runtime_analyzer_timeout_s =
-                        static_cast<std::uint32_t>(value.number);
+                    const auto seconds = static_cast<std::uint32_t>(value.number);
+                    if (isRuntimeAnalyzer)
+                    {
+                        ctx.config.tools.runtime_analyzer_timeout_s = seconds;
+                    }
+                    else
+                    {
+                        ctx.config.tools.timeouts_s[std::string(tool)] = seconds;
+                    }
                 }
                 if (const auto itCompileArgs = itTool->find("compile_args");
                     isRuntimeAnalyzer && itCompileArgs != itTool->end() &&

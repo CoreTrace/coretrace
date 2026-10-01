@@ -3,10 +3,12 @@
 #include "App/ShippedDefaults.hpp"
 #include "App/ToolConfig.hpp"
 
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -418,8 +420,18 @@ namespace
         CHECK(cfg.tools.args.at("coretrace-runtime-analyzer") ==
               (std::vector<std::string>{"--run-arg", "input"}));
 
-        CHECK(loadError("timeout-elsewhere.json", R"({"tools": {"cppcheck": {"timeout_s": 5}}})")
+        // Every external tool takes a timeout; a tool linked into ctrace cannot be stopped.
+        CHECK(defaults.tools.timeouts_s.empty());
+        const auto timed =
+            loadOrDie("tool-timeout.json", R"({"tools": {"cppcheck": {"timeout_s": 5}}})");
+        CHECK(timed.tools.timeouts_s == (std::map<std::string, std::uint32_t>{{"cppcheck", 5U}}));
+        CHECK(timed.tools.runtime_analyzer_timeout_s == 60U);
+        CHECK(loadError("timeout-linked-tool.json",
+                        R"({"tools": {"coretrace-concurrency-analyzer": {"timeout_s": 5}}})")
                   .find("timeout_s") != std::string::npos);
+        CHECK(loadError("tool-timeout-too-large.json",
+                        R"({"tools": {"ikos": {"timeout_s": 99999999999}}})") ==
+              "tools.ikos.timeout_s is too large.");
         CHECK(
             loadError("timeout-too-large.json",
                       R"({"tools": {"coretrace-runtime-analyzer": {"timeout_s": 99999999999}}})") ==
