@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+#ifndef ANALYSIS_TOOLS_BASE_HPP
+#define ANALYSIS_TOOLS_BASE_HPP
+
 #include "IAnalysisTools.hpp"
 #include "../Ipc/IpcStrategy.hpp"
 
@@ -18,3 +21,5 @@ namespace ctrace
     };
 
 } // namespace ctrace
+
+#endif // ANALYSIS_TOOLS_BASE_HPP
