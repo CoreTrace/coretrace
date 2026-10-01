@@ -101,6 +101,15 @@ int main()
         report.expect(contains(IkosToolImplementation::buildArguments(several, "a.c"),
                                "--entry-points=main,foo,_Z3runi"),
                       "ikos: several C entry points keep their names");
+
+        // Without a configured entry point, ikos keeps its own default, main.
+        ctrace::ProgramConfig none = configWithSarif(false);
+        none.files.entry_points.clear();
+        const auto noEntryArgs = IkosToolImplementation::buildArguments(none, "a.cpp");
+        report.expect(std::none_of(noEntryArgs.begin(), noEntryArgs.end(),
+                                   [](const std::string& arg)
+                                   { return arg.starts_with("--entry-points"); }),
+                      "ikos: no entry point option without configured entry points");
     }
     {
         // The merged SARIF document is rendered by CoreTrace from the model, so cppcheck
