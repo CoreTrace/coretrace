@@ -11,26 +11,26 @@ namespace ctrace_tools::mangle
     {
         std::stringstream mangled;
 
-        // Préfixe standard pour les symboles C++ dans l'Itanium ABI
+        // Standard prefix of C++ symbols in the Itanium ABI
         mangled << "_Z";
 
-        // Si un namespace est présent, on utilise 'N' et on encode le nom
+        // A namespace opens a nested name with 'N' followed by the encoded namespace
         if (!namespaceName.empty())
         {
             mangled << "N";
             mangled << namespaceName.length() << namespaceName;
         }
 
-        // Ajouter le nom de la fonction avec sa longueur
+        // The function name, prefixed with its length
         mangled << functionName.length() << functionName;
 
-        // Fermer le namespace avec 'E' si utilisé
+        // The nested name ends with 'E', before the parameter types
         if (!namespaceName.empty())
         {
             mangled << "E";
         }
 
-        // Encoder les types de paramètres
+        // The parameter types
         for (const std::string& param : paramTypes)
         {
             if (param == "int")
@@ -47,7 +47,7 @@ namespace ctrace_tools::mangle
             }
             else if (param == "std::string")
             {
-                mangled << "Ss"; // 'S' pour substitution, 's' pour std::string
+                mangled << "Ss"; // 'S' for substitution, 's' for std::string
             }
             else if (param == "float")
             {
@@ -63,7 +63,7 @@ namespace ctrace_tools::mangle
             }
             else
             {
-                // Pour les types complexes ou non reconnus, encoder avec longueur + nom
+                // Other types are encoded as their length followed by their name
                 mangled << param.length() << param;
             }
         }
