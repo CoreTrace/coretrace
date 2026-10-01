@@ -302,6 +302,27 @@ CLI: not exposed (`config/tool-config.json` only)
 }
 ```
 
+- `tools.<name>.timeout_s`
+Type: `uint`
+Default: `600`
+Allowed: seconds; `0` disables the limit.
+Description: how long one run of an external tool (`cppcheck`, `flawfinder`, `tscancode`,
+`ikos`, `coretrace-python-analyzer`) may take.
+Impact: a run still going after this time is stopped and reported as failed, which makes the
+analysis incomplete (exit code 3); the other runs go on. `coretrace-concurrency-analyzer` and
+the stack analyzer are linked into `ctrace` and cannot be stopped, so they take no timeout.
+`coretrace-runtime-analyzer` gives the key its own meaning, below.
+CLI: not exposed (`config/tool-config.json` only)
+
+```json
+{
+  "tools": {
+    "ikos": {"timeout_s": 1800},
+    "cppcheck": {"timeout_s": 0}
+  }
+}
+```
+
 - `tools.coretrace-runtime-analyzer.timeout_s`
 Type: `uint`
 Default: `60`
