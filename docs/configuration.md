@@ -162,7 +162,10 @@ Type: `bool`
 Default: `false`
 Allowed: `true|false`
 Description: async execution policy.
-Impact: enables thread-pool based tool scheduling.
+Impact: runs the tool runs on a thread pool with one worker per core: each file is one run of
+each per-file tool, so different files are analyzed at the same time, and a slow file holds
+one worker, not the others. `coretrace-runtime-analyzer` runs one program at a time. Findings
+are reported in the same order as in a sequential run (by tool, file, line and column).
 CLI: `--async`
 
 - `runtime.ipc`
