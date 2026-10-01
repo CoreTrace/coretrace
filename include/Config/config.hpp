@@ -160,6 +160,11 @@ namespace ctrace
     {
         std::map<std::string, std::string> paths;
         std::map<std::string, std::vector<std::string>> args;
+        /// The timeout of an external tool without `tools.<name>.timeout_s`.
+        static constexpr std::uint32_t kDefaultTimeoutSeconds = 600;
+        /// `tools.<name>.timeout_s` of the external tools but the runtime analyzer: how long one
+        /// run may take before it is stopped and reported as failed; 0 disables the limit.
+        std::map<std::string, std::uint32_t> timeouts_s;
         /// `tools.coretrace-runtime-analyzer.timeout_s`: how long each program may run; 0
         /// disables the limit.
         std::uint32_t runtime_analyzer_timeout_s = 60;
