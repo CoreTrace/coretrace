@@ -43,6 +43,11 @@ int main()
     report.expect(splitsInto("", {}), "an empty input gives no token");
     report.expect(splitsInto("\"a,b\",c", {"a,b", "c"}), "a comma inside quotes does not split");
 
+    // A lone quote is not a quoted token: unquoting it would read past an empty view.
+    report.expect(splitsInto("a,\"", {"a", "\""}), "a trailing lone quote is kept as is");
+    report.expect(splitsInto("\"", {"\""}), "a lone quote is kept as is");
+    report.expect(splitsInto("\"\"", {}), "an empty quoted token is dropped");
+
     if (report.failures == 0)
     {
         std::cout << "strings_tests: all checks passed\n";

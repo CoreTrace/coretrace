@@ -12,7 +12,7 @@ namespace ctrace_tools
         /// unless nothing is left of it.
         void appendToken(std::vector<std::string_view>& result, std::string_view token)
         {
-            if (!token.empty() && token.front() == '"' && token.back() == '"')
+            if (token.size() >= 2 && token.front() == '"' && token.back() == '"')
             {
                 token.remove_prefix(1);
                 token.remove_suffix(1);
