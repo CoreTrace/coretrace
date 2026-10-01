@@ -25,21 +25,22 @@ cmake -S . -B build -G Ninja \
 On macOS, use Homebrew's versioned LLVM formula:
 
 ```bash
-brew install cmake ninja llvm@20 python@3.12
+brew install cmake ninja llvm@20
 cmake -S . -B build -G Ninja \
   -DLLVM_DIR="$(brew --prefix llvm@20)/lib/cmake/llvm" \
   -DClang_DIR="$(brew --prefix llvm@20)/lib/cmake/clang" \
   -DCLANG_EXECUTABLE="$(brew --prefix llvm@20)/bin/clang"
 ```
 
+Python is optional: the configuration above builds `ctrace` without the Python analyzer, so
+it needs no Python virtual environment or Nuitka (`ENABLE_PYTHON_ANALYZER` defaults to `OFF`).
 To include [coretrace-python-analyzer](https://github.com/CoreTrace/coretrace-python-analyzer),
-install Python 3.11 or newer (CI uses 3.12), then use the **same interpreter** for Nuitka and
-`Python3_EXECUTABLE`. The following commands work on both platforms after the initial CMake
-configuration above; on Ubuntu, install `patchelf` first. Skip this step if Python analysis is
-not needed (`ENABLE_PYTHON_ANALYZER` defaults to `OFF`).
+install Python 3.11 or newer (CI uses 3.12): `brew install python@3.12` on macOS, or
+`sudo apt-get install -y patchelf python3.12-venv` on Ubuntu 24.04. Use the **same interpreter**
+for Nuitka and `Python3_EXECUTABLE`. Run the following commands after the initial CMake
+configuration above:
 
 ```bash
-# Ubuntu only: sudo apt-get install -y patchelf python3.12-venv
 python3.12 -m venv .venv
 .venv/bin/python -m pip install nuitka==4.2.2
 cmake -S . -B build \
