@@ -366,10 +366,21 @@ namespace ctrace
     class TscancodeToolImplementation : public AnalysisToolBase
     {
       public:
-        [[nodiscard]] static std::vector<std::string> buildArguments(const ProgramConfig& config,
-                                                                     const std::string& file);
+        /// `fileList` names the files to analyze, one per line (writeFileList).
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ProgramConfig& config, const std::filesystem::path& fileList);
         void execute(const std::string& file, const ProgramConfig& config,
-                     ToolOutput& output) const override;
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        /// One run over every file, like cppcheck, which it derives from.
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files, const ProgramConfig& config,
+                          ToolOutput& output) const override;
         std::string name() const override;
 
         /// Reads tscancode's `[file:line]: (severity) message` lines.

@@ -100,6 +100,7 @@ int main(int argc, char** argv)
     TestReport report;
     testCppcheckFindsTheSameTogether(report, root);
     testFileListTool(report, root, CppCheckToolImplementation());
+    testFileListTool(report, root, TscancodeToolImplementation());
 
     if (report.failures == 0)
     {

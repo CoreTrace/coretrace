@@ -214,12 +214,12 @@ int main()
         config.tools.args["tscancode"] = {"--xml"};
         config.tools.args["ikos"] = {"--opt=1"};
         const auto flaw = FlawfinderToolImplementation::buildArguments(config, "a.c");
-        const auto tscan = TscancodeToolImplementation::buildArguments(config, "a.c");
+        const auto tscan = TscancodeToolImplementation::buildArguments(config, "files.txt");
         const auto ikos = IkosToolImplementation::buildArguments(config, "a.c", "run/output.db");
         report.expect(contains(flaw, "--minlevel=3") && flaw.back() == "a.c",
                       "flawfinder: pass-through arguments precede the file");
-        report.expect(contains(tscan, "--xml") && tscan.back() == "a.c",
-                      "tscancode: pass-through arguments precede the file");
+        report.expect(contains(tscan, "--xml") && tscan.back() == "--file-list=files.txt",
+                      "tscancode: pass-through arguments precede the file list");
         report.expect(contains(ikos, "--opt=1") && ikos.back() == "a.c",
                       "ikos: pass-through arguments precede the file");
         report.expect(!contains(CppCheckToolImplementation::buildArguments(configWithSarif(false),
@@ -356,9 +356,9 @@ int main()
     }
     {
         const auto args =
-            TscancodeToolImplementation::buildArguments(configWithSarif(false), "a.c");
-        report.expect(contains(args, "--enable=all") && args.back() == "a.c",
-                      "tscancode: enables all checks and passes the file");
+            TscancodeToolImplementation::buildArguments(configWithSarif(false), "files.txt");
+        report.expect(contains(args, "--enable=all") && args.back() == "--file-list=files.txt",
+                      "tscancode: enables all checks and passes the file list");
     }
 
     // A compilation database, reduced to what replays each unit's compilation elsewhere: the
