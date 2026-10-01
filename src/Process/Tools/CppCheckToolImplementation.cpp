@@ -86,7 +86,8 @@ namespace ctrace
                                                   const ctrace::ProgramConfig& config,
                                                   ToolOutput& output) const
     {
-        coretrace::log(coretrace::Level::Info, "Running cppcheck on {} file(s)\n", files.size());
+        coretrace::log(coretrace::Level::Info, "Running cppcheck on {}\n",
+                       ctrace_tools::strings::joinByComma(files));
         const RunDirectory runDirectory("ctrace-cppcheck");
         const std::filesystem::path fileList = runDirectory.path() / "files.txt";
         writeFileList(fileList, files);
