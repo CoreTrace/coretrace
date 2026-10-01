@@ -93,8 +93,8 @@ namespace ctrace
     CT_NODISCARD int run_cli_analysis(const ProgramConfig& config)
     {
         const std::size_t workers = workerCount(config.runtime.jobs);
-        ctrace::ToolInvoker invoker(config, workers,
-                                    workers > 1 ? std::launch::async : std::launch::deferred);
+        ctrace::ToolInvoker invoker(config,
+                                    workers > 1 ? std::make_shared<ThreadPool>(workers) : nullptr);
         if (workers > 1)
         {
             coretrace::set_thread_safe(true);

@@ -283,9 +283,8 @@ namespace
 
         const std::size_t workers = ctrace::workerCount(config.runtime.jobs);
         auto output_capture = std::make_shared<ctrace::CaptureBuffer>();
-        ctrace::ToolInvoker invoker(config, workers,
-                                    workers > 1 ? std::launch::async : std::launch::deferred,
-                                    output_capture);
+        ctrace::ToolInvoker invoker(
+            config, workers > 1 ? std::make_shared<ThreadPool>(workers) : nullptr, output_capture);
         const ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
         if (!resolution.ok())
         {
