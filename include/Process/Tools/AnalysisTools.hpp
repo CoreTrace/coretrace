@@ -99,18 +99,17 @@ namespace ctrace
     }
 
     /// Appends the build context every C/C++ tool receives: `-I<dir>` for each
-    /// `stack_analyzer.include_dirs` entry, then `-D<macro>` for each `stack_analyzer.defines`
-    /// entry. Empty entries are skipped: a bare `-I` would take the next argument as its value.
+    /// `build.include_dirs` entry, then `-D<macro>` for each `build.defines` entry. Empty entries are skipped: a bare `-I` would take the next argument as its value.
     inline void appendBuildContext(std::vector<std::string>& args, const ProgramConfig& config)
     {
-        for (const std::string& dir : config.stack_analyzer.include_dirs)
+        for (const std::string& dir : config.build.include_dirs)
         {
             if (!dir.empty())
             {
                 args.push_back("-I" + dir);
             }
         }
-        for (const std::string& macro : config.stack_analyzer.defines)
+        for (const std::string& macro : config.build.defines)
         {
             if (!macro.empty())
             {
@@ -248,7 +247,7 @@ namespace ctrace
     /// their frame, unsafe signal handlers, weak publication. With a compilation database the
     /// inputs are analyzed as one program, each unit built as the database says, so that a
     /// thread started in one unit is related to its body in another; otherwise each input is
-    /// analyzed on its own, built with `stack_analyzer.include_dirs` and `.defines`. An input
+    /// analyzed on its own, built with `build.include_dirs` and `build.defines`. An input
     /// that does not compile, or that the database does not list, makes the run incomplete.
     class ConcurrencyAnalyzerToolImplementation : public AnalysisToolBase
     {

@@ -124,8 +124,6 @@ namespace ctrace
         bool print_effective_config = false;
         bool compdb_fast = false;
         std::string jobs; ///< "auto" or a positive integer.
-        std::vector<std::string> include_dirs;
-        std::vector<std::string> defines;
         std::vector<std::string> compile_args;
         std::vector<std::string> only_functions;
         std::vector<std::string> only_files;
@@ -159,6 +157,14 @@ namespace ctrace
         std::vector<std::string> extra_args; ///< Forwarded verbatim after mapped options.
     };
 
+    /// How the project builds, for every C/C++ tool that compiles or preprocesses the inputs:
+    /// each include directory becomes `-I<dir>`, each macro `-D<macro>`.
+    struct BuildConfig
+    {
+        std::vector<std::string> include_dirs;
+        std::vector<std::string> defines;
+    };
+
     /// Where external tools live and what extra arguments they get. A path may be a bare
     /// command name, resolved through PATH, or an absolute path; tools absent from the map use
     /// their own name. `args` are appended verbatim after the options CoreTrace derives.
@@ -190,6 +196,7 @@ namespace ctrace
         RuntimeConfig runtime;
         ServerConfig server;
         StackAnalyzerConfig stack_analyzer;
+        BuildConfig build;
         ToolsConfig tools;
         std::string config_file; ///< Path of the loaded JSON config, empty when none.
 

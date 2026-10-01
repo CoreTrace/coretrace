@@ -173,8 +173,8 @@ int main()
                       "cppcheck: no -j without tools.cppcheck.jobs; file last");
 
         ctrace::ProgramConfig config = configWithSarif(false);
-        config.stack_analyzer.include_dirs = {"inc", "third_party"};
-        config.stack_analyzer.defines = {"FOO=1", "BAR"};
+        config.build.include_dirs = {"inc", "third_party"};
+        config.build.defines = {"FOO=1", "BAR"};
         config.stack_analyzer.jobs = "4";
         const auto derived = CppCheckToolImplementation::buildArguments(config, "a.c");
         report.expect(contains(derived, "-Iinc") && contains(derived, "-Ithird_party"),
@@ -274,8 +274,8 @@ int main()
 
         config.tools.runtime_analyzer_timeout_s = 5;
         config.tools.args["coretrace-runtime-analyzer"] = {"--run-arg", "input"};
-        config.stack_analyzer.include_dirs = {"inc"};
-        config.stack_analyzer.defines = {"FOO=1"};
+        config.build.include_dirs = {"inc"};
+        config.build.defines = {"FOO=1"};
         config.tools.runtime_analyzer_compile_args = {"-std=c++20", "-Wall"};
         const auto derived =
             RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program");
@@ -287,8 +287,8 @@ int main()
             "source after --");
 
         // A bare -I would take the next argument as its directory.
-        config.stack_analyzer.include_dirs = {"", "inc"};
-        config.stack_analyzer.defines = {"FOO=1", ""};
+        config.build.include_dirs = {"", "inc"};
+        config.build.defines = {"FOO=1", ""};
         report.expect(
             (RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program") ==
              std::vector<std::string>{"--format", "sarif", "--timeout", "5", "-o", "/run/program",

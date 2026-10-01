@@ -697,7 +697,7 @@ namespace
         CHECK(cfg.stack_analyzer.jobs == "4");
         CHECK(cfg.stack_analyzer.compile_ir_format == ".LL");
         CHECK(cfg.stack_analyzer.smt_timeout_ms == 12U);
-        CHECK((cfg.stack_analyzer.defines == std::vector<std::string>{"X=1"}));
+        CHECK((cfg.build.defines == std::vector<std::string>{"X=1"}));
         CHECK(cfg.stack_analyzer.print_effective_config);
     }
 
