@@ -320,6 +320,29 @@ target_link_libraries(ctrace_tool_routing_tests
             coretrace::coretrace_concurrency_analyzer_lib)
 add_test(NAME ctrace_tool_routing_tests COMMAND ctrace_tool_routing_tests)
 
+# What the reported findings do not depend on: the order tool runs are scheduled and finish in.
+add_executable(ctrace_tool_scheduling_tests
+    tests/tool_scheduling_tests.cpp
+    src/Process/Tools/CompileCommands.cpp
+    src/Process/Tools/ConcurrencyAnalyzerBridge.cpp
+    src/Process/Tools/ConcurrencyAnalyzerToolImplementation.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/PythonAnalyzerToolImplementation.cpp
+    src/Process/Tools/RuntimeAnalyzerToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
+    src/Process/Tools/StackAnalyzerToolImplementation.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/App/ToolConfig.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+target_link_libraries(ctrace_tool_scheduling_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger coretrace::stack_usage_analyzer_lib
+            coretrace::coretrace_concurrency_analyzer_lib)
+add_test(NAME ctrace_tool_scheduling_tests COMMAND ctrace_tool_scheduling_tests)
+
 add_executable(ctrace_exit_policy_tests tests/exit_policy_tests.cpp)
 add_test(NAME ctrace_exit_policy_tests COMMAND ctrace_exit_policy_tests)
 
@@ -759,6 +782,7 @@ set(coretrace_unit_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
+    ctrace_tool_scheduling_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
     ctrace_fetched_dependencies_are_pinned
@@ -788,6 +812,7 @@ foreach(coretrace_target
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
+    ctrace_tool_scheduling_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
     ctrace_ipc_socket_tests
