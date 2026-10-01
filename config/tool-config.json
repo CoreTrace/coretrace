@@ -32,6 +32,10 @@
     "shutdown_token": "",
     "shutdown_timeout_ms": 0
   },
+  "build": {
+    "include_dirs": [],
+    "defines": []
+  },
   "stack_analyzer": {
     "mode": "ir",
     "output_format": "json",
@@ -42,8 +46,6 @@
     "compdb_fast": false,
     "jobs": "",
     "assume_external_frame": "",
-    "include_dirs": [],
-    "defines": [],
     "compile_args": [],
     "entry_points": [
     ],
