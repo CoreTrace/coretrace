@@ -118,20 +118,33 @@ namespace ctrace
         }
     }
 
+    /// How long one run of `tool` may take: `tools.<name>.timeout_s`, else the default. Zero
+    /// means no limit.
+    [[nodiscard]] inline std::chrono::seconds toolTimeout(const ProgramConfig& config,
+                                                          const std::string& tool)
+    {
+        const auto configured = config.tools.timeouts_s.find(tool);
+        return std::chrono::seconds(configured != config.tools.timeouts_s.end()
+                                        ? configured->second
+                                        : ToolsConfig::kDefaultTimeoutSeconds);
+    }
+
     /// Runs an external tool to completion. A tool that cannot be started is reported on the
     /// sink and yields nothing. An exit code outside `completedCodes` (by default only 0) is
     /// reported too, but the output is still returned: partial findings are not lost because
-    /// the tool ended badly. A tool still running after `timeout` (none by default) is stopped
-    /// and reported the same way.
+    /// the tool ended badly. A tool still running after `timeout` (by default its toolTimeout)
+    /// is stopped and reported the same way.
     [[nodiscard]] inline std::optional<ProcessResult>
     runExternalTool(const ProgramConfig& config, const IAnalysisTool& tool,
                     const std::vector<std::string>& args, ToolOutput& output,
                     std::initializer_list<int> completedCodes = {0},
-                    std::chrono::milliseconds timeout = {})
+                    std::optional<std::chrono::milliseconds> timeout = std::nullopt)
     {
         try
         {
-            auto process = ProcessFactory::createProcess(toolCommand(config, tool), args, timeout);
+            auto process =
+                ProcessFactory::createProcess(toolCommand(config, tool), args,
+                                              timeout.value_or(toolTimeout(config, tool.name())));
             const ProcessResult run = process->execute();
             if (!run.completedWith(completedCodes))
             {

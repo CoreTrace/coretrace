@@ -6,6 +6,7 @@
 #include "ctrace_tools/languageType.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
@@ -396,6 +397,23 @@ int main()
         config.files.input = {"main.c", "build/compile_commands.json"};
         report.expect(compileCommandsPath(config) == "build/compile_commands.json",
                       "compile commands: a .json input is a database");
+    }
+
+    // An external tool still running after its timeout is stopped and reported as failed, so
+    // one stuck tool does not hold the run.
+    {
+        report.expect(toolTimeout(ctrace::ProgramConfig{}, "ikos") == std::chrono::seconds(600),
+                      "external tools: the default timeout is ten minutes");
+        ctrace::ProgramConfig config;
+        config.tools.paths["ikos"] = "sleep";
+        config.tools.timeouts_s["ikos"] = 1;
+        ToolOutput output(nullptr, "ikos", /*mirrorToConsole=*/false);
+        const auto start = std::chrono::steady_clock::now();
+        const auto run = runExternalTool(config, IkosToolImplementation(), {"3"}, output);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        report.expect(run && run->timedOut && output.failed() &&
+                          elapsed < std::chrono::milliseconds(2500),
+                      "external tools: a run past tools.<name>.timeout_s is stopped and failed");
     }
 
     if (report.failures == 0)
