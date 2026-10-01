@@ -11,6 +11,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -64,6 +65,56 @@ namespace
         std::vector<unsigned> m_lines;
     };
 
+    /// The runs a tool was asked for, as `tool:file` (or `tool:[a,b]` for a batch run), in the
+    /// order they started.
+    struct RunLog
+    {
+        std::mutex mutex;
+        std::vector<std::string> runs;
+
+        void add(std::string run)
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            runs.push_back(std::move(run));
+        }
+    };
+
+    class LoggingTool : public ctrace::AnalysisToolBase
+    {
+      public:
+        LoggingTool(std::string name, std::shared_ptr<RunLog> log, bool batch)
+            : m_name(std::move(name)), m_log(std::move(log)), m_batch(batch)
+        {
+        }
+
+        void execute(const std::string& file, const ctrace::ProgramConfig&,
+                     ctrace::ToolOutput&) const override
+        {
+            m_log->add(m_name + ":" + file);
+        }
+
+        void executeBatch(const std::vector<std::string>& files, const ctrace::ProgramConfig&,
+                          ctrace::ToolOutput&) const override
+        {
+            m_log->add(m_name + ":[" + ctrace_tools::strings::joinByComma(files) + "]");
+        }
+
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return m_batch;
+        }
+
+        std::string name() const override
+        {
+            return m_name;
+        }
+
+      private:
+        std::string m_name;
+        std::shared_ptr<RunLog> m_log;
+        bool m_batch;
+    };
+
     /// `tool:file:line` for each finding, in reported order.
     std::vector<std::string> positions(const std::vector<ctrace::Diagnostic>& diagnostics)
     {
@@ -93,6 +144,22 @@ namespace
                       "findings are grouped by tool name, not by the order tools ran in");
     }
 
+    // A sequential run goes file by file, each file through the per-file tools in the requested
+    // order, then each batch tool once over every file.
+    void testSequentialRunOrder(TestReport& report)
+    {
+        auto log = std::make_shared<RunLog>();
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 4, std::launch::deferred);
+        invoker.registerTool("second", std::make_unique<LoggingTool>("second", log, false));
+        invoker.registerTool("first", std::make_unique<LoggingTool>("first", log, false));
+        invoker.registerTool("batch", std::make_unique<LoggingTool>("batch", log, true));
+        invoker.runSpecificTools({"batch", "second", "first"}, {"b.c", "a.c"});
+        report.expect(
+            (log->runs == std::vector<std::string>{"second:b.c", "first:b.c", "second:a.c",
+                                                   "first:a.c", "batch:[b.c,a.c]"}),
+            "a sequential run goes file by file, then runs the batch tools");
+    }
+
     // Within a tool, findings are ordered by file then position, not by the order the files
     // were given in or the order the tool reported them in.
     void testFindingsAreSortedByPosition(TestReport& report)
@@ -119,6 +186,7 @@ namespace
 int main()
 {
     TestReport report;
+    testSequentialRunOrder(report);
     testToolOrderIsFixed(report);
     testFindingsAreSortedByPosition(report);
     testSarifDoesNotDependOnScheduling(report);
