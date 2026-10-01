@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <fcntl.h>
 #include <poll.h>
@@ -135,6 +136,53 @@ namespace
         ::close(peer);
     }
 
+    // Tools share one strategy and may report at the same time: each message must arrive whole,
+    // never interleaved with another.
+    void testConcurrentWritesArriveWhole(TestReport& report)
+    {
+        constexpr std::size_t kWriters = 8;
+        constexpr std::size_t kMessagesPerWriter = 4;
+        constexpr std::size_t kMessageSize = 256 * 1024;
+
+        const Listener listener;
+        std::string received;
+        std::thread reader(
+            [&]
+            {
+                const int peer = listener.accept();
+                received = readUntilClosed(peer);
+                ::close(peer);
+            });
+        {
+            UnixSocketStrategy socket(listener.path());
+            std::vector<std::thread> writers;
+            for (std::size_t writer = 0; writer < kWriters; ++writer)
+            {
+                writers.emplace_back(
+                    [&socket, writer]
+                    {
+                        const std::string message(kMessageSize, static_cast<char>('a' + writer));
+                        for (std::size_t i = 0; i < kMessagesPerWriter; ++i)
+                        {
+                            socket.write(message);
+                        }
+                    });
+            }
+            for (std::thread& writer : writers)
+            {
+                writer.join();
+            }
+        }
+        reader.join();
+
+        bool whole = received.size() == kWriters * kMessagesPerWriter * kMessageSize;
+        for (std::size_t offset = 0; whole && offset < received.size(); offset += kMessageSize)
+        {
+            whole = received.find_first_not_of(received[offset], offset) >= offset + kMessageSize;
+        }
+        report.expect(whole, "concurrent writes arrive as whole messages");
+    }
+
     void testDestructorClosesTheStream(TestReport& report)
     {
         const Listener listener;
@@ -247,6 +295,7 @@ int main(int argc, char* argv[])
     {
         testWritesReachTheReader(report);
         testDestructorClosesTheStream(report);
+        testConcurrentWritesArriveWhole(report);
         testFailedConnectLeaksNoDescriptor(report);
         testClosedReaderIsAnError(report);
     }
