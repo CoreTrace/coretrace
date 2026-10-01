@@ -175,7 +175,6 @@ namespace ctrace
                 args.push_back("--entry-points=" +
                                ctrace_tools::strings::joinByComma(entry_points));
             }
-            args.push_back("--report-file=" + config.output.report_file);
             appendToolArguments(args, config, "ikos");
             args.push_back(file);
             return args;
