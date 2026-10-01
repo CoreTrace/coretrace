@@ -168,10 +168,13 @@ int main()
         const auto jobs = std::find(derived.begin(), derived.end(), "-j");
         report.expect(jobs != derived.end() && std::next(jobs) != derived.end() &&
                           *std::next(jobs) == "4",
-                      "cppcheck: a numeric jobs value becomes -j N");
-        config.stack_analyzer.jobs = "auto";
-        report.expect(!contains(CppCheckToolImplementation::buildArguments(config, "a.c"), "-j"),
-                      "cppcheck: jobs=auto is not forwarded (cppcheck needs a number)");
+                      "cppcheck: legacy stack jobs remain supported");
+        config.tools.cppcheck_jobs = 3;
+        const auto ownJobs = CppCheckToolImplementation::buildArguments(config, "a.c");
+        const auto own = std::find(ownJobs.begin(), ownJobs.end(), "-j");
+        report.expect(own != ownJobs.end() && std::next(own) != ownJobs.end() &&
+                          *std::next(own) == "3",
+                      "cppcheck: its own jobs setting becomes -j N");
     }
 
     // Per-tool pass-through arguments come after the derived options, so they can override
@@ -254,16 +257,18 @@ int main()
                       "coretrace-runtime-analyzer: --format sarif --timeout 60 -o <run> -- a.c");
 
         config.tools.runtime_analyzer_timeout_s = 5;
-        config.tools.args["coretrace-runtime-analyzer"] = {"--show-output"};
+        config.tools.args["coretrace-runtime-analyzer"] = {"--run-arg", "input"};
         config.stack_analyzer.include_dirs = {"inc"};
         config.stack_analyzer.defines = {"FOO=1"};
+        config.tools.runtime_analyzer_compile_args = {"-std=c++20", "-Wall"};
         const auto derived =
             RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program");
-        report.expect((derived == std::vector<std::string>{"--format", "sarif", "--timeout", "5",
-                                                           "-o", "/run/program", "--show-output",
-                                                           "--", "-Iinc", "-DFOO=1", "a.c"}),
-                      "coretrace-runtime-analyzer: timeout, user arguments, then -I/-D and the "
-                      "source after --");
+        report.expect(
+            (derived == std::vector<std::string>{"--format", "sarif", "--timeout", "5", "-o",
+                                                 "/run/program", "--run-arg", "input", "--",
+                                                 "-Iinc", "-DFOO=1", "-std=c++20", "-Wall", "a.c"}),
+            "coretrace-runtime-analyzer: timeout, user arguments, then -I/-D and the "
+            "source after --");
 
         // A bare -I would take the next argument as its directory.
         config.stack_analyzer.include_dirs = {"", "inc"};
@@ -271,7 +276,8 @@ int main()
         report.expect(
             (RuntimeAnalyzerToolImplementation::buildArguments(config, "a.c", "/run/program") ==
              std::vector<std::string>{"--format", "sarif", "--timeout", "5", "-o", "/run/program",
-                                      "--show-output", "--", "-Iinc", "-DFOO=1", "a.c"}),
+                                      "--run-arg", "input", "--", "-Iinc", "-DFOO=1", "-std=c++20",
+                                      "-Wall", "a.c"}),
             "coretrace-runtime-analyzer: an empty include directory or define is not passed");
 
         const RuntimeAnalyzerToolImplementation runtime;
