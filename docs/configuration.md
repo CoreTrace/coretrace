@@ -269,6 +269,31 @@ The token protects `POST /shutdown` only, so treat a non-loopback bind as giving
 can reach the port the ability to run analyses on this machine, and, with
 `server.allow_dynamic_analysis`, to run code on it.
 
+## build
+
+The project's build context, given to every C/C++ tool that preprocesses or compiles the inputs
+(cppcheck, the stack analyzer, the concurrency analyzer without a compilation database, the
+runtime analyzer). With a compilation database, the stack and concurrency analyzers build each
+unit as the database says.
+
+- `build.include_dirs`
+Type: `string[]`
+Default: `[]`
+Description: include directories.
+Impact: each non-empty entry becomes `-I<dir>`.
+CLI: not exposed (`config/tool-config.json` only)
+
+- `build.defines`
+Type: `string[]`
+Default: `[]`
+Description: preprocessor macros, as `NAME` or `NAME=VALUE`.
+Impact: each non-empty entry becomes `-D<macro>`.
+CLI: not exposed (`config/tool-config.json` only)
+
+`stack_analyzer.include_dirs` and `stack_analyzer.defines` (and their spellings `include-dirs`,
+`include_dir`, `include-dir`, `define`) are deprecated spellings of these keys: they still load,
+with a warning, and the `build` keys win when both are set.
+
 ## tools
 
 External tools are looked up in this order: `tools.<name>.path` when set; then the copy
@@ -306,7 +331,7 @@ back off, `--suppress=<id>` silences a rule). The Python and runtime bridges rej
 that change their required SARIF report or execution mode. This covers `--format`,
 `--emit-ir` for Python, and `--no-run` or `--show-output` for runtime. Other tool options
 remain available through this escape hatch. Project includes and defines belong in
-`stack_analyzer.include_dirs` and `stack_analyzer.defines`, which every tool that understands
+`build.include_dirs` and `build.defines`, which every tool that understands
 them receives.
 CLI: not exposed (`config/tool-config.json` only)
 
@@ -352,7 +377,7 @@ CLI: not exposed (`config/tool-config.json` only)
 
 The runtime analyzer receives `--format sarif --timeout <timeout_s> -o <run directory>/program`,
 then `tools.coretrace-runtime-analyzer.args`, then `--` followed by `-I`/`-D` from
-`stack_analyzer.include_dirs` and `stack_analyzer.defines`,
+`build.include_dirs` and `build.defines`,
 `tools.coretrace-runtime-analyzer.compile_args`, and the input. Each program is built
 in a private temporary directory, removed afterwards. Exit code 2 from the tool (the program
 could not be built or run) makes the analysis incomplete.
@@ -399,14 +424,14 @@ inputs are analyzed as one program: each unit is built with the arguments the da
 for it (without its output, dependency-file and optimization options), so a thread started in
 one unit is related to its body in another, and a unit the database does not list makes the
 analysis incomplete. Without a database, each input is analyzed on its own, built with `-I`/`-D`
-from `stack_analyzer.include_dirs` and `stack_analyzer.defines`. A finding carries its rule, its
+from `build.include_dirs` and `build.defines`. A finding carries its rule, its
 CWE, the analyzer's confidence as a property, and the other locations involved (the conflicting
 access of a race, the other lock of a cycle) as `note:` lines after it and as SARIF related
 locations; a finding the analyzer rates with low confidence is a warning at most.
 
 Derived cppcheck options: `--enable=warning,style,performance,portability` and
-`--inline-suppr` always; `-I<dir>` for each `stack_analyzer.include_dirs` entry, `-D<macro>`
-for each `stack_analyzer.defines` entry, and `-j N` from `tools.cppcheck.jobs` when set.
+`--inline-suppr` always; `-I<dir>` for each `build.include_dirs` entry, `-D<macro>`
+for each `build.defines` entry, and `-j N` from `tools.cppcheck.jobs` when set.
 
 `tools.ctrace_stack_analyzer` and `tools.stack_analyzer` keep their legacy meaning: they are
 alternative spellings of the `stack_analyzer` section below. The stack analyzer runs in
@@ -572,9 +597,11 @@ The loader still accepts legacy shapes:
 - root `invoke`
 - root `input` as string or array
 - `stack_analyzer` legacy keys (`analysis-profile`, `smt-*`, `entry_points`, etc.)
+- `stack_analyzer.include_dirs` and `stack_analyzer.defines`, now `build.include_dirs` and
+  `build.defines`
 - `tools.ctrace_stack_analyzer` / `tools.stack_analyzer`
 
-When both legacy and canonical sections are present, canonical sections (`analysis`, `files`, `output`, `runtime`, `server`) are applied last and therefore take precedence inside the config file.
+When both legacy and canonical sections are present, canonical sections (`analysis`, `files`, `output`, `runtime`, `server`, `build`) are applied last and therefore take precedence inside the config file.
 
 Every legacy spelling is reported when the file is loaded, on stderr for the CLI and in the
 server log for a request that names a config file, with the canonical key to use instead:
