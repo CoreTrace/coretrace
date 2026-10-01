@@ -170,7 +170,7 @@ int main()
         report.expect(contains(args, "--inline-suppr"),
                       "cppcheck: inline suppression comments are honoured");
         report.expect(!contains(args, "-j") && args.back() == "a.c",
-                      "cppcheck: no -j without a numeric jobs value; file last");
+                      "cppcheck: no -j without tools.cppcheck.jobs; file last");
 
         ctrace::ProgramConfig config = configWithSarif(false);
         config.stack_analyzer.include_dirs = {"inc", "third_party"};
@@ -181,10 +181,10 @@ int main()
                       "cppcheck: include_dirs become -I");
         report.expect(contains(derived, "-DFOO=1") && contains(derived, "-DBAR"),
                       "cppcheck: defines become -D");
-        const auto jobs = std::find(derived.begin(), derived.end(), "-j");
-        report.expect(jobs != derived.end() && std::next(jobs) != derived.end() &&
-                          *std::next(jobs) == "4",
-                      "cppcheck: legacy stack jobs remain supported");
+        // The stack analyzer's jobs belong to the stack analyzer: cppcheck's -j comes from
+        // tools.cppcheck.jobs only, and without it cppcheck keeps its own default.
+        report.expect(!contains(derived, "-j"),
+                      "cppcheck: the stack analyzer's jobs do not become cppcheck's -j");
         config.tools.cppcheck_jobs = 3;
         const auto ownJobs = CppCheckToolImplementation::buildArguments(config, "a.c");
         const auto own = std::find(ownJobs.begin(), ownJobs.end(), "-j");
