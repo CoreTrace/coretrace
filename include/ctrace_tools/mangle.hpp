@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+#ifndef MANGLE_HPP
+#define MANGLE_HPP
+
+#include <concepts>
+#include <cstdlib>
 #include <string>
+#include <string_view>
 #include <vector>
-#include <sstream>
-#include <iostream>
 #include <cxxabi.h>
 #include <memory>
 
@@ -66,4 +70,6 @@ namespace ctrace_tools::mangle
     [[nodiscard]] std::string mangleFunction(const std::string& namespaceName,
                                              const std::string& functionName,
                                              const std::vector<std::string>& paramTypes);
-}; // namespace ctrace_tools::mangle
+} // namespace ctrace_tools::mangle
+
+#endif // MANGLE_HPP

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ctrace_tools/mangle.hpp"
 
+#include <sstream>
+
 namespace ctrace_tools::mangle
 {
 
@@ -69,4 +71,4 @@ namespace ctrace_tools::mangle
         return mangled.str();
     }
 
-}; // namespace ctrace_tools::mangle
+} // namespace ctrace_tools::mangle
