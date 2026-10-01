@@ -69,6 +69,24 @@ namespace
                           std::to_string(together.size()) + " vs " +
                           std::to_string(oneByOne.size()) + ")");
     }
+
+    // A tool given its files in a --file-list: every file of the run reaches it in one run, and
+    // its findings map back to each file.
+    void testFileListTool(TestReport& report, const std::string& root, const IAnalysisTool& tool)
+    {
+        ProgramConfig config;
+        config.tools.paths[tool.name()] = root + "/tests/fake-file-list-tool.sh";
+        ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
+        tool.executeBatch({"a.c", "dir/b.cpp"}, config, output);
+        std::vector<std::string> files;
+        for (const Diagnostic& diagnostic : output.diagnostics())
+        {
+            files.push_back(diagnostic.file);
+        }
+        report.expect(tool.supportsBatchExecution(), tool.name() + ": a batch tool");
+        report.expect(!output.failed() && (files == std::vector<std::string>{"a.c", "dir/b.cpp"}),
+                      tool.name() + ": one run gets every file through --file-list");
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -81,6 +99,7 @@ int main(int argc, char** argv)
     const std::string root = argv[1];
     TestReport report;
     testCppcheckFindsTheSameTogether(report, root);
+    testFileListTool(report, root, CppCheckToolImplementation());
 
     if (report.failures == 0)
     {

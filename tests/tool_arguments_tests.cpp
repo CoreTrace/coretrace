@@ -136,17 +136,19 @@ int main()
     {
         // The merged SARIF document is rendered by CoreTrace from the model, so cppcheck
         // always runs with the template CoreTrace parses, whatever the output mode.
-        const auto args = CppCheckToolImplementation::buildArguments(configWithSarif(true), "a.c");
+        const auto args =
+            CppCheckToolImplementation::buildArguments(configWithSarif(true), "files.txt");
         report.expect(!contains(args, "--output-format=sarif") &&
                           contains(args, std::string("--template=") +
                                              CppCheckToolImplementation::kOutputTemplate),
                       "cppcheck: a SARIF request keeps the parsed text template");
-        const auto text = CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c");
+        const auto text =
+            CppCheckToolImplementation::buildArguments(configWithSarif(false), "files.txt");
         // The template is the parsing contract: the same on every cppcheck version.
         report.expect(contains(text, std::string("--template=") +
                                          CppCheckToolImplementation::kOutputTemplate) &&
-                          text.back() == "a.c",
-                      "cppcheck: text runs use the explicit output template, file last");
+                          text.back() == "--file-list=files.txt",
+                      "cppcheck: text runs use the explicit output template, file list last");
     }
     {
         const auto args =
@@ -164,19 +166,20 @@ int main()
 
     // cppcheck gets the checks and the build context the configuration already knows about.
     {
-        const auto args = CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c");
+        const auto args =
+            CppCheckToolImplementation::buildArguments(configWithSarif(false), "files.txt");
         report.expect(contains(args, "--enable=warning,style,performance,portability"),
                       "cppcheck: warning, style, performance and portability checks are enabled");
         report.expect(contains(args, "--inline-suppr"),
                       "cppcheck: inline suppression comments are honoured");
-        report.expect(!contains(args, "-j") && args.back() == "a.c",
-                      "cppcheck: no -j without tools.cppcheck.jobs; file last");
+        report.expect(!contains(args, "-j") && args.back() == "--file-list=files.txt",
+                      "cppcheck: no -j without tools.cppcheck.jobs; file list last");
 
         ctrace::ProgramConfig config = configWithSarif(false);
         config.build.include_dirs = {"inc", "third_party"};
         config.build.defines = {"FOO=1", "BAR"};
         config.stack_analyzer.jobs = "4";
-        const auto derived = CppCheckToolImplementation::buildArguments(config, "a.c");
+        const auto derived = CppCheckToolImplementation::buildArguments(config, "files.txt");
         report.expect(contains(derived, "-Iinc") && contains(derived, "-Ithird_party"),
                       "cppcheck: include_dirs become -I");
         report.expect(contains(derived, "-DFOO=1") && contains(derived, "-DBAR"),
@@ -186,7 +189,7 @@ int main()
         report.expect(!contains(derived, "-j"),
                       "cppcheck: the stack analyzer's jobs do not become cppcheck's -j");
         config.tools.cppcheck_jobs = 3;
-        const auto ownJobs = CppCheckToolImplementation::buildArguments(config, "a.c");
+        const auto ownJobs = CppCheckToolImplementation::buildArguments(config, "files.txt");
         const auto own = std::find(ownJobs.begin(), ownJobs.end(), "-j");
         report.expect(own != ownJobs.end() && std::next(own) != ownJobs.end() &&
                           *std::next(own) == "3",
@@ -198,14 +201,14 @@ int main()
     {
         ctrace::ProgramConfig config = configWithSarif(false);
         config.tools.args["cppcheck"] = {"--disable=style", "--std=c++20"};
-        const auto args = CppCheckToolImplementation::buildArguments(config, "a.c");
+        const auto args = CppCheckToolImplementation::buildArguments(config, "files.txt");
         const auto enable = std::find_if(args.begin(), args.end(), [](const std::string& arg)
                                          { return arg.rfind("--enable=", 0) == 0; });
         const auto disable = std::find(args.begin(), args.end(), "--disable=style");
         report.expect(
             enable != args.end() && disable != args.end() && enable < disable &&
-                contains(args, "--std=c++20") && args.back() == "a.c",
-            "cppcheck: tools.cppcheck.args follow the derived options and precede the file");
+                contains(args, "--std=c++20") && args.back() == "--file-list=files.txt",
+            "cppcheck: tools.cppcheck.args follow the derived options and precede the file list");
 
         config.tools.args["flawfinder"] = {"--minlevel=3"};
         config.tools.args["tscancode"] = {"--xml"};
@@ -219,10 +222,10 @@ int main()
                       "tscancode: pass-through arguments precede the file");
         report.expect(contains(ikos, "--opt=1") && ikos.back() == "a.c",
                       "ikos: pass-through arguments precede the file");
-        report.expect(
-            !contains(CppCheckToolImplementation::buildArguments(configWithSarif(false), "a.c"),
-                      "--disable=style"),
-            "pass-through arguments are per tool and off by default");
+        report.expect(!contains(CppCheckToolImplementation::buildArguments(configWithSarif(false),
+                                                                           "files.txt"),
+                                "--disable=style"),
+                      "pass-through arguments are per tool and off by default");
     }
 
     // Each file goes to the tools of its language: .py is Python, never C++ by default.
