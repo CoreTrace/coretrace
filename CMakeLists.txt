@@ -758,6 +758,7 @@ set(coretrace_unit_tests
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
+    ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
@@ -787,6 +788,7 @@ foreach(coretrace_target
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
+    ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
     ctrace_tool_diagnostics_tests
