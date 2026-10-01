@@ -178,6 +178,38 @@ namespace
         std::shared_ptr<Timeline> m_timeline;
     };
 
+    /// Takes a while on each file, records when, and allows one run at a time.
+    class OneAtATimeTool : public ctrace::AnalysisToolBase
+    {
+      public:
+        explicit OneAtATimeTool(std::shared_ptr<Timeline> timeline)
+            : m_timeline(std::move(timeline))
+        {
+        }
+
+        void execute(const std::string& file, const ctrace::ProgramConfig&,
+                     ctrace::ToolOutput&) const override
+        {
+            const Clock::time_point start = Clock::now();
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            const std::lock_guard<std::mutex> lock(m_timeline->mutex);
+            m_timeline->runs[file] = {start, Clock::now()};
+        }
+
+        [[nodiscard]] std::size_t maxConcurrentRuns() const override
+        {
+            return 1;
+        }
+
+        std::string name() const override
+        {
+            return "one_at_a_time";
+        }
+
+      private:
+        std::shared_ptr<Timeline> m_timeline;
+    };
+
     std::vector<ctrace::Diagnostic> runTimedTool(std::launch policy, std::size_t workers,
                                                  const std::vector<std::string>& files,
                                                  const std::shared_ptr<Timeline>& timeline)
@@ -283,6 +315,23 @@ namespace
         report.expect(ctrace::renderSarif(async) == ctrace::renderSarif(sequential),
                       "the SARIF document is the same when files finish out of order");
     }
+
+    // A tool that allows one run at a time gets one, and does not keep the other tools waiting.
+    void testToolConcurrencyLimit(TestReport& report)
+    {
+        auto limited = std::make_shared<Timeline>();
+        auto timed = std::make_shared<Timeline>();
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, 2, std::launch::async);
+        invoker.registerTool("one_at_a_time", std::make_unique<OneAtATimeTool>(limited));
+        invoker.registerTool("timed", std::make_unique<TimedTool>(timed));
+        invoker.runSpecificTools({"one_at_a_time", "timed"}, {"a.c", "b.c", "c.c"});
+
+        report.expect(!limited->anyOverlap(), "a tool limited to one run never runs twice at once");
+        const Clock::time_point limitedEnd = limited->end("c.c");
+        report.expect(timed->end("a.c") < limitedEnd && timed->end("b.c") < limitedEnd &&
+                          timed->end("c.c") < limitedEnd,
+                      "the other tools run while the limited tool works through its files");
+    }
 } // namespace
 
 int main()
@@ -294,6 +343,7 @@ int main()
     testSarifDoesNotDependOnScheduling(report);
     testFilesRunAtTheSameTime(report);
     testSlowFileDoesNotBlockTheOthers(report);
+    testToolConcurrencyLimit(report);
 
     if (report.failures == 0)
     {

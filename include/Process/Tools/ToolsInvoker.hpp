@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <future>
 #include <map>
@@ -304,8 +305,9 @@ namespace ctrace
         };
 
         /// Runs every tool of `tool_names` over the files of its language. Sequentially, the
-        /// runs go in planJobs order; on the pool, they are all queued at once, so that files
-        /// are analyzed at the same time and a slow run holds one worker, not the others.
+        /// runs go in planJobs order; on the pool, they all start as soon as a worker and their
+        /// tool allow, so that files are analyzed at the same time and a slow run holds one
+        /// worker, not the others.
         void runToolList(const std::vector<std::string>& tool_names,
                          const std::vector<std::string>& files)
         {
@@ -319,20 +321,79 @@ namespace ctrace
                 return;
             }
 
-            std::vector<std::future<void>> results;
-            results.reserve(jobs.size());
+            runOnPool(jobs);
+        }
+
+        /// The jobs of one tool not started yet, taken in order by the tool's lanes.
+        struct ToolQueue
+        {
+            std::mutex mutex;
+            std::deque<const Job*> pending;
+            std::size_t lanes = 0;
+
+            [[nodiscard]] const Job* next()
+            {
+                const std::lock_guard<std::mutex> lock(mutex);
+                if (pending.empty())
+                {
+                    return nullptr;
+                }
+                const Job* job = pending.front();
+                pending.pop_front();
+                return job;
+            }
+        };
+
+        /// Each tool gets up to maxConcurrentRuns lanes, each one pool task that runs the
+        /// tool's next job until none is left. A tool at its limit therefore holds no worker
+        /// waiting for its turn: workers only ever run jobs.
+        void runOnPool(const std::vector<Job>& jobs)
+        {
+            std::map<std::string, ToolQueue> queues;
             for (const Job& job : jobs)
             {
-                results.push_back(m_threadPool->enqueue([this, &job] { runJob(job); }));
+                queues[job.tool].pending.push_back(&job);
             }
-            // Every job refers to `jobs`: all of them end before an error is rethrown.
-            for (auto& result : results)
+            for (auto& [tool_name, queue] : queues)
             {
-                result.wait();
+                const std::size_t limit = tools.at(tool_name)->maxConcurrentRuns();
+                queue.lanes = std::min(queue.pending.size(), limit == 0 ? m_nbThreadPool : limit);
             }
-            for (auto& result : results)
+
+            std::vector<std::future<void>> lanes;
+            // Interleaved across tools, so that every tool starts before one gets a second lane.
+            for (std::size_t lane = 0;; ++lane)
             {
-                result.get();
+                bool added = false;
+                for (auto& [_, queue] : queues)
+                {
+                    if (lane < queue.lanes)
+                    {
+                        added = true;
+                        lanes.push_back(m_threadPool->enqueue(
+                            [this, &queue]
+                            {
+                                while (const Job* job = queue.next())
+                                {
+                                    runJob(*job);
+                                }
+                            }));
+                    }
+                }
+                if (!added)
+                {
+                    break;
+                }
+            }
+            // Every lane refers to `queues` and `jobs`: all of them end before an error is
+            // rethrown.
+            for (auto& lane : lanes)
+            {
+                lane.wait();
+            }
+            for (auto& lane : lanes)
+            {
+                lane.get();
             }
         }
 
