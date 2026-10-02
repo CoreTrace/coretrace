@@ -152,11 +152,11 @@ int main()
     }
     {
         const auto args =
-            FlawfinderToolImplementation::buildArguments(configWithSarif(true), "a.c");
+            FlawfinderToolImplementation::buildArguments(configWithSarif(true), {"a.c"});
         report.expect(contains(args, "--sarif") && args.back() == "a.c",
                       "flawfinder: SARIF request is forwarded and the file comes last");
         report.expect(
-            contains(FlawfinderToolImplementation::buildArguments(configWithSarif(false), "a.c"),
+            contains(FlawfinderToolImplementation::buildArguments(configWithSarif(false), {"a.c"}),
                      "--sarif"),
             "flawfinder: the structured output is always requested; CoreTrace renders the text");
         report.expect(std::none_of(args.begin(), args.end(), [](const std::string& arg)
@@ -213,7 +213,7 @@ int main()
         config.tools.args["flawfinder"] = {"--minlevel=3"};
         config.tools.args["tscancode"] = {"--xml"};
         config.tools.args["ikos"] = {"--opt=1"};
-        const auto flaw = FlawfinderToolImplementation::buildArguments(config, "a.c");
+        const auto flaw = FlawfinderToolImplementation::buildArguments(config, {"a.c"});
         const auto tscan = TscancodeToolImplementation::buildArguments(config, "files.txt");
         const auto ikos = IkosToolImplementation::buildArguments(config, "a.c", "run/output.db");
         report.expect(contains(flaw, "--minlevel=3") && flaw.back() == "a.c",

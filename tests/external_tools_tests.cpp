@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -87,6 +88,28 @@ namespace
         report.expect(!output.failed() && (files == std::vector<std::string>{"a.c", "dir/b.cpp"}),
                       tool.name() + ": one run gets every file through --file-list");
     }
+
+    // flawfinder takes its files on the command line: one run gets them all. `echo` stands for
+    // flawfinder and shows the arguments of each run.
+    void testFlawfinderGetsEveryFile(TestReport& report)
+    {
+        ProgramConfig config;
+        config.tools.paths["flawfinder"] = "echo";
+        auto buffer = std::make_shared<CaptureBuffer>();
+        {
+            ToolOutput output(buffer, "flawfinder", /*mirrorToConsole=*/false);
+            FlawfinderToolImplementation().executeBatch({"a.c", "dir/b.cpp"}, config, output);
+        }
+        const auto captured = buffer->snapshot();
+        const std::vector<CapturedLine> runs = captured.count("flawfinder") == 1
+                                                   ? captured.at("flawfinder")
+                                                   : std::vector<CapturedLine>{};
+        report.expect(FlawfinderToolImplementation().supportsBatchExecution(),
+                      "flawfinder: a batch tool");
+        report.expect(runs.size() == 1 &&
+                          runs.front().message.find("a.c dir/b.cpp") != std::string::npos,
+                      "flawfinder: one run gets every file");
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -101,6 +124,7 @@ int main(int argc, char** argv)
     testCppcheckFindsTheSameTogether(report, root);
     testFileListTool(report, root, CppCheckToolImplementation());
     testFileListTool(report, root, TscancodeToolImplementation());
+    testFlawfinderGetsEveryFile(report);
 
     if (report.failures == 0)
     {

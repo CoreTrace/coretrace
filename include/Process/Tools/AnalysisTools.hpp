@@ -287,12 +287,22 @@ namespace ctrace
     {
       public:
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
+        buildArguments(const ctrace::ProgramConfig& config, const std::vector<std::string>& files);
         /// Reads flawfinder's SARIF output; nothing when the output is not SARIF.
         [[nodiscard]] static std::optional<std::vector<Diagnostic>>
         parseDiagnostics(const std::string& output);
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override;
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        /// One run over every file, given on the command line.
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files,
+                          const ctrace::ProgramConfig& config, ToolOutput& output) const override;
         std::string name() const override;
 
       private:
