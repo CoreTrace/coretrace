@@ -26,11 +26,11 @@ namespace ctrace
     } // namespace
 
     /// The command line: the output template CoreTrace parses, then the checks and the build context the
-    /// configuration already carries for the stack analyzer, then the user's own arguments
-    /// (which can override what precedes, e.g. `--disable=style`), then the file.
+    /// configuration carries, then the user's own arguments (which can override what precedes,
+    /// e.g. `--disable=style`), then the list of files.
     std::vector<std::string>
     CppCheckToolImplementation::buildArguments(const ctrace::ProgramConfig& config,
-                                               const std::string& file)
+                                               const std::filesystem::path& fileList)
     {
         std::vector<std::string> args;
         args.push_back(std::string("--template=") + kOutputTemplate);
@@ -46,7 +46,7 @@ namespace ctrace
             args.push_back(std::to_string(config.tools.cppcheck_jobs));
         }
         appendToolArguments(args, config, "cppcheck");
-        args.push_back(file);
+        args.push_back("--file-list=" + fileList.string());
         return args;
     }
 
@@ -82,12 +82,17 @@ namespace ctrace
         return diagnostics;
     }
 
-    void CppCheckToolImplementation::execute(const std::string& file,
-                                             const ctrace::ProgramConfig& config,
-                                             ToolOutput& output) const
+    void CppCheckToolImplementation::executeBatch(const std::vector<std::string>& files,
+                                                  const ctrace::ProgramConfig& config,
+                                                  ToolOutput& output) const
     {
-        coretrace::log(coretrace::Level::Info, "Running cppcheck on {}\n", file);
-        const auto run = runExternalTool(config, *this, buildArguments(config, file), output);
+        coretrace::log(coretrace::Level::Info, "Running cppcheck on {}\n",
+                       ctrace_tools::strings::joinByComma(files));
+        const RunDirectory runDirectory("ctrace-cppcheck");
+        const std::filesystem::path fileList = runDirectory.path() / "files.txt";
+        writeFileList(fileList, files);
+        const auto run = runExternalTool(config, *this, buildArguments(config, fileList), output,
+                                         {0}, toolTimeout(config, name(), files.size()));
         if (!run)
         {
             return;

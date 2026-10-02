@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -118,15 +119,32 @@ namespace ctrace
         }
     }
 
-    /// How long one run of `tool` may take: `tools.<name>.timeout_s`, else the default. Zero
-    /// means no limit.
-    [[nodiscard]] inline std::chrono::seconds toolTimeout(const ProgramConfig& config,
-                                                          const std::string& tool)
+    /// How long one run of `tool` over `inputs` files may take: `tools.<name>.timeout_s`, else
+    /// the default, for each file. Zero means no limit.
+    [[nodiscard]] inline std::chrono::seconds
+    toolTimeout(const ProgramConfig& config, const std::string& tool, std::size_t inputs = 1)
     {
         const auto configured = config.tools.timeouts_s.find(tool);
-        return std::chrono::seconds(configured != config.tools.timeouts_s.end()
-                                        ? configured->second
-                                        : ToolsConfig::kDefaultTimeoutSeconds);
+        const std::chrono::seconds perFile(configured != config.tools.timeouts_s.end()
+                                               ? configured->second
+                                               : ToolsConfig::kDefaultTimeoutSeconds);
+        return perFile * static_cast<std::chrono::seconds::rep>(inputs);
+    }
+
+    /// Writes `files` to `path`, one per line: the `--file-list` of cppcheck and tscancode, which
+    /// keeps a run over many files clear of the command-line length limit.
+    inline void writeFileList(const std::filesystem::path& path,
+                              const std::vector<std::string>& files)
+    {
+        std::ofstream list(path);
+        for (const std::string& file : files)
+        {
+            list << file << '\n';
+        }
+        if (!list.flush())
+        {
+            throw std::runtime_error("cannot write the file list " + path.string());
+        }
     }
 
     /// Runs an external tool to completion. A tool that cannot be started is reported on the
@@ -270,12 +288,22 @@ namespace ctrace
     {
       public:
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
+        buildArguments(const ctrace::ProgramConfig& config, const std::vector<std::string>& files);
         /// Reads flawfinder's SARIF output; nothing when the output is not SARIF.
         [[nodiscard]] static std::optional<std::vector<Diagnostic>>
         parseDiagnostics(const std::string& output);
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override;
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        /// One run over every file, given on the command line.
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files,
+                          const ctrace::ProgramConfig& config, ToolOutput& output) const override;
         std::string name() const override;
 
       private:
@@ -349,10 +377,21 @@ namespace ctrace
     class TscancodeToolImplementation : public AnalysisToolBase
     {
       public:
-        [[nodiscard]] static std::vector<std::string> buildArguments(const ProgramConfig& config,
-                                                                     const std::string& file);
+        /// `fileList` names the files to analyze, one per line (writeFileList).
+        [[nodiscard]] static std::vector<std::string>
+        buildArguments(const ProgramConfig& config, const std::filesystem::path& fileList);
         void execute(const std::string& file, const ProgramConfig& config,
-                     ToolOutput& output) const override;
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        /// One run over every file, like cppcheck, which it derives from.
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files, const ProgramConfig& config,
+                          ToolOutput& output) const override;
         std::string name() const override;
 
         /// Reads tscancode's `[file:line]: (severity) message` lines.
@@ -368,12 +407,23 @@ namespace ctrace
         static constexpr const char* kOutputTemplate =
             "{file}:{line}:{column}: {severity}: {message} [{id}] [CWE-{cwe}]";
 
+        /// `fileList` names the files to analyze, one per line (writeFileList).
         [[nodiscard]] static std::vector<std::string>
-        buildArguments(const ctrace::ProgramConfig& config, const std::string& file);
+        buildArguments(const ctrace::ProgramConfig& config, const std::filesystem::path& fileList);
         /// Reads lines laid out by kOutputTemplate; other lines (progress) are ignored.
         [[nodiscard]] static std::vector<Diagnostic> parseDiagnostics(const std::string& output);
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
-                     ToolOutput& output) const override;
+                     ToolOutput& output) const override
+        {
+            executeBatch({file}, config, output);
+        }
+        /// One run over every file: cppcheck's own -j works across the files of a run.
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return true;
+        }
+        void executeBatch(const std::vector<std::string>& files,
+                          const ctrace::ProgramConfig& config, ToolOutput& output) const override;
         std::string name() const override;
     };
 

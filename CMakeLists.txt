@@ -272,6 +272,22 @@ add_executable(ctrace_tool_arguments_tests
 target_link_libraries(ctrace_tool_arguments_tests PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
 add_test(NAME ctrace_tool_arguments_tests COMMAND ctrace_tool_arguments_tests)
 
+# The external tools that accept many files get them all in one run (cppcheck must be installed).
+add_executable(ctrace_external_tools_tests
+    tests/external_tools_tests.cpp
+    src/Process/Tools/CppCheckToolImplementation.cpp
+    src/Process/Tools/FlawfinderToolImplementation.cpp
+    src/Process/Tools/Sarif.cpp
+    src/Process/Tools/TscancodeToolImplementation.cpp
+    src/ctrace_tools/mangle.cpp
+    src/ctrace_tools/languageType.cpp
+    src/ctrace_tools/strings.cpp
+)
+target_link_libraries(ctrace_external_tools_tests
+    PRIVATE nlohmann_json::nlohmann_json coretrace::logger)
+add_test(NAME ctrace_external_tools_tests
+    COMMAND ctrace_external_tools_tests ${CMAKE_SOURCE_DIR})
+
 add_executable(ctrace_files_tests tests/files_tests.cpp src/App/Files.cpp src/ctrace_tools/strings.cpp)
 target_link_libraries(ctrace_files_tests PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME ctrace_files_tests COMMAND ctrace_files_tests)
@@ -824,6 +840,7 @@ foreach(coretrace_target
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests
+    ctrace_external_tools_tests
     ctrace_exit_policy_tests
     ctrace_process_tests
     ctrace_mangle_tests

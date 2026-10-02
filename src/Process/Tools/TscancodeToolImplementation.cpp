@@ -13,24 +13,30 @@ namespace ctrace
 
     std::vector<std::string>
     TscancodeToolImplementation::buildArguments(const ProgramConfig& config,
-                                                const std::string& file)
+                                                const std::filesystem::path& fileList)
     {
         std::vector<std::string> args = {"--enable=all"};
         appendToolArguments(args, config, "tscancode");
-        args.push_back(file);
+        args.push_back("--file-list=" + fileList.string());
         return args;
     }
 
-    void TscancodeToolImplementation::execute(const std::string& file, const ProgramConfig& config,
-                                              ToolOutput& output) const
+    void TscancodeToolImplementation::executeBatch(const std::vector<std::string>& files,
+                                                   const ProgramConfig& config,
+                                                   ToolOutput& output) const
     {
-        coretrace::log(coretrace::Level::Info, "Running tscancode on {}\n", file);
-        const auto run = runExternalTool(config, *this, buildArguments(config, file), output);
+        const std::string inputs = ctrace_tools::strings::joinByComma(files);
+        coretrace::log(coretrace::Level::Info, "Running tscancode on {}\n", inputs);
+        const RunDirectory runDirectory("ctrace-tscancode");
+        const std::filesystem::path fileList = runDirectory.path() / "files.txt";
+        writeFileList(fileList, files);
+        const auto run = runExternalTool(config, *this, buildArguments(config, fileList), output,
+                                         {0}, toolTimeout(config, name(), files.size()));
         if (!run)
         {
             return;
         }
-        coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", file);
+        coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", inputs);
         const std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
         // In SARIF mode the merged document is the output; text lines would pollute it.
         if (!config.output.sarif_format && !diagnostics.empty())

@@ -8,12 +8,14 @@ namespace ctrace
 {
     std::vector<std::string>
     FlawfinderToolImplementation::buildArguments(const ctrace::ProgramConfig& config,
-                                                 const std::string& file)
+                                                 const std::vector<std::string>& files)
     {
         // Always the machine format (flawfinder >= 2.0): CoreTrace renders the text itself.
         std::vector<std::string> args = {"--sarif"};
         appendToolArguments(args, config, "flawfinder");
-        args.push_back(file);
+        // flawfinder has no file list: the paths go on the command line, which bounds a run by
+        // the system's argument size (about 2 MiB on Linux, tens of thousands of paths).
+        args.insert(args.end(), files.begin(), files.end());
         return args;
     }
 
@@ -23,12 +25,14 @@ namespace ctrace
         return diagnosticsFromSarifText(output, "flawfinder");
     }
 
-    void FlawfinderToolImplementation::execute(const std::string& file,
-                                               const ctrace::ProgramConfig& config,
-                                               ToolOutput& output) const
+    void FlawfinderToolImplementation::executeBatch(const std::vector<std::string>& files,
+                                                    const ctrace::ProgramConfig& config,
+                                                    ToolOutput& output) const
     {
-        coretrace::log(coretrace::Level::Info, "Running flawfinder on {}\n", file);
-        const auto run = runExternalTool(config, *this, buildArguments(config, file), output);
+        coretrace::log(coretrace::Level::Info, "Running flawfinder on {}\n",
+                       ctrace_tools::strings::joinByComma(files));
+        const auto run = runExternalTool(config, *this, buildArguments(config, files), output, {0},
+                                         toolTimeout(config, name(), files.size()));
         if (!run)
         {
             return;
