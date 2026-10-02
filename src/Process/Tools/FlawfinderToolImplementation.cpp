@@ -31,7 +31,8 @@ namespace ctrace
     {
         coretrace::log(coretrace::Level::Info, "Running flawfinder on {}\n",
                        ctrace_tools::strings::joinByComma(files));
-        const auto run = runExternalTool(config, *this, buildArguments(config, files), output);
+        const auto run = runExternalTool(config, *this, buildArguments(config, files), output, {0},
+                                         toolTimeout(config, name(), files.size()));
         if (!run)
         {
             return;

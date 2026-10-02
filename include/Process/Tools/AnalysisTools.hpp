@@ -119,15 +119,16 @@ namespace ctrace
         }
     }
 
-    /// How long one run of `tool` may take: `tools.<name>.timeout_s`, else the default. Zero
-    /// means no limit.
-    [[nodiscard]] inline std::chrono::seconds toolTimeout(const ProgramConfig& config,
-                                                          const std::string& tool)
+    /// How long one run of `tool` over `inputs` files may take: `tools.<name>.timeout_s`, else
+    /// the default, for each file. Zero means no limit.
+    [[nodiscard]] inline std::chrono::seconds
+    toolTimeout(const ProgramConfig& config, const std::string& tool, std::size_t inputs = 1)
     {
         const auto configured = config.tools.timeouts_s.find(tool);
-        return std::chrono::seconds(configured != config.tools.timeouts_s.end()
-                                        ? configured->second
-                                        : ToolsConfig::kDefaultTimeoutSeconds);
+        const std::chrono::seconds perFile(configured != config.tools.timeouts_s.end()
+                                               ? configured->second
+                                               : ToolsConfig::kDefaultTimeoutSeconds);
+        return perFile * static_cast<std::chrono::seconds::rep>(inputs);
     }
 
     /// Writes `files` to `path`, one per line: the `--file-list` of cppcheck and tscancode, which

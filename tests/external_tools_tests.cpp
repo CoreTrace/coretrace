@@ -110,6 +110,19 @@ namespace
                           runs.front().message.find("a.c dir/b.cpp") != std::string::npos,
                       "flawfinder: one run gets every file");
     }
+
+    // A run over several files gets the timeout of each: 1 s per file lets a run over two
+    // files go on for 1.5 s.
+    void testBatchTimeoutCoversEveryFile(TestReport& report, const std::string& root)
+    {
+        ProgramConfig config;
+        config.tools.paths["cppcheck"] = root + "/tests/fake-file-list-tool.sh";
+        config.tools.timeouts_s["cppcheck"] = 1;
+        ToolOutput output(nullptr, "cppcheck", /*mirrorToConsole=*/false);
+        CppCheckToolImplementation().executeBatch({"slow.c", "a.c"}, config, output);
+        report.expect(!output.failed() && output.diagnostics().size() == 2,
+                      "timeout_s applies per file of a batch run");
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -125,6 +138,7 @@ int main(int argc, char** argv)
     testFileListTool(report, root, CppCheckToolImplementation());
     testFileListTool(report, root, TscancodeToolImplementation());
     testFlawfinderGetsEveryFile(report);
+    testBatchTimeoutCoversEveryFile(report, root);
 
     if (report.failures == 0)
     {

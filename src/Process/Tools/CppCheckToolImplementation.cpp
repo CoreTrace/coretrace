@@ -91,7 +91,8 @@ namespace ctrace
         const RunDirectory runDirectory("ctrace-cppcheck");
         const std::filesystem::path fileList = runDirectory.path() / "files.txt";
         writeFileList(fileList, files);
-        const auto run = runExternalTool(config, *this, buildArguments(config, fileList), output);
+        const auto run = runExternalTool(config, *this, buildArguments(config, fileList), output,
+                                         {0}, toolTimeout(config, name(), files.size()));
         if (!run)
         {
             return;
