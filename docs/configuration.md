@@ -164,8 +164,9 @@ Type: `uint`
 Default: `0` (one per core)
 Allowed: `0` to `1024`
 Description: how many tool runs go on at the same time.
-Impact: each file is one run of each per-file tool, so different files are analyzed at the same
-time, and a slow file holds one worker, not the others. `1` runs the tools one after another, file
+Impact: `ikos` and `coretrace-runtime-analyzer` run once per file, so different files are
+analyzed at the same time, and a slow file holds one worker, not the others; `cppcheck`,
+`flawfinder`, `tscancode` and the linked analyzers run once over every file, alongside them. `1` runs the tools one after another, file
 by file, as earlier releases did by default. `coretrace-runtime-analyzer` runs one program at a
 time whatever the value. Findings are reported in the same order whatever the value (by tool,
 file, line and column). In server mode, the server's value sizes one pool shared by every
@@ -348,9 +349,11 @@ CLI: not exposed (`config/tool-config.json` only)
 Type: `uint`
 Default: `600`
 Allowed: seconds; `0` disables the limit.
-Description: how long one run of an external tool (`cppcheck`, `flawfinder`, `tscancode`,
-`ikos`, `coretrace-python-analyzer`) may take.
-Impact: a run still going after this time is stopped and reported as failed, which makes the
+Description: how long an external tool (`cppcheck`, `flawfinder`, `tscancode`, `ikos`,
+`coretrace-python-analyzer`) may take per input file. `cppcheck`, `flawfinder` and `tscancode`
+analyze every file of the run at once, so a run over N files may take N times this; `ikos` runs
+once per file, and the Python analyzer once per project.
+Impact: a run still going after its time is stopped and reported as failed, which makes the
 analysis incomplete (exit code 3); the other runs go on. `coretrace-concurrency-analyzer` and
 the stack analyzer are linked into `ctrace` and cannot be stopped, so they take no timeout.
 `coretrace-runtime-analyzer` gives the key its own meaning, below.
@@ -431,7 +434,9 @@ locations; a finding the analyzer rates with low confidence is a warning at most
 
 Derived cppcheck options: `--enable=warning,style,performance,portability` and
 `--inline-suppr` always; `-I<dir>` for each `build.include_dirs` entry, `-D<macro>`
-for each `build.defines` entry, and `-j N` from `tools.cppcheck.jobs` when set.
+for each `build.defines` entry, and `-j N` from `tools.cppcheck.jobs` when set. cppcheck runs once
+over every C/C++ input, named in a `--file-list` written to a private temporary directory;
+tscancode is run the same way, and flawfinder gets the paths on its command line.
 
 `tools.ctrace_stack_analyzer` and `tools.stack_analyzer` keep their legacy meaning: they are
 alternative spellings of the `stack_analyzer` section below. The stack analyzer runs in
