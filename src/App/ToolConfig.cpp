@@ -376,13 +376,16 @@ namespace ctrace
                                            const std::string& locationPath, std::string& error)>;
 
         /// One configuration key: its canonical name (used in diagnostics), the accepted
-        /// spellings, how the value is read and how it lands in ProgramConfig.
+        /// spellings, how the value is read and how it lands in ProgramConfig. A key that moved
+        /// to another section names its new place in `movedTo`: every spelling of it is then
+        /// deprecated in favour of that place.
         struct FieldSpec
         {
             const char* name;
             std::vector<const char*> keys;
             Kind kind;
             ApplyFn apply;
+            const char* movedTo = nullptr;
         };
 
         struct SectionSpec
@@ -482,7 +485,11 @@ namespace ctrace
                 {
                     continue;
                 }
-                if (std::string_view(matched) != field.name)
+                if (field.movedTo != nullptr)
+                {
+                    ctx.deprecated(matched, location, field.movedTo);
+                }
+                else if (std::string_view(matched) != field.name)
                 {
                     ctx.deprecated(matched, location, field.name);
                 }
@@ -759,6 +766,22 @@ namespace ctrace
             return spec;
         }
 
+        /// The project's build context, shared by every C/C++ tool.
+        const SectionSpec& buildSection()
+        {
+            static const SectionSpec spec{{
+                {"include_dirs",
+                 {"include_dirs"},
+                 Kind::StringList,
+                 setList(&ProgramConfig::build, &BuildConfig::include_dirs)},
+                {"defines",
+                 {"defines"},
+                 Kind::StringList,
+                 setList(&ProgramConfig::build, &BuildConfig::defines)},
+            }};
+            return spec;
+        }
+
         const SectionSpec& serverSection()
         {
             static const SectionSpec spec{{
@@ -827,8 +850,13 @@ namespace ctrace
                 {"include_dirs",
                  {"include_dirs", "include-dirs", "include_dir", "include-dir"},
                  Kind::StringList,
-                 setList(sa, &SA::include_dirs)},
-                {"defines", {"defines", "define"}, Kind::StringList, setList(sa, &SA::defines)},
+                 setList(&ProgramConfig::build, &BuildConfig::include_dirs),
+                 "build.include_dirs"},
+                {"defines",
+                 {"defines", "define"},
+                 Kind::StringList,
+                 setList(&ProgramConfig::build, &BuildConfig::defines),
+                 "build.defines"},
                 {"resource_model",
                  {"resource_model", "resource-model"},
                  Kind::String,
@@ -1361,8 +1389,8 @@ namespace ctrace
         }
         if (!validateKnownKeys(root,
                                {"schema_version", "analysis", "files", "output", "runtime",
-                                "server", "stack_analyzer", "stack-analyzer", "invoke", "input",
-                                "tools"},
+                                "server", "build", "stack_analyzer", "stack-analyzer", "invoke",
+                                "input", "tools"},
                                "root", errorMessage))
         {
             return false;
@@ -1404,6 +1432,7 @@ namespace ctrace
                applyNamedSection(root, "files", filesSection(), ctx, errorMessage) &&
                applyNamedSection(root, "output", outputSection(), ctx, errorMessage) &&
                applyNamedSection(root, "runtime", runtimeSection(), ctx, errorMessage) &&
-               applyNamedSection(root, "server", serverSection(), ctx, errorMessage);
+               applyNamedSection(root, "server", serverSection(), ctx, errorMessage) &&
+               applyNamedSection(root, "build", buildSection(), ctx, errorMessage);
     }
 } // namespace ctrace

@@ -477,6 +477,38 @@ namespace
         CHECK(cfg.runtime.jobs == 4U);
     }
 
+    // build.include_dirs and build.defines are the project's build context, shared by every
+    // C/C++ tool. The stack_analyzer spellings still load, with a warning; build wins over them.
+    void testBuildSection()
+    {
+        const auto cfg =
+            loadOrDie("build.json", R"({"build": {"include_dirs": ["inc"], "defines": ["X=1"]}})");
+        CHECK((cfg.build.include_dirs == std::vector<std::string>{"inc"}));
+        CHECK((cfg.build.defines == std::vector<std::string>{"X=1"}));
+
+        const auto path = makeTempConfigPath("build-legacy.json");
+        writeTextFile(path, R"({"stack_analyzer": {"include-dirs": ["old"], "defines": ["OLD"]}})");
+        ctrace::ProgramConfig legacy;
+        std::string err;
+        std::vector<std::string> warnings;
+        CHECK(ctrace::applyToolConfigFile(legacy, path.string(), err, &warnings));
+        CHECK((legacy.build.include_dirs == std::vector<std::string>{"old"}));
+        CHECK((legacy.build.defines == std::vector<std::string>{"OLD"}));
+        CHECK(warnings.size() == 2U);
+        CHECK(anyContains(warnings, "'include-dirs'") &&
+              anyContains(warnings, "'build.include_dirs'"));
+        CHECK(anyContains(warnings, "'defines'") && anyContains(warnings, "'build.defines'"));
+
+        const auto both = loadOrDie("build-both.json", R"json(
+{"build": {"include_dirs": ["new"]}, "stack_analyzer": {"include_dirs": ["old"]}}
+)json");
+        CHECK((both.build.include_dirs == std::vector<std::string>{"new"}));
+
+        CHECK(
+            loadError("build-unknown.json", R"({"build": {"includes": ["x"]}})").find("includes") !=
+            std::string::npos);
+    }
+
     void testConcurrencyAnalyzerSettings()
     {
         const ctrace::ProgramConfig defaults;
@@ -697,7 +729,7 @@ namespace
         CHECK(cfg.stack_analyzer.jobs == "4");
         CHECK(cfg.stack_analyzer.compile_ir_format == ".LL");
         CHECK(cfg.stack_analyzer.smt_timeout_ms == 12U);
-        CHECK((cfg.stack_analyzer.defines == std::vector<std::string>{"X=1"}));
+        CHECK((cfg.build.defines == std::vector<std::string>{"X=1"}));
         CHECK(cfg.stack_analyzer.print_effective_config);
     }
 
@@ -1008,6 +1040,7 @@ int main()
     testDynamicAnalysisSettings();
     testConcurrencyAnalyzerSettings();
     testJobs();
+    testBuildSection();
     testShippedClangHeaders();
     testFailOnPolicy();
     std::cout << "config_parser_tests: all checks passed" << std::endl;

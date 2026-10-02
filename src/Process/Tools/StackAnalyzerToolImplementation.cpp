@@ -267,14 +267,13 @@ namespace
                               "empty in coretrace config; no entry-point filter");
         }
 
-        if (!config.stack_analyzer.include_dirs.empty())
+        if (!config.build.include_dirs.empty())
         {
-            for (const auto& includeDir : config.stack_analyzer.include_dirs)
+            for (const auto& includeDir : config.build.include_dirs)
             {
                 if (includeDir.empty())
                 {
-                    appendBridgeDecision(report, "-I", false,
-                                         "empty value in stack_analyzer.include_dirs");
+                    appendBridgeDecision(report, "-I", false, "empty value in build.include_dirs");
                     continue;
                 }
                 args.emplace_back("-I" + includeDir);
@@ -283,17 +282,16 @@ namespace
         }
         else
         {
-            appendBridgeDecision(report, "-I", false, "empty stack_analyzer.include_dirs");
+            appendBridgeDecision(report, "-I", false, "empty build.include_dirs");
         }
 
-        if (!config.stack_analyzer.defines.empty())
+        if (!config.build.defines.empty())
         {
-            for (const auto& macroDef : config.stack_analyzer.defines)
+            for (const auto& macroDef : config.build.defines)
             {
                 if (macroDef.empty())
                 {
-                    appendBridgeDecision(report, "-D", false,
-                                         "empty value in stack_analyzer.defines");
+                    appendBridgeDecision(report, "-D", false, "empty value in build.defines");
                     continue;
                 }
                 args.emplace_back("-D" + macroDef);
@@ -302,7 +300,7 @@ namespace
         }
         else
         {
-            appendBridgeDecision(report, "-D", false, "empty stack_analyzer.defines");
+            appendBridgeDecision(report, "-D", false, "empty build.defines");
         }
 
         if (!config.stack_analyzer.compile_args.empty())
