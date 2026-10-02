@@ -7,6 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <future>
 #include <iostream>
@@ -184,6 +185,52 @@ namespace
         std::shared_ptr<Timeline> m_timeline;
     };
 
+    /// A per-file tool taking 100 ms on each file, or a batch tool taking 100 ms over all of
+    /// them; records when each run started and ended, under `tool:file` or `tool:batch`.
+    class StopwatchTool : public ctrace::AnalysisToolBase
+    {
+      public:
+        StopwatchTool(std::string name, bool batch, std::shared_ptr<Timeline> timeline)
+            : m_name(std::move(name)), m_batch(batch), m_timeline(std::move(timeline))
+        {
+        }
+
+        void execute(const std::string& file, const ctrace::ProgramConfig&,
+                     ctrace::ToolOutput&) const override
+        {
+            record(m_name + ":" + file);
+        }
+
+        void executeBatch(const std::vector<std::string>&, const ctrace::ProgramConfig&,
+                          ctrace::ToolOutput&) const override
+        {
+            record(m_name + ":batch");
+        }
+
+        [[nodiscard]] bool supportsBatchExecution() const override
+        {
+            return m_batch;
+        }
+
+        std::string name() const override
+        {
+            return m_name;
+        }
+
+      private:
+        void record(const std::string& run) const
+        {
+            const Clock::time_point start = Clock::now();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            const std::lock_guard<std::mutex> lock(m_timeline->mutex);
+            m_timeline->runs[run] = {start, Clock::now()};
+        }
+
+        std::string m_name;
+        bool m_batch;
+        std::shared_ptr<Timeline> m_timeline;
+    };
+
     /// Takes a while on each file, records when, and allows one run at a time.
     class OneAtATimeTool : public ctrace::AnalysisToolBase
     {
@@ -357,6 +404,32 @@ namespace
         report.expect(!timeline->anyOverlap(),
                       "invokers sharing a one-worker pool never run two tools at once");
     }
+
+    // Batch tools (the linked analyzers) are the longest runs: they start first, alongside the
+    // per-file tools, even when the pool has fewer workers than there are tools.
+    void testBatchToolsStartFirst(TestReport& report)
+    {
+        auto timeline = std::make_shared<Timeline>();
+        ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, std::make_shared<ThreadPool>(2));
+        invoker.registerTool("a_per_file",
+                             std::make_unique<StopwatchTool>("a_per_file", false, timeline));
+        invoker.registerTool("b_per_file",
+                             std::make_unique<StopwatchTool>("b_per_file", false, timeline));
+        invoker.registerTool("z_batch", std::make_unique<StopwatchTool>("z_batch", true, timeline));
+        invoker.runSpecificTools({"a_per_file", "b_per_file", "z_batch"},
+                                 {"a.c", "b.c", "c.c", "d.c"});
+
+        Clock::time_point firstPerFileEnd = Clock::time_point::max();
+        for (const auto& [run, interval] : timeline->runs)
+        {
+            if (run.rfind("z_batch", 0) != 0)
+            {
+                firstPerFileEnd = std::min(firstPerFileEnd, interval.second);
+            }
+        }
+        report.expect(timeline->runs.at("z_batch:batch").first < firstPerFileEnd,
+                      "a batch tool starts before the per-file tools are done with any file");
+    }
 } // namespace
 
 int main()
@@ -370,6 +443,7 @@ int main()
     testSlowFileDoesNotBlockTheOthers(report);
     testToolConcurrencyLimit(report);
     testSharedPoolBoundsEveryInvoker(report);
+    testBatchToolsStartFirst(report);
 
     if (report.failures == 0)
     {

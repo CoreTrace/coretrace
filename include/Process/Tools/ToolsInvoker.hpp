@@ -341,6 +341,7 @@ namespace ctrace
             std::mutex mutex;
             std::deque<const Job*> pending;
             std::size_t lanes = 0;
+            bool batch = false;
 
             [[nodiscard]] const Job* next()
             {
@@ -357,35 +358,43 @@ namespace ctrace
 
         /// Each tool gets up to maxConcurrentRuns lanes, each one pool task that runs the
         /// tool's next job until none is left. A tool at its limit therefore holds no worker
-        /// waiting for its turn: workers only ever run jobs.
+        /// waiting for its turn: workers only ever run jobs. Batch tools, one long run over
+        /// every file, get their lanes first, so that they go on alongside the per-file runs
+        /// instead of after them.
         void runOnPool(const std::vector<Job>& jobs)
         {
             std::map<std::string, ToolQueue> queues;
             for (const Job& job : jobs)
             {
-                queues[job.tool].pending.push_back(&job);
+                ToolQueue& queue = queues[job.tool];
+                queue.pending.push_back(&job);
+                queue.batch = job.batch;
             }
+            std::vector<ToolQueue*> order;
             for (auto& [tool_name, queue] : queues)
             {
                 const std::size_t limit = tools.at(tool_name)->maxConcurrentRuns();
                 queue.lanes =
                     std::min(queue.pending.size(), limit == 0 ? m_threadPool->size() : limit);
+                order.push_back(&queue);
             }
+            std::stable_partition(order.begin(), order.end(),
+                                  [](const ToolQueue* queue) { return queue->batch; });
 
             std::vector<std::future<void>> lanes;
             // Interleaved across tools, so that every tool starts before one gets a second lane.
             for (std::size_t lane = 0;; ++lane)
             {
                 bool added = false;
-                for (auto& [_, queue] : queues)
+                for (ToolQueue* queue : order)
                 {
-                    if (lane < queue.lanes)
+                    if (lane < queue->lanes)
                     {
                         added = true;
                         lanes.push_back(m_threadPool->enqueue(
-                            [this, &queue]
+                            [this, queue]
                             {
-                                while (const Job* job = queue.next())
+                                while (const Job* job = queue->next())
                                 {
                                     runJob(*job);
                                 }
