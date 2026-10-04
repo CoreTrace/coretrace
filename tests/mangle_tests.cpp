@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -41,6 +42,7 @@ namespace
 
 int main()
 {
+    using ctrace_tools::mangle::isMangled;
     using ctrace_tools::mangle::mangleFunction;
     TestReport report;
 
@@ -56,6 +58,30 @@ int main()
                   "a namespaced function closes its nested name before the parameters");
     report.expect(demangle(mangleFunction("ns", "func", {"int"})) == "ns::func(int)",
                   "a namespaced function demangles back to its signature");
+
+    report.expect(isMangled("_Z4mainv"), "_Z4mainv is recognized as mangled");
+    report.expect(!isMangled("main"), "unmangled 'main' returns false");
+    report.expect(!isMangled(""), "empty string returns false");
+    report.expect(!isMangled("_"), "single underscore returns false");
+    report.expect(!isMangled("_Zgarbage"), "invalid mangled symbol returns false");
+
+    // The view stops before "XYZ", but its buffer does not: isMangled must read only the
+    // view, since "_Z3foovXYZ" as a whole does not demangle.
+    const std::string_view symbolFollowedByGarbage("_Z3foovXYZ");
+    report.expect(isMangled(symbolFollowedByGarbage.substr(0, 7)),
+                  "std::string_view slice works correctly with isMangled");
+
+    report.expect(mangleFunction("", "f", {"int"}) == "_Z1fi", "int encodes as i");
+    report.expect(mangleFunction("", "f", {"double"}) == "_Z1fd", "double encodes as d");
+    report.expect(mangleFunction("", "f", {"char"}) == "_Z1fc", "char encodes as c");
+    report.expect(mangleFunction("", "f", {"float"}) == "_Z1ff", "float encodes as f");
+    report.expect(mangleFunction("", "f", {"bool"}) == "_Z1fb", "bool encodes as b");
+    report.expect(mangleFunction("", "f", {"CustomType"}) == "_Z1f10CustomType",
+                  "unknown type encodes as length + name");
+
+    const std::string mangled = mangleFunction("", "foo", {"int", "double"});
+    report.expect(isMangled(mangled),
+                  "round trip: mangleFunction output is recognized by isMangled");
 
     if (report.failures == 0)
     {
