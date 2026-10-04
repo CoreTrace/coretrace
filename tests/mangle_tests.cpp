@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -58,19 +59,18 @@ int main()
     report.expect(demangle(mangleFunction("ns", "func", {"int"})) == "ns::func(int)",
                   "a namespaced function demangles back to its signature");
 
-    // isMangled checks
-    report.expect(isMangled("_Z4mainv") == true, "_Z4mainv is recognized as mangled");
-    report.expect(isMangled("main") == false, "unmangled 'main' returns false");
-    report.expect(isMangled("") == false, "empty string returns false");
-    report.expect(isMangled("_") == false, "single underscore returns false");
-    report.expect(isMangled("_Zgarbage") == false, "invalid mangled symbol returns false");
+    report.expect(isMangled("_Z4mainv"), "_Z4mainv is recognized as mangled");
+    report.expect(!isMangled("main"), "unmangled 'main' returns false");
+    report.expect(!isMangled(""), "empty string returns false");
+    report.expect(!isMangled("_"), "single underscore returns false");
+    report.expect(!isMangled("_Zgarbage"), "invalid mangled symbol returns false");
 
-    // std::string_view slice regression test for isMangled
-    std::string_view sv("_Z3foovXYZ");
-    report.expect(isMangled(sv.substr(0, 7)) == true,
+    // The view stops before "XYZ", but its buffer does not: isMangled must read only the
+    // view, since "_Z3foovXYZ" as a whole does not demangle.
+    const std::string_view symbolFollowedByGarbage("_Z3foovXYZ");
+    report.expect(isMangled(symbolFollowedByGarbage.substr(0, 7)),
                   "std::string_view slice works correctly with isMangled");
 
-    // Built-in types and unknown types
     report.expect(mangleFunction("", "f", {"int"}) == "_Z1fi", "int encodes as i");
     report.expect(mangleFunction("", "f", {"double"}) == "_Z1fd", "double encodes as d");
     report.expect(mangleFunction("", "f", {"char"}) == "_Z1fc", "char encodes as c");
@@ -79,9 +79,8 @@ int main()
     report.expect(mangleFunction("", "f", {"CustomType"}) == "_Z1f10CustomType",
                   "unknown type encodes as length + name");
 
-    // Round trip test
-    std::string mangled = mangleFunction("", "foo", {"int", "double"});
-    report.expect(ctrace_tools::mangle::isMangled(mangled) == true,
+    const std::string mangled = mangleFunction("", "foo", {"int", "double"});
+    report.expect(isMangled(mangled),
                   "round trip: mangleFunction output is recognized by isMangled");
 
     if (report.failures == 0)
