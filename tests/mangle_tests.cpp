@@ -41,6 +41,7 @@ namespace
 
 int main()
 {
+    using ctrace_tools::mangle::isMangled;
     using ctrace_tools::mangle::mangleFunction;
     TestReport report;
 
@@ -56,6 +57,32 @@ int main()
                   "a namespaced function closes its nested name before the parameters");
     report.expect(demangle(mangleFunction("ns", "func", {"int"})) == "ns::func(int)",
                   "a namespaced function demangles back to its signature");
+
+    // isMangled checks
+    report.expect(isMangled("_Z4mainv") == true, "_Z4mainv is recognized as mangled");
+    report.expect(isMangled("main") == false, "unmangled 'main' returns false");
+    report.expect(isMangled("") == false, "empty string returns false");
+    report.expect(isMangled("_") == false, "single underscore returns false");
+    report.expect(isMangled("_Zgarbage") == false, "invalid mangled symbol returns false");
+
+    // std::string_view slice regression test for isMangled
+    std::string_view sv("_Z3foovXYZ");
+    report.expect(isMangled(sv.substr(0, 7)) == true,
+                  "std::string_view slice works correctly with isMangled");
+
+    // Built-in types and unknown types
+    report.expect(mangleFunction("", "f", {"int"}) == "_Z1fi", "int encodes as i");
+    report.expect(mangleFunction("", "f", {"double"}) == "_Z1fd", "double encodes as d");
+    report.expect(mangleFunction("", "f", {"char"}) == "_Z1fc", "char encodes as c");
+    report.expect(mangleFunction("", "f", {"float"}) == "_Z1ff", "float encodes as f");
+    report.expect(mangleFunction("", "f", {"bool"}) == "_Z1fb", "bool encodes as b");
+    report.expect(mangleFunction("", "f", {"CustomType"}) == "_Z1f10CustomType",
+                  "unknown type encodes as length + name");
+
+    // Round trip test
+    std::string mangled = mangleFunction("", "foo", {"int", "double"});
+    report.expect(ctrace_tools::mangle::isMangled(mangled) == true,
+                  "round trip: mangleFunction output is recognized by isMangled");
 
     if (report.failures == 0)
     {

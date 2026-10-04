@@ -50,7 +50,7 @@ namespace ctrace_tools::mangle
         }
 
         std::unique_ptr<char, void (*)(void*)> demangled(
-            abi::__cxa_demangle(sv.data(), nullptr, nullptr, &status), std::free);
+            abi::__cxa_demangle(std::string(sv).c_str(), nullptr, nullptr, &status), std::free);
         return status == 0;
     }
 
