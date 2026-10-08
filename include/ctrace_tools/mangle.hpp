@@ -2,23 +2,12 @@
 #ifndef MANGLE_HPP
 #define MANGLE_HPP
 
-#include <concepts>
-#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <cxxabi.h>
-#include <memory>
 
 namespace ctrace_tools::mangle
 {
-    /**
-     * @brief Concept to define types that can be converted to `std::string_view`.
-     *
-     * The `StringLike` concept ensures that any type passed to functions
-     * requiring it can be implicitly converted to `std::string_view`.
-     */
-    template <typename T> concept StringLike = std::convertible_to<T, std::string_view>;
     // TODO: add mangling for windows
 
     /**
@@ -27,7 +16,6 @@ namespace ctrace_tools::mangle
      * This function determines whether a given name follows the Itanium C++ ABI
      * mangling conventions (e.g., names starting with `_Z`).
      *
-     * @tparam T A type satisfying the `StringLike` concept.
      * @param name The name to check for mangling.
      * @return `true` if the name is mangled, `false` otherwise.
      *
@@ -38,21 +26,11 @@ namespace ctrace_tools::mangle
      * @note The function is marked `[[nodiscard]]`, meaning the return value
      *       should not be ignored. It is also `noexcept`, indicating that it
      *       does not throw exceptions.
+     * @note If constructing the temporary `std::string` throws, `noexcept` causes
+     *       `std::terminate` to be called. An allocation failure inside
+     *       `abi::__cxa_demangle` is reported through its status and yields `false`.
      */
-    [[nodiscard]] bool isMangled(StringLike auto name) noexcept
-    {
-        int status = 0;
-        std::string_view sv{name};
-
-        if (sv.length() < 2 || sv.substr(0, 2) != "_Z")
-        {
-            return false;
-        }
-
-        std::unique_ptr<char, void (*)(void*)> demangled(
-            abi::__cxa_demangle(std::string(sv).c_str(), nullptr, nullptr, &status), std::free);
-        return status == 0;
-    }
+    [[nodiscard]] bool isMangled(std::string_view name) noexcept;
 
     /**
      * @brief Generates a mangled name for a function.

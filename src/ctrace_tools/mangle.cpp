@@ -1,10 +1,28 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ctrace_tools/mangle.hpp"
 
+#include <cstdlib>
+#include <memory>
 #include <sstream>
+
+#include <cxxabi.h>
 
 namespace ctrace_tools::mangle
 {
+
+    bool isMangled(std::string_view name) noexcept
+    {
+        int status = 0;
+
+        if (!name.starts_with("_Z"))
+        {
+            return false;
+        }
+
+        std::unique_ptr<char, void (*)(void*)> demangled(
+            abi::__cxa_demangle(std::string(name).c_str(), nullptr, nullptr, &status), std::free);
+        return status == 0;
+    }
 
     std::string mangleFunction(const std::string& namespaceName, const std::string& functionName,
                                const std::vector<std::string>& paramTypes)
