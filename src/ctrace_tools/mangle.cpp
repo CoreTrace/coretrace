@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ctrace_tools/mangle.hpp"
 
-#include <sstream>
-#include <cxxabi.h>
 #include <cstdlib>
 #include <memory>
+#include <sstream>
+
+#include <cxxabi.h>
 
 namespace ctrace_tools::mangle
 {
 
     bool isMangled(std::string_view name) noexcept
     {
-
         int status = 0;
 
         if (!name.starts_with("_Z"))

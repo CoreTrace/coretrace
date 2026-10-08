@@ -8,10 +8,9 @@
 
 namespace ctrace_tools::mangle
 {
-
     // TODO: add mangling for windows
 
-    /*
+    /**
      * @brief Checks if a given name is a mangled C++ symbol.
      *
      * This function determines whether a given name follows the Itanium C++ ABI
@@ -27,7 +26,9 @@ namespace ctrace_tools::mangle
      * @note The function is marked `[[nodiscard]]`, meaning the return value
      *       should not be ignored. It is also `noexcept`, indicating that it
      *       does not throw exceptions.
-     * @note A memory allocation failure will end the program because of 'noexcept'.
+     * @note If constructing the temporary `std::string` throws, `noexcept` causes
+     *       `std::terminate` to be called. An allocation failure inside
+     *       `abi::__cxa_demangle` is reported through its status and yields `false`.
      */
     [[nodiscard]] bool isMangled(std::string_view name) noexcept;
 
