@@ -3,7 +3,7 @@
 
 #include <sstream>
 #include <cxxabi.h>
-#include <cxxabi.h>
+#include <cstdlib>
 #include <memory>
 
 namespace ctrace_tools::mangle
