@@ -133,6 +133,7 @@ RUN set -eux; \
     # Add metadata files \
     install -m 0644 /repo/README.md "${staging}/README.md"; \
     install -m 0644 /repo/LICENSE "${staging}/LICENSE"; \
+    install -m 0644 /repo/NOTICE "${staging}/NOTICE"; \
     \
     # Licenses of the Ubuntu packages the libraries come from, then every shipped library and \
     # executable against the inventory of third-party code \
