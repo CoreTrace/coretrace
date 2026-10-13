@@ -55,8 +55,10 @@ these changes, only two people other than Hugo Payet had authored commits on `ma
   `coretrace-stack-analyzer`;
 - Cédric Roulof (`@shookapic`): 2 commits in `coretrace`.
 
-The repositories hold no trace of their agreement; see the actions below. Every contribution
-since then is under Apache-2.0 by section 5, for example #147, #165, #166 and #168.
+Both confirmed in writing, on 2026-10-13, that their contributions made before the change are
+licensed under Apache-2.0
+([#171](https://github.com/CoreTrace/coretrace/issues/171)). Every contribution since the change
+is under Apache-2.0 by section 5, for example #147, #165, #166 and #168.
 
 ## Compatibility of the dependencies
 
@@ -134,12 +136,10 @@ the offer of their source code. The packaging enforces the first part: see below
 
 ## Gaps and actions
 
-1. **The release archive lacks CoreTrace's own `NOTICE`.** Its root holds `LICENSE` and
-   `README.md` only, while the `NOTICE` of every Apache dependency is shipped. Fix: copy `NOTICE`
-   next to `LICENSE` in `Dockerfile.release-binaries`.
-2. **Consent to the relicensing.** Ask Arthur Mazeau and Cédric Roulof to confirm in writing,
-   for example in a comment on an issue, that their contributions made before the change are
-   licensed under Apache-2.0.
+1. **Done: the release archive now ships CoreTrace's own `NOTICE`**, next to `LICENSE`
+   ([#170](https://github.com/CoreTrace/coretrace/pull/170)), from the release after `v0.84.0`.
+2. **Done: consent to the relicensing.** Arthur Mazeau and Cédric Roulof confirmed it in
+   [#171](https://github.com/CoreTrace/coretrace/issues/171) on 2026-10-13.
 3. **`NOTICE` says "Copyright 2026 Hugo Payet".** The code dates from 2025 and has other
    authors: "Copyright 2025-2026 Hugo Payet and the CoreTrace contributors", with a pointer to
    `AUTHORS.md`, is more accurate.
