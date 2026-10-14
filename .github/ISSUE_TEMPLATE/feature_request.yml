@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Feature request
+description: Something ctrace should do, or do differently.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. A maintainer answers within three business days. A change that
+        breaks current users (an option, a configuration key, an exit code, a report format) is
+        decided as GOVERNANCE.md describes, after at least seven days of discussion here.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How ctrace could solve it, for example the command or the output you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways to solve it, or what you do today instead.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to implement it.

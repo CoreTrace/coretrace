@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Bug report
+description: ctrace crashes, gives a wrong verdict, or does not do what its documentation says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A maintainer answers within three business days.
+        A wrong finding of an analyzer (false positive or false negative) belongs in the analyzer's
+        repository, for example coretrace-stack-analyzer, if `ctrace` reports what the analyzer said.
+        For a vulnerability, use private reporting (see SECURITY.md) instead of this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, with the exact error or the wrong output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The full `ctrace` command, and the smallest input that shows the problem.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ctrace version
+      description: The output of `ctrace --version`.
+      placeholder: ctrace v0.84.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed ctrace
+      options:
+        - Release archive
+        - Built from source
+        - Docker image or GitHub Action
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: Ubuntu 24.04, x86-64
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: The output of the command, with `--verbose` if you can.
+      render: text
