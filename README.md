@@ -1,5 +1,61 @@
 # ctrace
 
+`ctrace` finds bugs in C and C++ code before it runs: stack buffer overflows, data races,
+deadlocks, uninitialized reads, memory errors at run time. It runs several analyzers on your
+sources, merges what they find into one report (text, JSON or SARIF), and returns an exit code
+that can fail a CI pipeline. It also checks Python projects.
+
+It is for C and C++ developers and the CI pipelines of their projects. Part of
+[CoreTrace](https://github.com/CoreTrace); see the [roadmap](ROADMAP.md) for where it is going.
+
+### Quick start
+
+On Linux (x86-64 or arm64, glibc 2.34 or newer), the release archive needs neither a compiler
+nor LLVM; only the C library headers (`libc6-dev` on Debian and Ubuntu, `glibc-devel` on RHEL).
+Take the archive of the [latest release](https://github.com/CoreTrace/coretrace/releases/latest)
+for your machine, for example:
+
+```bash
+curl -fsSLO https://github.com/CoreTrace/coretrace/releases/download/v0.84.0/coretrace-v0.84.0-linux-amd64.tar.gz
+tar -xzf coretrace-v0.84.0-linux-amd64.tar.gz
+```
+
+Save this as `demo.c`:
+
+```c
+int main(void)
+{
+    int values[4];
+    for (int i = 0; i <= 4; i++)
+        values[i] = i;
+    return 0;
+}
+```
+
+and analyze it:
+
+```bash
+./coretrace-v0.84.0-linux-amd64/bin/ctrace --input demo.c \
+    --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer --fail-on warning
+```
+
+```
+at line 5, column 19
+[ !!Warn ] potential stack buffer overflow on variable 'values' (size 4)
+     ↳ index variable may go up to 4 (array last valid index: 3)
+     ↳ (this is a write access)
+```
+
+The exit code is 2: a finding at or above `--fail-on`. Add `--sarif-format --report-file
+ctrace.sarif` for a report that GitHub Code Scanning reads. On macOS, or to change the code,
+[build from source](#build).
+
+### Contribute
+
+Start with an issue labelled
+[`good first issue`](https://github.com/CoreTrace/coretrace/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22),
+and read [CONTRIBUTING.md](CONTRIBUTING.md): a maintainer answers within three business days.
+
 ### Repository documents
 
 - [CONTRIBUTING.md](CONTRIBUTING.md)

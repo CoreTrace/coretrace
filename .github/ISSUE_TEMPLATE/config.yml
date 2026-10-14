@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/CoreTrace/coretrace/security/advisories/new
+    about: Report it privately, as SECURITY.md explains.
+  - name: Documentation
+    url: https://github.com/CoreTrace/coretrace/wiki
+    about: How to use ctrace, its configuration and its HTTP API.

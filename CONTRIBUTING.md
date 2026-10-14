@@ -1,5 +1,21 @@
 # Contributing to ctrace
 
+Thanks for your interest. This guide takes you from choosing an issue to a merged pull request.
+
+## Find something to work on
+
+- Issues labelled
+  [`good first issue`](https://github.com/CoreTrace/coretrace/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
+  are scoped for a first contribution: each says what to change, where, and how to check it.
+- Comment on the issue to ask for it. A maintainer assigns it to you and answers your questions
+  there. If you stop working on it, say so in the issue so that someone else can take it.
+- For a change that no issue describes, open one first to agree on the approach. Changes that
+  break users go through the process of [GOVERNANCE.md](GOVERNANCE.md).
+- Report a bug or ask for a feature with the
+  [issue forms](https://github.com/CoreTrace/coretrace/issues/new/choose).
+
+A maintainer gives a first answer to every issue and pull request within **three business days**.
+
 ## Local setup
 
 Follow the [build instructions](README.md#build) for LLVM/Clang 20 and CMake. The Python analyzer and its virtual environment are optional; enable them only when working on Python integration.
