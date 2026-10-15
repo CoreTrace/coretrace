@@ -301,6 +301,9 @@ add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 add_executable(ctrace_report_file_tests tests/report_file_tests.cpp)
 add_test(NAME ctrace_report_file_tests COMMAND ctrace_report_file_tests)
 
+add_executable(ctrace_run_directory_tests tests/run_directory_tests.cpp)
+add_test(NAME ctrace_run_directory_tests COMMAND ctrace_run_directory_tests)
+    
 # The unified diagnostic model and the per-tool parsers that feed it.
 add_executable(ctrace_tool_diagnostics_tests
     tests/tool_diagnostics_tests.cpp
@@ -805,6 +808,7 @@ set(coretrace_unit_tests
     ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
+    ctrace_run_directory_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests
@@ -837,6 +841,7 @@ foreach(coretrace_target
     ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
+    ctrace_run_directory_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests
