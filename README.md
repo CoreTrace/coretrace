@@ -69,8 +69,10 @@ and read [CONTRIBUTING.md](CONTRIBUTING.md): a maintainer answers within three b
 
 ### BUILD
 
-Builds from source need Git, CMake 3.28 or newer, Ninja, a C++20 compiler, and the LLVM 20 and
-Clang 20 development packages. The build is tested on Ubuntu 24.04 and macOS 14. Use matching
+Builds from source need Git, CMake 3.28 or newer, Ninja, a C++20 compiler whose standard library
+provides `<format>` (GCC 13 or newer, or Clang with libstdc++ 13 or libc++), and the LLVM 20 and
+Clang 20 development packages. The test suite also runs cppcheck. The build is tested on Ubuntu
+24.04 and macOS 14, and was checked on Ubuntu 22.04. Use matching
 LLVM and Clang installations: `LLVM_DIR` and `Clang_DIR` select their CMake packages, while
 `CLANG_EXECUTABLE` selects the Clang 20 executable whose resource headers are bundled with
 `ctrace`. These paths are build-time settings; an installed or released `ctrace` does not need
@@ -81,9 +83,28 @@ configure from the repository root:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential cmake ninja-build git curl ca-certificates gnupg
+sudo apt-get install -y build-essential cmake ninja-build git curl ca-certificates gnupg cppcheck
 sudo ./scripts/ci/install-llvm-apt.sh 20
 cmake -S . -B build -G Ninja \
+  -DLLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm \
+  -DClang_DIR=/usr/lib/llvm-20/lib/cmake/clang \
+  -DCLANG_EXECUTABLE=/usr/bin/clang-20 \
+  -DENABLE_PYTHON_ANALYZER=OFF
+```
+
+On Ubuntu 22.04, the system's GCC 11 lacks `<format>` and its CMake is 3.22: take GCC 13 from the
+toolchain PPA, as the release build does, and a CMake release from Kitware. The PPA also updates
+the system's `libstdc++6` and `libgcc-s1`.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential ninja-build git curl ca-certificates gnupg cppcheck software-properties-common
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+sudo apt-get install -y g++-13
+sudo ./scripts/ci/install-llvm-apt.sh 20
+curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-$(uname -m).tar.gz | tar -xz -C "$HOME"
+export PATH="$HOME/cmake-3.31.6-linux-$(uname -m)/bin:$PATH"
+CC=gcc-13 CXX=g++-13 cmake -S . -B build -G Ninja \
   -DLLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm \
   -DClang_DIR=/usr/lib/llvm-20/lib/cmake/clang \
   -DCLANG_EXECUTABLE=/usr/bin/clang-20 \
@@ -93,7 +114,7 @@ cmake -S . -B build -G Ninja \
 On macOS, use Homebrew's versioned LLVM formula:
 
 ```bash
-brew install cmake ninja llvm@20
+brew install cmake ninja llvm@20 cppcheck
 cmake -S . -B build -G Ninja \
   -DLLVM_DIR="$(brew --prefix llvm@20)/lib/cmake/llvm" \
   -DClang_DIR="$(brew --prefix llvm@20)/lib/cmake/clang" \
