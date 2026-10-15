@@ -77,8 +77,25 @@ Objectives:
 There is no separate objective for unit tests. Unit tests check logic inside a component;
 integration tests check behavior through the binary. Both count toward the objective.
 
+A copy of the report is kept in the repository, with the share of the critical path: [2026-10-15](coverage/2026-10-15/README.md).
+
 Today the coverage job measures but never fails. Enforcing these floors is the first action
 below.
+
+## CI history
+
+Every run of every workflow, with its logs for 90 days:
+
+| Repository | Runs | Required checks of `main` |
+|---|---|---:|
+| `coretrace` | [Actions](https://github.com/CoreTrace/coretrace/actions) | 7 |
+| `coretrace-stack-analyzer` | [Actions](https://github.com/CoreTrace/coretrace-stack-analyzer/actions) | 10 |
+| `coretrace-concurrency-analyzer` | [Actions](https://github.com/CoreTrace/coretrace-concurrency-analyzer/actions) | 7 |
+| `coretrace-runtime-analyzer` | [Actions](https://github.com/CoreTrace/coretrace-runtime-analyzer/actions) | 4 |
+| `coretrace-gui` | [Actions](https://github.com/CoreTrace/coretrace-gui/actions) | 3 |
+
+The failed runs of `coretrace`, and what each one caught, are in
+[Regressions caught](regressions.md).
 
 ## Team conventions
 

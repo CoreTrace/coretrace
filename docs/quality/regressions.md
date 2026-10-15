@@ -38,9 +38,10 @@ the merge itself: R2 was fixed 18 minutes later, R3 reverted four days later.
 | | Date | Test | Cause | Fix |
 |---|---|---|---|---|
 | F1 | 2026-09-21 | `ctrace_version_is_resolved`, in [#87](https://github.com/CoreTrace/coretrace/pull/87) | The expected version did not allow a bare commit hash, which a CI clone without tags produces | `744104c`: the test accepts the hash |
-| F2 | 2026-10-13 | `ctrace_tool_scheduling_tests`, on `main` after [#181](https://github.com/CoreTrace/coretrace/pull/181), macOS only | The test compares wall-clock end times with a 100–150 ms margin, which a slow runner can eat | Job re-run, green. To do: rewrite the test without timing ([test policy](test-policy.md), convention 4) |
+| F2 | 2026-10-13, again 2026-10-15 | `ctrace_tool_scheduling_tests`, on `main` after [#181](https://github.com/CoreTrace/coretrace/pull/181), then after [#193](https://github.com/CoreTrace/coretrace/pull/193), macOS only | The test compares wall-clock end times with a 100–150 ms margin, which a slow runner can eat | Job re-run, green. To do: rewrite the test without timing ([test policy](test-policy.md), convention 4) |
 
-F2 is not among the 42 runs: its re-run passed, so the run is recorded as a success.
+F2 is not among the 42 runs: both times, the re-run passed, so the run is recorded as a success.
+Two failures in three days make it the first fix of the test suite to do.
 
 ## Other failures
 
