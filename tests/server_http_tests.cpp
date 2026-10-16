@@ -356,6 +356,30 @@ namespace
                           response.value("error", nlohmann::json::object()).dump() + ")");
     }
 
+    // The IPC socket is a resource of the server's side: one nobody listens on is a server
+    // failure, answered with 500 and no details, not an invalid request.
+    void testUnreachableIpcSocket(TestReport& report, const std::string& sourceDir)
+    {
+        const ServerFixture server(localConfig(18810));
+        nlohmann::json request =
+            analysisRequest(sourceDir + "/tests/double_free.c", {"cppcheck"}, false, "");
+        request["params"].erase("config");
+        request["params"]["ipc"] = "socket";
+        request["params"]["ipc_path"] = "/nonexistent/ctrace-ipc.sock";
+        const auto answer = server.client().Post("/api", request.dump(), "application/json");
+        const nlohmann::json body =
+            answer ? nlohmann::json::parse(answer->body, nullptr, false) : nlohmann::json();
+        report.expect(answer && answer->status == 500 && body.is_object() &&
+                          errorCode(body) == "InternalError" &&
+                          answer->body.find("ctrace-ipc.sock") == std::string::npos,
+                      "an IPC socket nobody listens on is answered with 500 InternalError, "
+                      "without its details (got " +
+                          (answer
+                               ? std::to_string(answer->status) + " " + answer->body.substr(0, 160)
+                               : "no response") +
+                          ")");
+    }
+
     // A tool may print bytes that are not UTF-8, such as a message in Latin-1: the result still
     // reaches the client, those bytes replaced by U+FFFD, in JSON and in SARIF.
     void testToolOutputThatIsNotUtf8(TestReport& report, const std::string& buildDir,
@@ -422,6 +446,7 @@ int main(int argc, char* argv[])
     testGracefulShutdown(report);
     testDynamicAnalysisNeedsTheServerOptIn(report, argv[1], argv[2]);
     testToolOutputThatIsNotUtf8(report, argv[1], argv[2]);
+    testUnreachableIpcSocket(report, argv[2]);
 
     if (report.failures == 0)
     {
