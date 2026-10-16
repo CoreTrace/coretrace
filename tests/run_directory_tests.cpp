@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-
+//
+// RunDirectory gives each tool run a directory of its own in the temporary directory: it exists
+// once constructed, two runs never share one, and it is removed with its content on destruction.
 #include "Process/Tools/RunDirectory.hpp"
 
 #include <filesystem>
@@ -30,50 +32,55 @@ int main()
 {
     TestReport report;
 
-    // 1. The directory exists right after construction, is under temp_directory_path(),
-    // and its name starts with the given prefix followed by '-'
-    std::filesystem::path created_path;
+    // 1. The directory exists right after construction, directly in temp_directory_path(),
+    // and its name starts with the given prefix followed by '-'; empty, it is removed with
+    // the object.
+    std::filesystem::path createdPath;
     {
-        ctrace::RunDirectory run_dir("testprefix");
-        created_path = run_dir.path();
+        ctrace::RunDirectory runDirectory("testprefix");
+        createdPath = runDirectory.path();
 
-        report.expect(std::filesystem::exists(created_path) &&
-                          std::filesystem::is_directory(created_path),
+        report.expect(std::filesystem::is_directory(createdPath),
                       "RunDirectory: directory exists right after construction");
 
-        const auto temp_root = std::filesystem::temp_directory_path();
-        const bool under_temp = (created_path.string().find(temp_root.string()) == 0);
-        report.expect(under_temp,
-                      "RunDirectory: located under std::filesystem::temp_directory_path()");
+        // temp_directory_path() may end with a separator (macOS): compare the directories,
+        // not their spellings.
+        report.expect(std::filesystem::equivalent(createdPath.parent_path(),
+                                                  std::filesystem::temp_directory_path()),
+                      "RunDirectory: located in std::filesystem::temp_directory_path()");
 
-        const std::string filename = created_path.filename().string();
-        report.expect(filename.rfind("testprefix-", 0) == 0,
+        report.expect(createdPath.filename().string().starts_with("testprefix-"),
                       "RunDirectory: name starts with given prefix followed by '-'");
     }
+    report.expect(!std::filesystem::exists(createdPath),
+                  "RunDirectory: an empty directory is removed on destruction");
 
-    // 2. Two instances created with the same prefix get two different paths
+    // 2. Two instances created with the same prefix get two different directories, which
+    // exist at the same time
     {
-        ctrace::RunDirectory dir1("sameprefix");
-        ctrace::RunDirectory dir2("sameprefix");
-        report.expect(dir1.path() != dir2.path(),
+        ctrace::RunDirectory first("sameprefix");
+        ctrace::RunDirectory second("sameprefix");
+        report.expect(first.path() != second.path(),
                       "RunDirectory: two instances with same prefix get different paths");
+        report.expect(std::filesystem::is_directory(first.path()) &&
+                          std::filesystem::is_directory(second.path()),
+                      "RunDirectory: both directories exist at the same time");
     }
 
     // 3. The directory is removed when the object is destroyed, including when it contains files/subdirs
     {
-        std::filesystem::path nested_path;
+        std::filesystem::path nestedPath;
         {
-            ctrace::RunDirectory run_dir("cleanup");
-            nested_path = run_dir.path();
+            ctrace::RunDirectory runDirectory("cleanup");
+            nestedPath = runDirectory.path();
 
-            // Create files and subdirectories inside it
-            std::filesystem::create_directories(nested_path / "sub" / "dir");
-            std::ofstream(nested_path / "sub" / "dir" / "file.txt") << "test data";
+            std::filesystem::create_directories(nestedPath / "sub" / "dir");
+            std::ofstream(nestedPath / "sub" / "dir" / "file.txt") << "test data";
 
-            report.expect(std::filesystem::exists(nested_path / "sub" / "dir" / "file.txt"),
+            report.expect(std::filesystem::exists(nestedPath / "sub" / "dir" / "file.txt"),
                           "RunDirectory: files and subdirectories successfully created");
         }
-        report.expect(!std::filesystem::exists(nested_path),
+        report.expect(!std::filesystem::exists(nestedPath),
                       "RunDirectory: directory and its contents are removed on destruction");
     }
 
