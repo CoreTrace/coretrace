@@ -806,10 +806,12 @@ add_test(NAME ctrace_dyn_reports_runtime_findings
     COMMAND sh -c "rm -f '${ctrace_runtime_log}'; out=$(CTRACE_FAKE_RUNTIME_LOG='${ctrace_runtime_log}' $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input tests/runtime/heap_overflow.c,tests/runtime/clean.c,tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/runtime/heap_overflow.c:7:15: error: heap-buffer-overflow WRITE of size 4 \\[coretrace-runtime-analyzer/heap-buffer-overflow\\]$' && printf '%s\\n' \"$out\" | grep -q '(coretrace-runtime-analyzer) Diagnostics summary: info=0, warning=0, error=1' && test $(wc -l < '${ctrace_runtime_log}') -eq 2 && ! grep -q main.py '${ctrace_runtime_log}' && while read -r program; do test ! -e \"$(dirname \"$program\")\" || exit 1; done < '${ctrace_runtime_log}'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # The runtime analyzer's `--` ends its own options, not the compiler's: the source must not
-# look like an option either (the stand-in refuses one that does).
+# look like an option either (the stand-in refuses one that does). The stand-in must have run
+# once, and its summary been read: exit code 0 alone is also what a run with no tool gives.
 file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/runtime/clean.c ${ctrace_dash_dir}/-C.c)
+set(ctrace_dash_runtime_log ${CMAKE_BINARY_DIR}/fake-runtime-dash-runs.log)
 add_test(NAME ctrace_dyn_input_starting_with_dash_is_a_file
-    COMMAND $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input -C.c
+    COMMAND sh -c "rm -f '${ctrace_dash_runtime_log}'; out=$(CTRACE_FAKE_RUNTIME_LOG='${ctrace_dash_runtime_log}' $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input -C.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && test $(wc -l < '${ctrace_dash_runtime_log}') -eq 1 && printf '%s\\n' \"$out\" | grep -q '(coretrace-runtime-analyzer) Diagnostics summary: info=0, warning=0, error=0'"
     WORKING_DIRECTORY ${ctrace_dash_dir})
 # The finding reaches the merged SARIF log with its CWE; one the stack analyzer reports at the
 # same line and CWE (the double free) becomes one result, confirmed at run time.
