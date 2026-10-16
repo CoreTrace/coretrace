@@ -76,7 +76,7 @@ namespace ctrace
         void writeMergedSarif(const ProgramConfig& config,
                               const std::vector<Diagnostic>& diagnostics)
         {
-            const std::string document = renderSarif(diagnostics).dump(2);
+            const std::string document = sarifText(renderSarif(diagnostics));
             std::cout << document << std::endl;
             std::string error;
             if (writeReportToFile(config.output.report_file, document, error))
