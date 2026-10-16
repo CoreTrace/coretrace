@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # Stands in for coretrace-runtime-analyzer. It checks the command line ctrace must use:
 #   --format sarif --timeout <seconds> -o <run directory>/<name> [args] -- [compiler args] <source>
-# with the run directory existing and the source last, and exits 64 otherwise. Then it prints
-# the SARIF the real tool prints for the fixtures, with the source spelled as it was given:
-# a heap overflow for heap_overflow.c, a double free on line 12 for double_free.c, nothing for
+# with the run directory existing and the source last, not starting with `-`, and exits 64
+# otherwise. Then it prints the SARIF the real tool prints for the fixtures, with the source
+# spelled as it was given: a heap overflow for heap_overflow.c, a double free on line 12 for double_free.c, nothing for
 # others. --fake-exit=<code> ends with that code instead (2: could not build or run),
 # --fake-hang never ends. When CTRACE_FAKE_RUNTIME_LOG is set, the -o path is appended to it.
 contract() { echo "fake-runtime-analyzer: $1" >&2; exit 64; }
@@ -26,6 +26,7 @@ done
 [ "$1" = -- ] || contract "expected -- before the compiler arguments"
 for source; do :; done
 [ -f "$source" ] || contract "the source comes last: $source"
+case "$source" in -*) contract "the compiler would read the source as an option: $source" ;; esac
 if [ -n "${CTRACE_FAKE_RUNTIME_LOG:-}" ]; then
     echo "$program" >> "$CTRACE_FAKE_RUNTIME_LOG"
 fi

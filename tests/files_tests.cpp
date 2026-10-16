@@ -72,6 +72,15 @@ int main()
                       "plain paths: normalized and deduplicated");
     }
 
+    // A name starting with `-` keeps a `./` in front, or the tools read it as an option; both
+    // spellings are one file. Other paths are left as they are.
+    {
+        const auto r = resolve({"-F.c", "./-F.c", "main.c", "src/-t.c", "/abs/-x.c"});
+        report.expect(
+            (r.files == std::vector<std::string>{"./-F.c", "main.c", "src/-t.c", "/abs/-x.c"}),
+            "dash paths: './' kept in front of a leading '-', both spellings deduplicated");
+    }
+
     // An explicit compile database: entries resolve against their directory (relative to the
     // database location) and _deps entries are kept because the user named the file.
     const auto compdb = dir / "compile_commands.json";

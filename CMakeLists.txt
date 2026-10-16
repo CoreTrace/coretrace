@@ -578,6 +578,21 @@ add_test(NAME ctrace_stack_analyzer_paths_follow_the_input
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer,cppcheck --input tests/null_pointer.c,tests/dead_code.cc > ${CMAKE_BINARY_DIR}/paths.sarif 2>/dev/null && grep -q '\"uri\": \"tests/null_pointer.c\"' ${CMAKE_BINARY_DIR}/paths.sarif && ! grep -q '\"uri\": \"/' ${CMAKE_BINARY_DIR}/paths.sarif"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# An input named like an option reaches every tool as a file: ctrace keeps a `./` in front of
+# it, which normalization would drop. Its findings are spelled `./-F.cc`.
+set(ctrace_dash_dir ${CMAKE_BINARY_DIR}/dash-inputs)
+file(MAKE_DIRECTORY ${ctrace_dash_dir})
+file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/buffer_overflow.cc ${ctrace_dash_dir}/-F.cc)
+add_test(NAME ctrace_input_starting_with_dash_is_a_file
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer,cppcheck --input -F.cc,./-F.cc > dash.sarif && grep -q '\"ruleId\": \"MemcpyWithStackDest\"' dash.sarif && grep -q '\"uri\": \"./-F.cc\"' dash.sarif && ! grep -q '\"uri\": \"-F.cc\"' dash.sarif"
+    WORKING_DIRECTORY ${ctrace_dash_dir})
+find_program(CTRACE_TEST_FLAWFINDER flawfinder)
+if(CTRACE_TEST_FLAWFINDER)
+    add_test(NAME ctrace_input_starting_with_dash_reaches_flawfinder
+        COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke flawfinder --input -F.cc > dash-flawfinder.sarif && grep -q '\"ruleId\": \"FF1001\"' dash-flawfinder.sarif && grep -q '\"uri\": \"./-F.cc\"' dash-flawfinder.sarif"
+        WORKING_DIRECTORY ${ctrace_dash_dir})
+endif()
+
 # Every stack analyzer finding names its rule and CWE (coretrace-stack-analyzer >= v0.21.0):
 # the strcpy overflow is MemcpyWithStackDest, CWE-120, the CWE flawfinder gives it too.
 add_test(NAME ctrace_stack_analyzer_findings_name_rule_and_cwe
@@ -741,6 +756,12 @@ file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json
 add_test(NAME ctrace_dyn_reports_runtime_findings
     COMMAND sh -c "rm -f '${ctrace_runtime_log}'; out=$(CTRACE_FAKE_RUNTIME_LOG='${ctrace_runtime_log}' $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input tests/runtime/heap_overflow.c,tests/runtime/clean.c,tests/python/project/app/main.py 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/runtime/heap_overflow.c:7:15: error: heap-buffer-overflow WRITE of size 4 \\[coretrace-runtime-analyzer/heap-buffer-overflow\\]$' && printf '%s\\n' \"$out\" | grep -q '(coretrace-runtime-analyzer) Diagnostics summary: info=0, warning=0, error=1' && test $(wc -l < '${ctrace_runtime_log}') -eq 2 && ! grep -q main.py '${ctrace_runtime_log}' && while read -r program; do test ! -e \"$(dirname \"$program\")\" || exit 1; done < '${ctrace_runtime_log}'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# The runtime analyzer's `--` ends its own options, not the compiler's: the source must not
+# look like an option either (the stand-in refuses one that does).
+file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/runtime/clean.c ${ctrace_dash_dir}/-C.c)
+add_test(NAME ctrace_dyn_input_starting_with_dash_is_a_file
+    COMMAND $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input -C.c
+    WORKING_DIRECTORY ${ctrace_dash_dir})
 # The finding reaches the merged SARIF log with its CWE; one the stack analyzer reports at the
 # same line and CWE (the double free) becomes one result, confirmed at run time.
 add_test(NAME ctrace_dyn_findings_merge_with_static_ones
@@ -765,6 +786,11 @@ if(ENABLE_RUNTIME_ANALYZER)
     add_test(NAME ctrace_dyn_bundled_runtime_analyzer_finds_the_overflow
         COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input tests/runtime/heap_overflow.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/runtime/heap_overflow.c:7:[0-9]*: error: heap-buffer-overflow WRITE of size 4 \\[coretrace-runtime-analyzer/heap-buffer-overflow\\]$'"
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # The real compiler on a source named like an option.
+    file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/runtime/heap_overflow.c ${ctrace_dash_dir}/-H.c)
+    add_test(NAME ctrace_dyn_bundled_runtime_analyzer_input_starting_with_dash
+        COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input -H.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^./-H.c:7:[0-9]*: error: heap-buffer-overflow'"
+        WORKING_DIRECTORY ${ctrace_dash_dir})
     add_test(NAME ctrace_dyn_bundled_runtime_analyzer_clean_program
         COMMAND ctrace --dyn --input tests/runtime/clean.c
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
