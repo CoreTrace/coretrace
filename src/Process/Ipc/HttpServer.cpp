@@ -6,6 +6,8 @@
 #include <chrono>
 #include <exception>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <string>
 
 using json = nlohmann::json;
@@ -41,6 +43,41 @@ namespace
                        "DynamicAnalysisDisabled"
                    ? 403
                    : 400;
+    }
+
+    /// The one address `host` is bound to: the first that getaddrinfo() gives, in numeric form;
+    /// nothing when the host does not resolve. Given a name, cpp-httplib would try the next
+    /// address when the first is taken, so that a second server on "localhost" started on the
+    /// IPv4 or IPv6 address the first one left free. The first address depends on the system's
+    /// resolver configuration: binding only it removes that fallback, it does not promise the
+    /// same choice to two resolutions made under different configurations.
+    std::optional<std::string> bindAddress(const std::string& host)
+    {
+        addrinfo hints{};
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        addrinfo* found = nullptr;
+        // An empty host is the loopback address, as for cpp-httplib (no AI_PASSIVE).
+        if (::getaddrinfo(host.empty() ? nullptr : host.c_str(), "0", &hints, &found) != 0 ||
+            found == nullptr)
+        {
+            return std::nullopt;
+        }
+        const std::unique_ptr<addrinfo, decltype(&::freeaddrinfo)> addresses(found,
+                                                                             &::freeaddrinfo);
+        char numeric[NI_MAXHOST];
+        if (::getnameinfo(found->ai_addr, found->ai_addrlen, numeric, sizeof(numeric), nullptr, 0,
+                          NI_NUMERICHOST) != 0)
+        {
+            return std::nullopt;
+        }
+        return std::string(numeric);
+    }
+
+    /// `address` as the host of a URL: an IPv6 address goes between brackets.
+    std::string urlHost(const std::string& address)
+    {
+        return address.find(':') == std::string::npos ? address : "[" + address + "]";
     }
 } // namespace
 
@@ -80,14 +117,20 @@ bool HttpServer::run(const std::string& host, int port)
     server_.Post("/shutdown", [this](const httplib::Request& req, httplib::Response& res)
                  { handle_post_shutdown(req, res); });
 
-    const std::string address = host + ":" + std::to_string(port);
-    if (!server_.bind_to_port(host, port))
+    const std::string requested = host + ":" + std::to_string(port);
+    const std::optional<std::string> address = bindAddress(host);
+    if (!address)
     {
-        logger_.error("Cannot listen on " + address +
+        logger_.error("Cannot listen on " + requested + ": the host does not resolve.");
+        return false;
+    }
+    if (!server_.bind_to_port(*address, port))
+    {
+        logger_.error("Cannot listen on " + requested +
                       ": the port is already in use or the address is not available.");
         return false;
     }
-    logger_.info("Listening on http://" + address);
+    logger_.info("Listening on http://" + urlHost(*address) + ":" + std::to_string(port));
     server_.listen_after_bind();
     shutdown_.finish();
     std::cout << std::flush;
