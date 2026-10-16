@@ -9,10 +9,12 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -167,16 +169,39 @@ namespace
                           "the configured origin is echoed back");
         }
     }
-    // S19: a port another server listens on is an error, not a shared or silent listener.
-    void testPortInUse(TestReport& report)
+    /// Whether a second server starts on `config`, where a first one listens. run() returns
+    /// false at once when the bind fails; a server that binds serves until it is stopped, so
+    /// one still running after a moment is stopped, and counted as started.
+    [[nodiscard]] bool secondServerStarts(const ctrace::ServerConfig& config)
     {
-        const ctrace::ServerConfig config = localConfig(18806);
-        const ServerFixture first(config);
         ConsoleLogger logger;
         ApiHandler handler(logger, /*executable=*/{});
         HttpServer second(handler, logger, config);
-        report.expect(!second.run(config.host, config.port),
-                      "a second server on a port in use does not start");
+        std::promise<bool> ran;
+        std::future<bool> result = ran.get_future();
+        std::thread thread([&] { ran.set_value(second.run(config.host, config.port)); });
+        const bool returned = result.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+        if (!returned)
+        {
+            second.stop();
+        }
+        thread.join();
+        return !returned || result.get();
+    }
+
+    // S19: a port another server listens on is an error, not a second listener. "localhost" has
+    // an IPv4 and an IPv6 address: the second server must not fall back to the one left free.
+    void testPortInUse(TestReport& report)
+    {
+        for (const auto& [host, port] :
+             {std::pair{"127.0.0.1", 18806}, std::pair{"localhost", 18809}})
+        {
+            ctrace::ServerConfig config = localConfig(port);
+            config.host = host;
+            const ServerFixture first(config);
+            report.expect(!secondServerStarts(config), std::string("a second server on ") + host +
+                                                           ", port in use, does not start");
+        }
     }
 
     // S04, S05: errors are told by the HTTP status too, and the error object stays in the body.
