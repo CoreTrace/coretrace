@@ -626,7 +626,7 @@ add_test(NAME ctrace_stack_analyzer_paths_follow_the_input
 # the stack analyzer and of cppcheck, which rewrites the paths of its file list, and no other.
 set(ctrace_dash_dir ${CMAKE_BINARY_DIR}/dash-inputs)
 file(MAKE_DIRECTORY ${ctrace_dash_dir})
-file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/buffer_overflow.cc ${ctrace_dash_dir}/-F.cc)
+configure_file(${CMAKE_SOURCE_DIR}/tests/buffer_overflow.cc ${ctrace_dash_dir}/-F.cc COPYONLY)
 add_test(NAME ctrace_input_starting_with_dash_is_a_file
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer,cppcheck --input -F.cc,./-F.cc > dash.sarif && grep -q '\"ruleId\": \"MemcpyWithStackDest\"' dash.sarif && locations=$($<TARGET_FILE:ctrace_sarif_locations> dash.sarif) && printf '%s\\n' \"$locations\" && test \"$locations\" = \"$(printf 'cppcheck\\t./-F.cc\\nctrace_stack_analyzer\\t./-F.cc')\""
     WORKING_DIRECTORY ${ctrace_dash_dir})
@@ -808,7 +808,7 @@ add_test(NAME ctrace_dyn_reports_runtime_findings
 # The runtime analyzer's `--` ends its own options, not the compiler's: the source must not
 # look like an option either (the stand-in refuses one that does). The stand-in must have run
 # once, and its summary been read: exit code 0 alone is also what a run with no tool gives.
-file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/runtime/clean.c ${ctrace_dash_dir}/-C.c)
+configure_file(${CMAKE_SOURCE_DIR}/tests/runtime/clean.c ${ctrace_dash_dir}/-C.c COPYONLY)
 set(ctrace_dash_runtime_log ${CMAKE_BINARY_DIR}/fake-runtime-dash-runs.log)
 add_test(NAME ctrace_dyn_input_starting_with_dash_is_a_file
     COMMAND sh -c "rm -f '${ctrace_dash_runtime_log}'; out=$(CTRACE_FAKE_RUNTIME_LOG='${ctrace_dash_runtime_log}' $<TARGET_FILE:ctrace> --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input -C.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && test $(wc -l < '${ctrace_dash_runtime_log}') -eq 1 && printf '%s\\n' \"$out\" | grep -q '(coretrace-runtime-analyzer) Diagnostics summary: info=0, warning=0, error=0'"
@@ -846,7 +846,7 @@ if(ENABLE_RUNTIME_ANALYZER)
         COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input tests/runtime/heap_overflow.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^tests/runtime/heap_overflow.c:7:[0-9]*: error: heap-buffer-overflow WRITE of size 4 \\[coretrace-runtime-analyzer/heap-buffer-overflow\\]$'"
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
     # The real compiler on a source named like an option.
-    file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/runtime/heap_overflow.c ${ctrace_dash_dir}/-H.c)
+    configure_file(${CMAKE_SOURCE_DIR}/tests/runtime/heap_overflow.c ${ctrace_dash_dir}/-H.c COPYONLY)
     add_test(NAME ctrace_dyn_bundled_runtime_analyzer_input_starting_with_dash
         COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --dyn --input -H.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 2 && printf '%s\\n' \"$out\" | grep -q '^./-H.c:7:[0-9]*: error: heap-buffer-overflow'"
         WORKING_DIRECTORY ${ctrace_dash_dir})
