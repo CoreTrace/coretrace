@@ -2,6 +2,8 @@
 #ifndef INPUT_PATHS_HPP
 #define INPUT_PATHS_HPP
 
+#include "Process/Tools/Diagnostic.hpp"
+
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -83,6 +85,23 @@ namespace ctrace
         std::map<std::filesystem::path, std::string> inputs_;
         std::filesystem::path workingDirectory_;
     };
+
+    /// Spells the file of every finding as InputPaths::display() does, for a tool that reports
+    /// the files it was given its own way: cppcheck and tscancode rewrite the paths of their file
+    /// list, the runtime analyzer names its source. Resolves nothing when there is no finding.
+    inline void respellFindings(std::vector<Diagnostic>& diagnostics,
+                                const std::vector<std::string>& inputs)
+    {
+        if (diagnostics.empty())
+        {
+            return;
+        }
+        const InputPaths paths(inputs);
+        for (Diagnostic& diagnostic : diagnostics)
+        {
+            diagnostic.file = paths.display(diagnostic.file);
+        }
+    }
 } // namespace ctrace
 
 #endif // INPUT_PATHS_HPP

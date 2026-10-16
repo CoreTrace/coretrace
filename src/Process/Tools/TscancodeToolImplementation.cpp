@@ -41,11 +41,7 @@ namespace ctrace
         std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
         // The tool rewrites the paths of its file list (`./-F.c` becomes `-F.c`): each finding
         // is spelled as its input.
-        const InputPaths paths(files);
-        for (Diagnostic& diagnostic : diagnostics)
-        {
-            diagnostic.file = paths.display(diagnostic.file);
-        }
+        respellFindings(diagnostics, files);
         // In SARIF mode the merged document is the output; text lines would pollute it.
         if (!config.output.sarif_format && !diagnostics.empty())
         {
