@@ -67,8 +67,7 @@ namespace ctrace
         ApiHandler apiHandler(logger, executable, config.server.allow_dynamic_analysis,
                               workers > 1 ? std::make_shared<ThreadPool>(workers) : nullptr);
         HttpServer server(apiHandler, logger, config.server);
-        server.run(config.server.host, config.server.port);
-        return EXIT_SUCCESS;
+        return server.run(config.server.host, config.server.port) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     namespace
@@ -77,7 +76,7 @@ namespace ctrace
         void writeMergedSarif(const ProgramConfig& config,
                               const std::vector<Diagnostic>& diagnostics)
         {
-            const std::string document = renderSarif(diagnostics).dump(2);
+            const std::string document = sarifText(renderSarif(diagnostics));
             std::cout << document << std::endl;
             std::string error;
             if (writeReportToFile(config.output.report_file, document, error))

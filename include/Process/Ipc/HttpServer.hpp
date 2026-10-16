@@ -21,8 +21,10 @@ class HttpServer
     /// Stops accepting connections. Safe to call from another thread.
     void stop();
 
-    /// Serves until stopped, then completes the graceful shutdown.
-    void run(const std::string& host, int port);
+    /// Serves until stopped, then completes the graceful shutdown. False, at once, when the
+    /// port cannot be bound (another process listens on it, or the address is not local), and
+    /// false too when the listener stops on an error rather than on stop().
+    [[nodiscard]] bool run(const std::string& host, int port);
 
   private:
     void set_cors(httplib::Response& res) const;

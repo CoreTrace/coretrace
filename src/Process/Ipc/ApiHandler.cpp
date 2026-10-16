@@ -180,6 +180,18 @@ namespace
         return schema;
     }
 
+    /// Whether `param` is a run_analysis parameter: one of param_schema(), or one of the two
+    /// read on their own, the config file and the IPC type.
+    [[nodiscard]] bool is_known_param(const std::string& param)
+    {
+        if (param == "config" || param == "ipc")
+        {
+            return true;
+        }
+        return std::any_of(param_schema().begin(), param_schema().end(),
+                           [&param](const ParamSpec& spec) { return param == spec.param; });
+    }
+
     /// Loader diagnostics name the sectioned key; clients know the flat parameter.
     std::string with_param_names(std::string message)
     {
@@ -210,6 +222,15 @@ namespace
         {
             err = {"InvalidParams", "Params must be a JSON object."};
             return false;
+        }
+        // Like the configuration file, a request rejects the keys it does not know.
+        for (const auto& item : params.items())
+        {
+            if (!is_known_param(item.key()))
+            {
+                err = {"InvalidParams", "Unknown parameter '" + item.key() + "'."};
+                return false;
+            }
         }
 
         // Precedence: defaults < config file < request parameters.
@@ -387,8 +408,8 @@ namespace
             // The merged document the CLI prints; also persisted like the CLI does.
             result["sarif"] = ctrace::renderSarif(invoker.diagnostics());
             std::string writeError;
-            if (!ctrace::writeReportToFile(config.output.report_file, result["sarif"].dump(2),
-                                           writeError))
+            if (!ctrace::writeReportToFile(config.output.report_file,
+                                           ctrace::sarifText(result["sarif"]), writeError))
             {
                 logger.error("Unable to write the SARIF report: " + writeError);
             }
@@ -441,27 +462,52 @@ namespace
 
 } // namespace
 
+void ApiHandler::setError(json& response, const std::string& code, const std::string& message)
+{
+    response["status"] = "error";
+    response["error"] = {{"code", code}, {"message", message}};
+}
+
 json ApiHandler::handle_request(const json& request)
 {
     log_request(logger_, request);
 
     json response;
-    response["proto"] = request.value("proto", std::string("coretrace-1.0"));
-    response["id"] = request.value("id", 0);
+    response["proto"] = kProtocol;
+    response["id"] = 0;
     response["type"] = "response";
-
-    std::string method = request.value("method", "");
-    json params = request.value("params", json::object());
-
-    if (method == "run_analysis")
+    const auto fail = [&response](const std::string& code, const std::string& message)
     {
-        return handle_run_analysis(response, params);
+        setError(response, code, message);
+        return response;
+    };
+
+    if (!request.is_object())
+    {
+        return fail("InvalidRequest", "The request must be a JSON object.");
+    }
+    if (const auto id = request.find("id"); id != request.end())
+    {
+        response["id"] = *id;
+    }
+    if (request.value("proto", json()) != kProtocol)
+    {
+        return fail("UnsupportedProtocol",
+                    std::string("Unsupported proto: expected '") + kProtocol + "'.");
+    }
+    if (const auto type = request.find("type"); type != request.end() && *type != "request")
+    {
+        return fail("InvalidRequest", "Expected type 'request'.");
     }
 
-    // Méthode inconnue
-    response["status"] = "error";
-    response["error"] = {{"code", "UnknownMethod"}, {"message", "Unknown method: " + method}};
-    return response;
+    const json method = request.value("method", json());
+    if (method != "run_analysis")
+    {
+        return fail("UnknownMethod",
+                    "Unknown method: " +
+                        (method.is_string() ? method.get<std::string>() : method.dump()));
+    }
+    return handle_run_analysis(response, request.value("params", json::object()));
 }
 
 bool ApiHandler::build_config_from_params(const json& params, ctrace::ProgramConfig& config,
@@ -478,18 +524,15 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     std::vector<std::string> warnings;
     if (!build_config_from_params_impl(params, config, err, &warnings))
     {
-        baseResponse["status"] = "error";
-        baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
+        setError(baseResponse, err.code, err.message);
         return baseResponse;
     }
     if (!allowDynamicAnalysis_ && runsClientCode(config))
     {
-        baseResponse["status"] = "error";
-        baseResponse["error"] = {
-            {"code", "DynamicAnalysisDisabled"},
-            {"message", "Dynamic analysis builds and runs the submitted code on the server, which "
-                        "this server does not allow: start it with --serve-allow-dynamic "
-                        "(server.allow_dynamic_analysis) to enable it."}};
+        setError(baseResponse, "DynamicAnalysisDisabled",
+                 "Dynamic analysis builds and runs the submitted code on the server, which this "
+                 "server does not allow: start it with --serve-allow-dynamic "
+                 "(server.allow_dynamic_analysis) to enable it.");
         return baseResponse;
     }
     ctrace::applyShippedDefaults(config, executable_, warnings);
@@ -501,8 +544,7 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     json result;
     if (!run_analysis(config, pool_, logger_, result, err))
     {
-        baseResponse["status"] = "error";
-        baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
+        setError(baseResponse, err.code, err.message);
         return baseResponse;
     }
 

@@ -7,10 +7,14 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -41,7 +45,7 @@ namespace
             thread_ = std::thread(
                 [this]
                 {
-                    server_.run(config_.host, config_.port);
+                    static_cast<void>(server_.run(config_.host, config_.port));
                     runReturned_.store(true);
                 });
             httplib::Client probe(config_.host, config_.port);
@@ -136,7 +140,9 @@ namespace
         const std::string small =
             R"({"proto":"coretrace-1.0","id":1,"type":"request","method":"x"})";
         const auto accepted = client.Post("/api", small, "application/json");
-        report.expect(accepted && accepted->status == 200, "a request under the limit is accepted");
+        report.expect(accepted && accepted->status == 400 &&
+                          accepted->body.find("UnknownMethod") != std::string::npos,
+                      "a request under the limit reaches the handler");
 
         const std::string large = R"({"pad":")" + std::string(4096, 'x') + R"("})";
         const auto rejected = client.Post("/api", large, "application/json");
@@ -163,6 +169,102 @@ namespace
                           "the configured origin is echoed back");
         }
     }
+    /// Whether a second server starts on `config`, where a first one listens. run() returns
+    /// false at once when the bind fails; a server that binds serves until it is stopped, so
+    /// one still running after a moment is stopped, and counted as started.
+    [[nodiscard]] bool secondServerStarts(const ctrace::ServerConfig& config)
+    {
+        ConsoleLogger logger;
+        ApiHandler handler(logger, /*executable=*/{});
+        HttpServer second(handler, logger, config);
+        std::promise<bool> ran;
+        std::future<bool> result = ran.get_future();
+        std::thread thread([&] { ran.set_value(second.run(config.host, config.port)); });
+        const bool returned = result.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
+        if (!returned)
+        {
+            second.stop();
+        }
+        thread.join();
+        return !returned || result.get();
+    }
+
+    // S19: a port another server listens on is an error, not a second listener. "localhost" has
+    // an IPv4 and an IPv6 address: the second server must not fall back to the one left free.
+    void testPortInUse(TestReport& report)
+    {
+        for (const auto& [host, port] :
+             {std::pair{"127.0.0.1", 18806}, std::pair{"localhost", 18809}})
+        {
+            ctrace::ServerConfig config = localConfig(port);
+            config.host = host;
+            const ServerFixture first(config);
+            report.expect(!secondServerStarts(config), std::string("a second server on ") + host +
+                                                           ", port in use, does not start");
+        }
+    }
+
+    // S04, S05: errors are told by the HTTP status too, and the error object stays in the body.
+    void testErrorStatuses(TestReport& report)
+    {
+        const ServerFixture server(localConfig(18807));
+        auto client = server.client();
+        const auto post = [&client](const nlohmann::json& params, const std::string& proto,
+                                    const std::string& method)
+        {
+            return client.Post("/api",
+                               nlohmann::json{{"proto", proto},
+                                              {"id", 7},
+                                              {"type", "request"},
+                                              {"method", method},
+                                              {"params", params}}
+                                   .dump(),
+                               "application/json");
+        };
+        const auto expectAnswer = [&report](const httplib::Result& answer, int status,
+                                            const std::string& code, const std::string& what)
+        {
+            const nlohmann::json body =
+                answer ? nlohmann::json::parse(answer->body, nullptr, false) : nlohmann::json();
+            const std::string got = answer ? std::to_string(answer->status) : "no response";
+            report.expect(answer && answer->status == status && body.is_object() &&
+                              body.value("error", nlohmann::json::object()).value("code", "") ==
+                                  code,
+                          what + " is answered with " + std::to_string(status) + " " + code +
+                              " (got " + got + ")");
+        };
+
+        const nlohmann::json noInput = {{"static_analysis", true}};
+        expectAnswer(post(noInput, "coretrace-9.9", "run_analysis"), 400, "UnsupportedProtocol",
+                     "an unsupported proto");
+        expectAnswer(post(noInput, "coretrace-1.0", "no_such_method"), 400, "UnknownMethod",
+                     "an unknown method");
+        expectAnswer(post({{"static_analysis", true}, {"no_such_param", 1}}, "coretrace-1.0",
+                          "run_analysis"),
+                     400, "InvalidParams", "an unknown parameter");
+        expectAnswer(post({{"jobs", "many"}}, "coretrace-1.0", "run_analysis"), 400,
+                     "InvalidParams", "a parameter of the wrong type");
+        expectAnswer(post(nlohmann::json::object(), "coretrace-1.0", "run_analysis"), 400,
+                     "NoAnalysisSelected", "a request without analysis");
+        expectAnswer(post(noInput, "coretrace-1.0", "run_analysis"), 400, "MissingInput",
+                     "a request without input");
+        expectAnswer(
+            post({{"dynamic_analysis", true}, {"input", "a.c"}}, "coretrace-1.0", "run_analysis"),
+            403, "DynamicAnalysisDisabled", "dynamic analysis without the opt-in");
+        expectAnswer(client.Post("/api", "{not json", "application/json"), 400, "InvalidRequest",
+                     "malformed JSON");
+        // A Latin-1 file name: the parser's message quotes the invalid byte.
+        expectAnswer(
+            client.Post("/api",
+                        "{\"proto\":\"coretrace-1.0\",\"params\":{\"input\":\"caf\xe9.c\"}}",
+                        "application/json"),
+            400, "InvalidRequest", "a body that is not valid UTF-8");
+        expectAnswer(client.Post("/api", R"({"id":1e1000})", "application/json"), 400,
+                     "InvalidRequest", "a number out of range");
+        expectAnswer(client.Post("/api", "[1]", "application/json"), 400, "InvalidRequest",
+                     "a request that is not an object");
+    }
+
     // K5: the shutdown endpoint is token-protected and stops the server gracefully.
     void testGracefulShutdown(TestReport& report)
     {
@@ -253,6 +355,76 @@ namespace
                       "with the opt-in, the dynamic analysis runs (" +
                           response.value("error", nlohmann::json::object()).dump() + ")");
     }
+
+    // The IPC socket is a resource of the server's side: one nobody listens on is a server
+    // failure, answered with 500 and no details, not an invalid request.
+    void testUnreachableIpcSocket(TestReport& report, const std::string& sourceDir)
+    {
+        const ServerFixture server(localConfig(18810));
+        nlohmann::json request =
+            analysisRequest(sourceDir + "/tests/double_free.c", {"cppcheck"}, false, "");
+        request["params"].erase("config");
+        request["params"]["ipc"] = "socket";
+        request["params"]["ipc_path"] = "/nonexistent/ctrace-ipc.sock";
+        const auto answer = server.client().Post("/api", request.dump(), "application/json");
+        const nlohmann::json body =
+            answer ? nlohmann::json::parse(answer->body, nullptr, false) : nlohmann::json();
+        report.expect(answer && answer->status == 500 && body.is_object() &&
+                          errorCode(body) == "InternalError" &&
+                          answer->body.find("ctrace-ipc.sock") == std::string::npos,
+                      "an IPC socket nobody listens on is answered with 500 InternalError, "
+                      "without its details (got " +
+                          (answer
+                               ? std::to_string(answer->status) + " " + answer->body.substr(0, 160)
+                               : "no response") +
+                          ")");
+    }
+
+    // A tool may print bytes that are not UTF-8, such as a message in Latin-1: the result still
+    // reaches the client, those bytes replaced by U+FFFD, in JSON and in SARIF.
+    void testToolOutputThatIsNotUtf8(TestReport& report, const std::string& buildDir,
+                                     const std::string& sourceDir)
+    {
+        const std::string latin1Tool = buildDir + "/fake-cppcheck-latin1.json";
+        {
+            std::ofstream(latin1Tool)
+                << nlohmann::json{{"schema_version", 1},
+                                  {"tools",
+                                   {{"cppcheck",
+                                     {{"path", sourceDir + "/tests/fake-file-list-tool.sh"},
+                                      {"args", {"--fake-latin1"}}}}}}}
+                       .dump();
+        }
+        const ServerFixture server(localConfig(18808));
+        auto client = server.client();
+        const std::string replaced = "caf\xEF\xBF\xBD";
+        for (const bool sarif : {false, true})
+        {
+            nlohmann::json request = analysisRequest(sourceDir + "/tests/double_free.c",
+                                                     {"cppcheck"}, false, latin1Tool);
+            const std::string reportFile = buildDir + "/latin1-report.sarif";
+            std::filesystem::remove(reportFile);
+            request["params"]["sarif_format"] = sarif;
+            request["params"]["report_file"] = reportFile;
+            const auto answer = client.Post("/api", request.dump(), "application/json");
+            const std::string format = sarif ? "SARIF" : "JSON";
+            report.expect(
+                answer && answer->status == 200 && answer->body.find(replaced) != std::string::npos,
+                "a tool output that is not UTF-8 keeps the " + format +
+                    " result, the byte replaced (got " +
+                    (answer ? std::to_string(answer->status) + " " + answer->body.substr(0, 160)
+                            : "no response") +
+                    ")");
+            if (sarif)
+            {
+                std::ifstream written(reportFile);
+                const std::string document((std::istreambuf_iterator<char>(written)),
+                                           std::istreambuf_iterator<char>());
+                report.expect(document.find(replaced) != std::string::npos,
+                              "the SARIF report file is written, the byte replaced");
+            }
+        }
+    }
 } // namespace
 
 int main(int argc, char* argv[])
@@ -269,8 +441,12 @@ int main(int argc, char* argv[])
     testBindPolicy(report);
     testBodyLimit(report);
     testCorsHeaders(report);
+    testPortInUse(report);
+    testErrorStatuses(report);
     testGracefulShutdown(report);
     testDynamicAnalysisNeedsTheServerOptIn(report, argv[1], argv[2]);
+    testToolOutputThatIsNotUtf8(report, argv[1], argv[2]);
+    testUnreachableIpcSocket(report, argv[2]);
 
     if (report.failures == 0)
     {

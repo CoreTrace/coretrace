@@ -186,6 +186,25 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             "/usr/lib/llvm-20/lib"
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
+elseif(APPLE)
+    # The system's libraries (/usr/lib, /System) stay the system's; the others, Homebrew's LLVM
+    # and Clang and what they load, are shipped. They still refer to each other by their Homebrew
+    # paths: scripts/release/relocate-macos-libraries.sh makes them load through this run path.
+    set_target_properties(ctrace PROPERTIES
+        INSTALL_RPATH "@loader_path/../lib"
+    )
+
+    install(TARGETS ctrace
+        RUNTIME_DEPENDENCY_SET ctrace_deps
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    install(RUNTIME_DEPENDENCY_SET ctrace_deps
+        POST_EXCLUDE_REGEXES
+            "^/usr/lib/"
+            "^/System/"
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
 else()
     install(TARGETS ctrace
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -300,6 +319,9 @@ add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 
 add_executable(ctrace_report_file_tests tests/report_file_tests.cpp)
 add_test(NAME ctrace_report_file_tests COMMAND ctrace_report_file_tests)
+
+add_executable(ctrace_run_directory_tests tests/run_directory_tests.cpp)
+add_test(NAME ctrace_run_directory_tests COMMAND ctrace_run_directory_tests)
 
 # The unified diagnostic model and the per-tool parsers that feed it.
 add_executable(ctrace_tool_diagnostics_tests
@@ -468,6 +490,8 @@ target_link_libraries(ctrace_server_http_tests
             coretrace::coretrace_concurrency_analyzer_lib httplib::httplib)
 add_test(NAME ctrace_server_http_tests
     COMMAND ctrace_server_http_tests ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
+# A second server that binds a port in use anyway serves forever: its run() never returns.
+set_tests_properties(ctrace_server_http_tests PROPERTIES TIMEOUT 120)
 
 # The server as `ctrace --ipc serve` runs it: an analysis over HTTP, then a clean shutdown.
 add_executable(ctrace_server_cli_tests tests/server_cli_tests.cpp)
@@ -481,6 +505,11 @@ set_tests_properties(ctrace_server_cli_tests PROPERTIES TIMEOUT 120)
 add_test(NAME ctrace_serve_refuses_an_exposed_host_without_token
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --ipc serve --serve-host 0.0.0.0 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Refusing to serve'")
 set_tests_properties(ctrace_serve_refuses_an_exposed_host_without_token PROPERTIES TIMEOUT 30)
+# Port 0 asks the system for a free port: the log must give the one it chose, not 0.
+set(ctrace_port_zero_log ${CMAKE_BINARY_DIR}/serve-port-zero.log)
+add_test(NAME ctrace_serve_logs_the_port_the_system_chose
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --ipc serve --serve-port 0 > '${ctrace_port_zero_log}' 2>&1 & pid=$!; i=0; while [ $i -lt 100 ] && ! grep -q 'Listening on' '${ctrace_port_zero_log}'; do sleep 0.1; i=$((i + 1)); done; kill $pid; cat '${ctrace_port_zero_log}'; grep -Eq 'Listening on http://127\\.0\\.0\\.1:[1-9][0-9]*$' '${ctrace_port_zero_log}'")
+set_tests_properties(ctrace_serve_logs_the_port_the_system_chose PROPERTIES TIMEOUT 30)
 
 # K4: the bridge report explains every option forwarded to the analyzer, at verbose level.
 add_test(NAME ctrace_bridge_report_is_logged
@@ -571,6 +600,15 @@ set_tests_properties(ctrace_sarif_report_file_is_the_merged_log PROPERTIES
 set(ctrace_dedup_sarif ${CMAKE_BINARY_DIR}/ctrace-dedup.sarif)
 add_test(NAME ctrace_sarif_merges_cross_tool_duplicates
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer --config ${CMAKE_SOURCE_DIR}/config/tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_dedup_sarif} > /dev/null && test $(grep -c 'coretrace/v1' ${ctrace_dedup_sarif}) -eq 1 && grep -q 'alsoReportedBy' ${ctrace_dedup_sarif}")
+
+# A tool may print bytes that are not UTF-8: the SARIF log still comes out, on stdout and in the
+# report file, those bytes replaced by U+FFFD.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-latin1\"]}}}\n")
+set(ctrace_latin1_sarif ${CMAKE_BINARY_DIR}/latin1.sarif)
+add_test(NAME ctrace_sarif_survives_tool_output_that_is_not_utf8
+    COMMAND sh -c "rm -f '${ctrace_latin1_sarif}'; out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json --input tests/double_free.c --report-file '${ctrace_latin1_sarif}' 2>/dev/null); status=$?; replaced=$(printf 'caf\\357\\277\\275'); test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q \"$replaced\" && grep -q \"$replaced\" '${ctrace_latin1_sarif}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
 # its findings (null dereference, signed overflow) with an absolute path.
@@ -693,6 +731,11 @@ add_test(NAME ctrace_release_license_collection
 # The runtime analyzer's libraries identical to ctrace's are stored once in the release archive.
 add_test(NAME ctrace_release_identical_libraries_linked
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/link-identical-files-test.sh)
+# The macOS installation loads its shipped libraries from wherever it is copied.
+if(APPLE)
+    add_test(NAME ctrace_release_macos_libraries_relocated
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/relocate-macos-libraries-test.sh)
+endif()
 set(ctrace_license_install ${CMAKE_BINARY_DIR}/license-install)
 add_test(NAME ctrace_install_ships_third_party_licenses
     COMMAND sh -c "rm -rf '${ctrace_license_install}' && '${CMAKE_COMMAND}' --install '${CMAKE_BINARY_DIR}' --component third-party-licenses --prefix '${ctrace_license_install}' > /dev/null && cd '${ctrace_license_install}/licenses' && for component in coretrace-stack-analyzer coretrace-concurrency-analyzer coretrace-compiler; do grep -q 'Apache License' $component/LICENSE && test -s $component/NOTICE || { echo \"no license or notice for $component\"; exit 1; }; done && grep -q 'MIT License' cpp-httplib/LICENSE && grep -q 'MIT License' nlohmann-json/LICENSE.MIT && grep -q 'MIT License' coretrace-log/LICENSE && grep -q 'CLI11 .* Copyright' CLI11/LICENSE && grep -q 'Redistribution and use' CLI11/LICENSE && grep -q 'SUCH DAMAGE' CLI11/LICENSE && ! grep -q '^//' CLI11/LICENSE")
@@ -831,6 +874,7 @@ set(coretrace_unit_tests
     ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
+    ctrace_run_directory_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests
@@ -863,6 +907,7 @@ foreach(coretrace_target
     ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
+    ctrace_run_directory_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests

@@ -47,7 +47,8 @@ at line 5, column 19
 ```
 
 The exit code is 2: a finding at or above `--fail-on`. Add `--sarif-format --report-file
-ctrace.sarif` for a report that GitHub Code Scanning reads. On macOS, or to change the code,
+ctrace.sarif` for a report that GitHub Code Scanning reads. On macOS (Apple silicon, macOS 14 or
+newer), take the disk image of the release instead ([RELEASES](#releases)). To change the code,
 [build from source](#build).
 
 ### Contribute
@@ -173,6 +174,13 @@ RHEL 9 and its rebuilds (Rocky, Alma), Amazon Linux 2023, Ubuntu 22.04+, Debian 
 built on Rocky Linux 9. Each archive is unpacked and run on bare Rocky Linux 9, Ubuntu 22.04,
 Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published.
 
+The macOS disk image runs on Apple silicon with macOS 14 or newer. It holds one folder laid out
+as the Linux archive, with the Homebrew libraries `ctrace` and the Python analyzer load (LLVM and
+Clang, Python and OpenSSL...): copy the folder anywhere, Homebrew is not needed. Before it is
+published, the image is mounted, its folder copied out, and run with Homebrew moved away. Its
+third-party libraries are listed in `scripts/release/third-party-macos.txt`, and their licenses,
+with each Homebrew formula's version, are under `licenses/homebrew/`.
+
 Each archive carries the license of every third-party component it ships. `licenses/` holds
 those of the code compiled into `ctrace` and of the Ubuntu libraries in `lib/`, with each
 package's exact version. Each bundled analyzer holds its own under `libexec/coretrace/`.
@@ -182,7 +190,8 @@ the verification on each distribution, fail on a library or an executable it doe
 Analyzing C and C++ needs no LLVM or clang installation either: Clang's own headers ship in
 `lib/clang/<version>/include` next to `bin/ctrace`, and the stack analyzer compiles in process.
 Only the C library's headers come from the system (`libc6-dev` on Debian and Ubuntu,
-`glibc-devel` on RHEL), as for any C build. `CT_CLANG` still selects another clang when set.
+`glibc-devel` on RHEL, the SDK of the Command Line Tools on macOS: `xcode-select --install`), as
+for any C build. `CT_CLANG` still selects another clang when set.
 
 [coretrace-concurrency-analyzer](https://github.com/CoreTrace/coretrace-concurrency-analyzer) is
 linked into `ctrace` like the stack analyzer, and compiles in process too
@@ -209,12 +218,22 @@ analysis unless it is started with `--serve-allow-dynamic`.
 
 ### RELEASES
 
-Each release attaches the Linux archives with their `.sha256`, and a build provenance
-attestation for each archive: a signed statement that this repository's release workflow built
-it from the tagged commit. Check a downloaded archive with the GitHub CLI:
+Each release attaches the Linux archives and the macOS disk image with their `.sha256`, and a
+build provenance attestation for each: a signed statement that this repository's release
+workflow built it from the tagged commit. Check a downloaded archive with the GitHub CLI:
 
 ```bash
 gh attestation verify coretrace-<version>-linux-amd64.tar.gz -R CoreTrace/coretrace
+```
+
+The disk image is signed ad hoc, not with an Apple Developer ID, and is not notarized: macOS
+refuses to run a `ctrace` that a browser downloaded. Download it with `curl`, which does not mark
+the file, or remove the mark before opening it:
+
+```bash
+curl -fsSLO https://github.com/CoreTrace/coretrace/releases/download/<version>/coretrace-<version>-macos-arm64.dmg
+# or, after a download in a browser:
+xattr -d com.apple.quarantine coretrace-<version>-macos-arm64.dmg
 ```
 
 Every dependency the build fetches is pinned to a version tag or a commit, and every download
@@ -341,6 +360,12 @@ Start the HTTP server:
 ./ctrace --ipc serve --serve-host 127.0.0.1 --serve-port 8080 --shutdown-token mytoken
 ```
 
+If the address and port are already in use, the server exits with code 1. A host name is
+resolved once and only its first address is bound (`::1` for `localhost` on macOS), which the
+log gives: connect to that address, or use the same name. On macOS, a server on `0.0.0.0` and
+another on `127.0.0.1` can still share a port; details in
+[Input validation](docs/quality/input-validation.md#6-http-server).
+
 Send a request:
 
 ```bash
@@ -369,7 +394,12 @@ curl -X POST http://127.0.0.1:8080/api \
 ```
 
 Response notes:
-- `status` is `ok` or `error`.
+- `status` is `ok` or `error`. An error carries `error.code` and `error.message`, and the HTTP
+  status tells its kind: 400 for an invalid request (malformed JSON, a `proto` other than
+  `coretrace-1.0`, an unknown method or parameter, a wrong value), 403 for a refused one
+  (`DynamicAnalysisDisabled`), 500 for a server failure (`InternalError`, details only in the
+  server's log), such as an IPC socket nobody listens on. Bytes that are not UTF-8, in the
+  request or in a tool's output, are replaced by U+FFFD in the answer.
 - `result.diagnostics` lists every finding in one model (`tool`, `rule_id`, `file`, `line`, `column`, `severity`, `message`, `cwe`), whatever tool produced it; `result.diagnostics_summary_total` counts them by severity.
 - `result.sarif` is the merged SARIF log when `sarif_format` is true (also written to `report_file`).
 - `result.gate` carries the verdict the CLI would exit with: `fail_on`, `exit_code` (see EXIT CODES) and `failed_tools`.

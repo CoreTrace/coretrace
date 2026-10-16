@@ -134,6 +134,57 @@ printf 'x' > "$dist/yaml/_yaml.so"
 run 1 "rpm: a module no package owns fails and is named" \
     "libexec/py/yaml/_yaml.so comes from no package, not python3.12-libs" rpm "$rocky" "$work/inventory" libexec/py
 
+# The macOS side: Homebrew installs each formula in its keg, <Cellar>/<formula>/<version>, with the
+# license files of its sources at the keg's root, and links the keg as <prefix>/opt/<formula>.
+cat > "$work/bin/brew" <<'STUB'
+#!/bin/sh
+[ "$1" = --prefix ] || exit 2
+echo "$FAKE_BREW_OPT/$2"
+STUB
+chmod +x "$work/bin/brew"
+cellar=$work/Cellar
+mkdir -p "$cellar/zstd/1.5.7_1/lib" "$cellar/python@3.12/3.12.15/lib/python3.12/lib-dynload" \
+    "$cellar/nolicense/1.0/lib" "$work/opt"
+printf 'x' > "$cellar/zstd/1.5.7_1/lib/libzstd.1.dylib"
+printf 'zstd license\n' > "$cellar/zstd/1.5.7_1/LICENSE"
+printf 'zstd GPL\n' > "$cellar/zstd/1.5.7_1/COPYING"
+printf 'x' > "$cellar/zstd/1.5.7_1/README.md"
+printf 'x' > "$cellar/python@3.12/3.12.15/lib/python3.12/lib-dynload/_ssl.cpython-312-darwin.so"
+printf 'PSF license\n' > "$cellar/python@3.12/3.12.15/LICENSE"
+printf 'x' > "$cellar/nolicense/1.0/lib/libnolicense.dylib"
+for formula in zstd/1.5.7_1 python@3.12/3.12.15 nolicense/1.0; do
+    ln -s "$cellar/$formula" "$work/opt/${formula%/*}"
+done
+export FAKE_BREW_OPT="$work/opt"
+
+mac=$work/macos
+mkdir -p "$mac/lib" "$mac/libexec/py"
+printf 'x' > "$mac/lib/libzstd.1.dylib"
+printf 'x' > "$mac/libexec/py/_ssl.so"
+cat > "$work/inventory" <<'INVENTORY'
+lib/libzstd.*.dylib      licenses/homebrew/zstd
+lib/libnolicense.dylib   licenses/homebrew/nolicense
+libexec/py/*.so          libexec/py/licenses/homebrew/python@3.12
+INVENTORY
+
+run 0 "brew: each formula the inventory names for a shipped file gets its licenses and version" "" \
+    brew "$mac" "$work/inventory" lib libexec/py
+expect 'grep -q "zstd license" "$mac/licenses/homebrew/zstd/LICENSE" && test -s "$mac/licenses/homebrew/zstd/COPYING"' \
+    "brew: every license file at the root of the keg is copied"
+expect '! test -e "$mac/licenses/homebrew/zstd/README.md"' "brew: the keg's other files are not"
+expect 'grep -qx "zstd 1.5.7_1" "$mac/licenses/homebrew/zstd/VERSION"' "brew: the keg's exact version is recorded"
+expect 'test -s "$mac/libexec/py/licenses/homebrew/python@3.12/LICENSE"' \
+    "brew: an extension module maps to the formula of its .cpython- file"
+
+printf 'x' > "$mac/lib/libzstd.2.dylib"
+run 1 "brew: a library the named formula does not provide fails and is named" \
+    "lib/libzstd.2.dylib is not in Homebrew's zstd" brew "$mac" "$work/inventory" lib
+rm "$mac/lib/libzstd.2.dylib"
+
+printf 'x' > "$mac/lib/libnolicense.dylib"
+run 1 "brew: a formula without a license file fails and is named" \
+    "nolicense has no license file" brew "$mac" "$work/inventory" lib
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures collect-licenses test(s) failed"
     exit 1
