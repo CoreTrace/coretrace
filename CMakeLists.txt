@@ -403,6 +403,12 @@ add_test(NAME ctrace_exit_0_when_below_threshold
     COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/dead_code.cc --invoke cppcheck; test $? -eq 0")
 add_test(NAME ctrace_exit_3_when_a_tool_cannot_run
     COMMAND sh -c "$<TARGET_FILE:ctrace> --config ${CMAKE_SOURCE_DIR}/tests/missing-tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck; test $? -eq 3")
+# A tool whose output ctrace cannot read leaves the run incomplete too: its zero findings are
+# not a fact (C27). echo stands in for a flawfinder that prints no SARIF.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-flawfinder-text.json
+    "{\"schema_version\": 1, \"tools\": {\"flawfinder\": {\"path\": \"/bin/echo\"}}}\n")
+add_test(NAME ctrace_exit_3_when_a_tool_output_cannot_be_read
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke flawfinder --config ${CMAKE_BINARY_DIR}/fake-flawfinder-text.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of flawfinder'")
 add_test(NAME ctrace_help_lists_fail_on COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSION "--fail-on")
 # Nothing to analyze is a usage error. A SARIF report that cannot be written is a warning: the
