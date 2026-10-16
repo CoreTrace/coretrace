@@ -39,6 +39,20 @@ namespace ctrace
         }
         coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", inputs);
         std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
+        if (diagnostics.empty() && citesAnInputLine(run->output, files))
+        {
+            // Findings in a format ctrace cannot parse: shown as is (kept for the API only in
+            // SARIF mode), and the tool left unread so that the run is incomplete, not clean.
+            if (config.output.sarif_format)
+            {
+                output.record("stdout", run->output);
+            }
+            else
+            {
+                output.result(run->output);
+            }
+            return;
+        }
         // The tool rewrites the paths of its file list (`./-F.c` becomes `-F.c`): each finding
         // is spelled as its input.
         respellFindings(diagnostics, files);

@@ -39,6 +39,8 @@ namespace ctrace
         // checks are what a static analysis run is expected to report.
         args.push_back("--enable=warning,style,performance,portability");
         args.push_back("--inline-suppr");
+        // Its "Checking <file> ..." progress lines would mix with the findings.
+        args.push_back("--quiet");
         appendBuildContext(args, config);
         // tools.cppcheck.jobs only: without it cppcheck keeps its own default.
         if (config.tools.cppcheck_jobs != 0)
@@ -99,6 +101,20 @@ namespace ctrace
             return;
         }
         std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
+        if (diagnostics.empty() && citesAnInputLine(run->output, files))
+        {
+            // Findings in a format ctrace cannot parse: shown as is (kept for the API only in
+            // SARIF mode), and the tool left unread so that the run is incomplete, not clean.
+            if (config.output.sarif_format)
+            {
+                output.record("stdout", run->output);
+            }
+            else
+            {
+                output.result(run->output);
+            }
+            return;
+        }
         // The tool rewrites the paths of its file list (`./-F.c` becomes `-F.c`): each finding
         // is spelled as its input.
         respellFindings(diagnostics, files);
