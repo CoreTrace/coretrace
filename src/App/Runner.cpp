@@ -127,6 +127,13 @@ namespace ctrace
                            "Config file in use: none (CLI/runtime values only)\n");
         }
 
+        if (!config.analysis.selectsAnalysis())
+        {
+            coretrace::log(coretrace::Level::Error,
+                           "No analysis selected: give --static, --dyn or --invoke.\n");
+            return exit_code::kUsage;
+        }
+
         ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
         if (!resolution.ok())
         {
