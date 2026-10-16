@@ -105,7 +105,7 @@ int main(int argc, char** argv)
             "[unreadVariable] [CWE-563]\n"
             "nofile:0:0: information: Active checkers: 167/856 [checkersReport] [CWE-0]\n"
             "1/2 files checked 50% done\n";
-        const auto items = CppCheckToolImplementation::parseDiagnostics(output);
+        const auto items = CppCheckToolImplementation::parseDiagnostics(output).diagnostics;
         report.expect(items.size() == 3, "cppcheck: only diagnostic lines are parsed (got " +
                                              std::to_string(items.size()) + ")");
         if (items.size() == 3)
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
             report.expect(items[1].severity == Severity::Warning, "cppcheck: style is a warning");
             report.expect(items[2].severity == Severity::Info, "cppcheck: information is info");
         }
-        report.expect(CppCheckToolImplementation::parseDiagnostics("").empty(),
+        report.expect(CppCheckToolImplementation::parseDiagnostics("").diagnostics.empty(),
                       "cppcheck: empty output has no diagnostics");
     }
 
@@ -179,7 +179,7 @@ int main(int argc, char** argv)
                                    "[src/util.c:3]: (Warning) Unused variable\n"
                                    "[src/util.c:4]: (Information) fyi\n"
                                    "not a diagnostic line\n";
-        const auto items = TscancodeToolImplementation::parseDiagnostics(output);
+        const auto items = TscancodeToolImplementation::parseDiagnostics(output).diagnostics;
         report.expect(items.size() == 3, "tscancode: only diagnostic lines become diagnostics");
         if (items.size() == 3)
         {

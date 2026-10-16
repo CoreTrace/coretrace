@@ -4,7 +4,6 @@
 
 #include "Process/Tools/Diagnostic.hpp"
 
-#include <cctype>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -103,32 +102,6 @@ namespace ctrace
         {
             diagnostic.file = paths.display(diagnostic.file);
         }
-    }
-
-    /// Whether `output` cites one of `inputs` at a line, `<file>:<line>` in whatever format: the
-    /// tool reported on its inputs. When none of its lines parse, ctrace cannot read that format,
-    /// and zero findings would be a guess. Matched on the base name, which the tool keeps whatever
-    /// it does to the rest of the path.
-    [[nodiscard]] inline bool citesAnInputLine(const std::string& output,
-                                               const std::vector<std::string>& inputs)
-    {
-        const auto partOfName = [](char c)
-        { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.'; };
-        for (const std::string& input : inputs)
-        {
-            const std::string cited = std::filesystem::path(input).filename().string() + ':';
-            for (std::size_t at = output.find(cited); at != std::string::npos;
-                 at = output.find(cited, at + 1))
-            {
-                const std::size_t line = at + cited.size();
-                if ((at == 0 || !partOfName(output[at - 1])) && line < output.size() &&
-                    std::isdigit(static_cast<unsigned char>(output[line])))
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 } // namespace ctrace
 

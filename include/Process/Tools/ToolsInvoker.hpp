@@ -252,7 +252,7 @@ namespace ctrace
             std::vector<std::string> names;
             for (const auto& [name, collected] : m_diagnosticsByTool)
             {
-                if (!collected.interpreted && !collected.failed)
+                if ((!collected.interpreted || collected.findingsUnread) && !collected.failed)
                 {
                     names.push_back(name);
                 }
@@ -531,6 +531,7 @@ namespace ctrace
         {
             std::vector<Diagnostic> items;
             bool interpreted = false;
+            bool findingsUnread = false;
             bool failed = false;
         };
 
@@ -553,6 +554,7 @@ namespace ctrace
             std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
             CollectedDiagnostics& collected = m_diagnosticsByTool[tool_name];
             collected.interpreted = collected.interpreted || output.interpreted();
+            collected.findingsUnread = collected.findingsUnread || output.hasUnreadFindings();
             collected.failed = collected.failed || output.failed();
             collected.items.insert(collected.items.end(), output.diagnostics().begin(),
                                    output.diagnostics().end());

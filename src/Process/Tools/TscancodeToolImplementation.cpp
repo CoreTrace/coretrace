@@ -38,30 +38,11 @@ namespace ctrace
             return;
         }
         coretrace::log(coretrace::Level::Debug, "Finished tscancode on {}\n", inputs);
-        std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
-        if (diagnostics.empty() && citesAnInputLine(run->output, files))
-        {
-            // Findings in a format ctrace cannot parse: shown as is (kept for the API only in
-            // SARIF mode), and the tool left unread so that the run is incomplete, not clean.
-            if (config.output.sarif_format)
-            {
-                output.record("stdout", run->output);
-            }
-            else
-            {
-                output.result(run->output);
-            }
-            return;
-        }
+        ParsedLines parsed = parseDiagnostics(run->output);
         // The tool rewrites the paths of its file list (`./-F.c` becomes `-F.c`): each finding
         // is spelled as its input.
-        respellFindings(diagnostics, files);
-        // In SARIF mode the merged document is the output; text lines would pollute it.
-        if (!config.output.sarif_format && !diagnostics.empty())
-        {
-            output.result(renderLines(diagnostics));
-        }
-        output.diagnostics(diagnostics);
+        respellFindings(parsed.diagnostics, files);
+        reportParsedLines(config, std::move(parsed), run->output, output);
     }
 
     std::string TscancodeToolImplementation::name() const
@@ -93,9 +74,9 @@ namespace ctrace
         }
     } // namespace
 
-    std::vector<Diagnostic> TscancodeToolImplementation::parseDiagnostics(const std::string& output)
+    ParsedLines TscancodeToolImplementation::parseDiagnostics(const std::string& output)
     {
-        std::vector<Diagnostic> diagnostics;
+        ParsedLines parsed;
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line))
@@ -103,6 +84,10 @@ namespace ctrace
             std::smatch match;
             if (!std::regex_match(line, match, tscancodeLinePattern()))
             {
+                if (citesASourceLocation(line))
+                {
+                    parsed.unread.push_back(line);
+                }
                 continue;
             }
             Diagnostic diagnostic;
@@ -111,9 +96,9 @@ namespace ctrace
             diagnostic.line = static_cast<unsigned>(std::stoul(match[2]));
             diagnostic.severity = severityOf(match[3]);
             diagnostic.message = match[4];
-            diagnostics.push_back(std::move(diagnostic));
+            parsed.diagnostics.push_back(std::move(diagnostic));
         }
-        return diagnostics;
+        return parsed;
     }
 
 } // namespace ctrace
