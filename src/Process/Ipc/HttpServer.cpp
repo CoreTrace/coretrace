@@ -165,7 +165,7 @@ void HttpServer::handle_post_api(const httplib::Request& req, httplib::Response&
         }
         const json response = apiHandler_.handle_request(request);
         res.status = httpStatusFor(response);
-        res.set_content(response.dump(), "application/json");
+        res.set_content(toJsonText(response), "application/json");
     }
     catch (const std::exception& e)
     {

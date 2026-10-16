@@ -399,8 +399,8 @@ namespace
             // The merged document the CLI prints; also persisted like the CLI does.
             result["sarif"] = ctrace::renderSarif(invoker.diagnostics());
             std::string writeError;
-            if (!ctrace::writeReportToFile(config.output.report_file, result["sarif"].dump(2),
-                                           writeError))
+            if (!ctrace::writeReportToFile(config.output.report_file,
+                                           ctrace::sarifText(result["sarif"]), writeError))
             {
                 logger.error("Unable to write the SARIF report: " + writeError);
             }
