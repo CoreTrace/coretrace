@@ -572,6 +572,15 @@ set(ctrace_dedup_sarif ${CMAKE_BINARY_DIR}/ctrace-dedup.sarif)
 add_test(NAME ctrace_sarif_merges_cross_tool_duplicates
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer --config ${CMAKE_SOURCE_DIR}/config/tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_dedup_sarif} > /dev/null && test $(grep -c 'coretrace/v1' ${ctrace_dedup_sarif}) -eq 1 && grep -q 'alsoReportedBy' ${ctrace_dedup_sarif}")
 
+# A tool may print bytes that are not UTF-8: the SARIF log still comes out, on stdout and in the
+# report file, those bytes replaced by U+FFFD.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-latin1\"]}}}\n")
+set(ctrace_latin1_sarif ${CMAKE_BINARY_DIR}/latin1.sarif)
+add_test(NAME ctrace_sarif_survives_tool_output_that_is_not_utf8
+    COMMAND sh -c "rm -f '${ctrace_latin1_sarif}'; out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json --input tests/double_free.c --report-file '${ctrace_latin1_sarif}' 2>/dev/null); status=$?; replaced=$(printf 'caf\\357\\277\\275'); test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q \"$replaced\" && grep -q \"$replaced\" '${ctrace_latin1_sarif}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
 # its findings (null dereference, signed overflow) with an absolute path.
 add_test(NAME ctrace_stack_analyzer_paths_follow_the_input
