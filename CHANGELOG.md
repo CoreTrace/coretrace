@@ -5,6 +5,7 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 ## Unreleased
 
 - Added repository contribution and community documentation.
+- Releases include a macOS disk image, for Apple silicon with macOS 14 or newer.
 
 ## v0.84.0
 
