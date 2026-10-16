@@ -374,6 +374,10 @@ int main(int argc, char** argv)
                       "InputPaths: asInput recognizes the inputs only");
         report.expect(paths.display("").empty(),
                       "InputPaths: a finding without a file stays without one");
+        report.expect(paths.display(cwd / "-dir/a.c") == "./-dir/a.c" &&
+                          paths.display("-dir/a.c") == "./-dir/a.c",
+                      "InputPaths: another file whose relative spelling starts with '-' keeps ./, "
+                      "as an input does");
     }
 
     // A SARIF result suppressed in source is not a finding; a rejected suppression is.
