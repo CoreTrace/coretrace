@@ -41,7 +41,7 @@ lines). It returns the same verdict through `result.gate`, and adds request hand
 | Unit tests (`ctest -L unit`) | One executable per component, in process; plus checks of the release and CI scripts. 19 tests, about 7 s | Every pull request, Ubuntu and macOS |
 | Integration tests (`ctest -L integration`) | The real `ctrace` binary, server and socket, run on the fixtures of `tests/`. They use the real tools CI installs (cppcheck, the linked analyzers, the Python and runtime analyzers on Linux), and fake tools (`tests/fake-*.sh`) for failure paths. 63 tests on Ubuntu | Every pull request, Ubuntu and macOS |
 | Equivalence | The F7 harness checks that sequential and parallel runs produce the same diagnostic fingerprints | Every pull request, Ubuntu and macOS |
-| Release verification | Each Linux archive is unpacked and run, with no compiler, on Rocky Linux 9, Ubuntu 22.04, Debian 12 and Ubuntu 24.04; packaging fails on any unlisted library | Every pull request (the "Build Linux binary" jobs, amd64 and arm64) and every release |
+| Release verification | Each Linux archive is unpacked and run, with no compiler, on Rocky Linux 9, Ubuntu 22.04, Debian 12 and Ubuntu 24.04; the macOS disk image is mounted, copied out and run with Homebrew moved away; packaging fails on any unlisted library | Every pull request (the "Build Linux binary" jobs, amd64 and arm64, and "Build macOS binary") and every release |
 | Coverage | llvm-cov over unit tests, integration tests and both; report published as the `coverage-report` artifact | Every pull request |
 | Static analysis | `ctrace` and its analyzers run on CoreTrace's own code ([initial report](static-analysis-initial.md)) | Start and end of the project |
 

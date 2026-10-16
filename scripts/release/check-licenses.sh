@@ -28,7 +28,7 @@ trap 'rm -rf "$work"' EXIT
 (cd "$prefix" && find . -path '*/licenses' -prune -o -type f -print) |
     sed 's|^\./||' | sort > "$work/files"
 (cd "$prefix" && find . -path '*/licenses' -prune -o -type f \
-    \( -name '*.so' -o -name '*.so.*' -o -perm -100 \) -print) |
+    \( -name '*.so' -o -name '*.so.*' -o -name '*.dylib' -o -perm -100 \) -print) |
     sed 's|^\./||' | sort > "$work/shipped"
 awk -f "$here/match-inventory.awk" "$inventory" "$work/files" > "$work/matched"
 

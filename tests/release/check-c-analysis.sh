@@ -5,7 +5,8 @@
 # clang: ctrace runs with an empty environment, so no clang can be found through PATH, and the
 # stack analyzer must compile the source with the Clang headers shipped next to ctrace. Only the
 # C library's headers (libc6-dev, glibc-devel), part of any C build environment, come from the
-# system.
+# system. On macOS they are in the SDK, which the analyzer finds through xcrun: PATH then holds
+# the system's tools only, not Homebrew's.
 #
 # Usage: check-c-analysis.sh <prefix> <scratch dir>
 set -eu
@@ -13,13 +14,17 @@ set -eu
 prefix=$1
 work=$2
 here=$(cd "$(dirname "$0")" && pwd)
+case $(uname -s) in
+    Darwin) system_path=/usr/bin:/bin ;;
+    *) system_path=/nonexistent ;;
+esac
 
 rm -rf "$work"
 mkdir -p "$work"
 cp "$here/../double_free.c" "$work/double_free.c"
 
 set +e
-output=$(cd "$work" && env -i PATH=/nonexistent "$prefix/bin/ctrace" \
+output=$(cd "$work" && env -i PATH="$system_path" "$prefix/bin/ctrace" \
     --invoke ctrace_stack_analyzer --input double_free.c 2>&1)
 status=$?
 set -e

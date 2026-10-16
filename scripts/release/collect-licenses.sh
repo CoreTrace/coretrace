@@ -12,8 +12,10 @@
 #   dpkg: /usr/share/doc/<package>/copyright, and /usr/share/common-licenses, to which copyright
 #         files refer for the full texts of common licenses.
 #   rpm:  the license files of the package (rpm -qL).
+#   brew: the license files at the root of the formula's keg, where Homebrew installs those of its
+#         sources, and the keg's version.
 #
-# Usage: collect-licenses.sh <dpkg|rpm> <prefix> <inventory> <directory relative to prefix>...
+# Usage: collect-licenses.sh <dpkg|rpm|brew> <prefix> <inventory> <directory relative to prefix>...
 set -eu
 export LC_ALL=C
 
@@ -30,8 +32,8 @@ fail() {
     exit 1
 }
 case $database in
-    dpkg | rpm) ;;
-    *) fail "unknown package database '$database': dpkg or rpm" ;;
+    dpkg | rpm | brew) ;;
+    *) fail "unknown package database '$database': dpkg, rpm or brew" ;;
 esac
 [ "$#" -gt 0 ] || fail "no directory to collect"
 
@@ -74,6 +76,20 @@ provider() {
         }' "$work/rpm-files"
 }
 
+# The keg of Homebrew formula $1, <Cellar>/<formula>/<version>.
+keg() {
+    (cd "$(brew --prefix "$1")" 2>/dev/null && pwd -P) || fail "Homebrew has no $1 installed"
+}
+
+# Whether the keg of formula $1 has the shipped library at archive path $2. Nuitka ships CPython's
+# extension modules as <module>.so, from <module>.cpython-<tag>.so.
+in_keg() {
+    name=${2##*/}
+    kegdir=$(keg "$1")
+    [ -n "$(find "$kegdir" \( -name "$name" -o -name "${name%.so}.cpython-*.so" \) -print |
+        head -n 1)" ]
+}
+
 # Copies the license and the version of package $1 to license path $2, once per run.
 collect() {
     if grep -qxF -- "$2" "$work/collected"; then
@@ -91,6 +107,15 @@ collect() {
             mkdir -p "$common"
             cp "$common_licenses"/* "$common/"
         fi
+    elif [ "$database" = brew ]; then
+        kegdir=$(keg "$1")
+        find "$kegdir" -maxdepth 1 -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' \
+            -o -iname 'COPYRIGHT*' -o -iname 'NOTICE*' \) > "$work/license-files"
+        [ -s "$work/license-files" ] || fail "$1 has no license file in $kegdir"
+        while IFS= read -r file; do
+            cp "$file" "$target/"
+        done < "$work/license-files"
+        echo "$1 ${kegdir##*/}" > "$target/VERSION"
     else
         files=$(rpm -qL "$1")
         case $files in
@@ -118,7 +143,11 @@ while IFS= read -r entry; do
     for license in $(printf '%s\n' "$licenses" | tr '\t' ' '); do
         package=${license##*/}
         while IFS= read -r file; do
-            case $file in
+            case $database:$file in
+                brew:*.dylib | brew:*.so)
+                    in_keg "$package" "$file" || fail "$file is not in Homebrew's $package"
+                    ;;
+                brew:*) ;;
                 *.so | *.so.*)
                     found=$(provider "$file")
                     [ "$found" = "$package" ] || fail "$file comes from ${found:-no package}, not $package"

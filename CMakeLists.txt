@@ -186,6 +186,25 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             "/usr/lib/llvm-20/lib"
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
+elseif(APPLE)
+    # The system's libraries (/usr/lib, /System) stay the system's; the others, Homebrew's LLVM
+    # and Clang and what they load, are shipped. They still refer to each other by their Homebrew
+    # paths: scripts/release/relocate-macos-libraries.sh makes them load through this run path.
+    set_target_properties(ctrace PROPERTIES
+        INSTALL_RPATH "@loader_path/../lib"
+    )
+
+    install(TARGETS ctrace
+        RUNTIME_DEPENDENCY_SET ctrace_deps
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    install(RUNTIME_DEPENDENCY_SET ctrace_deps
+        POST_EXCLUDE_REGEXES
+            "^/usr/lib/"
+            "^/System/"
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
 else()
     install(TARGETS ctrace
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -300,6 +319,9 @@ add_test(NAME ctrace_tool_output_tests COMMAND ctrace_tool_output_tests)
 
 add_executable(ctrace_report_file_tests tests/report_file_tests.cpp)
 add_test(NAME ctrace_report_file_tests COMMAND ctrace_report_file_tests)
+
+add_executable(ctrace_run_directory_tests tests/run_directory_tests.cpp)
+add_test(NAME ctrace_run_directory_tests COMMAND ctrace_run_directory_tests)
 
 # The unified diagnostic model and the per-tool parsers that feed it.
 add_executable(ctrace_tool_diagnostics_tests
@@ -694,6 +716,11 @@ add_test(NAME ctrace_release_license_collection
 # The runtime analyzer's libraries identical to ctrace's are stored once in the release archive.
 add_test(NAME ctrace_release_identical_libraries_linked
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/link-identical-files-test.sh)
+# The macOS installation loads its shipped libraries from wherever it is copied.
+if(APPLE)
+    add_test(NAME ctrace_release_macos_libraries_relocated
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/release/relocate-macos-libraries-test.sh)
+endif()
 set(ctrace_license_install ${CMAKE_BINARY_DIR}/license-install)
 add_test(NAME ctrace_install_ships_third_party_licenses
     COMMAND sh -c "rm -rf '${ctrace_license_install}' && '${CMAKE_COMMAND}' --install '${CMAKE_BINARY_DIR}' --component third-party-licenses --prefix '${ctrace_license_install}' > /dev/null && cd '${ctrace_license_install}/licenses' && for component in coretrace-stack-analyzer coretrace-concurrency-analyzer coretrace-compiler; do grep -q 'Apache License' $component/LICENSE && test -s $component/NOTICE || { echo \"no license or notice for $component\"; exit 1; }; done && grep -q 'MIT License' cpp-httplib/LICENSE && grep -q 'MIT License' nlohmann-json/LICENSE.MIT && grep -q 'MIT License' coretrace-log/LICENSE && grep -q 'CLI11 .* Copyright' CLI11/LICENSE && grep -q 'Redistribution and use' CLI11/LICENSE && grep -q 'SUCH DAMAGE' CLI11/LICENSE && ! grep -q '^//' CLI11/LICENSE")
@@ -821,6 +848,7 @@ set(coretrace_unit_tests
     ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
+    ctrace_run_directory_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests
@@ -853,6 +881,7 @@ foreach(coretrace_target
     ctrace_strings_tests
     ctrace_tool_output_tests
     ctrace_report_file_tests
+    ctrace_run_directory_tests
     ctrace_tool_diagnostics_tests
     ctrace_tool_routing_tests
     ctrace_tool_scheduling_tests
