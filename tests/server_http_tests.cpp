@@ -41,7 +41,7 @@ namespace
             thread_ = std::thread(
                 [this]
                 {
-                    server_.run(config_.host, config_.port);
+                    static_cast<void>(server_.run(config_.host, config_.port));
                     runReturned_.store(true);
                 });
             httplib::Client probe(config_.host, config_.port);
@@ -136,7 +136,9 @@ namespace
         const std::string small =
             R"({"proto":"coretrace-1.0","id":1,"type":"request","method":"x"})";
         const auto accepted = client.Post("/api", small, "application/json");
-        report.expect(accepted && accepted->status == 200, "a request under the limit is accepted");
+        report.expect(accepted && accepted->status == 400 &&
+                          accepted->body.find("UnknownMethod") != std::string::npos,
+                      "a request under the limit reaches the handler");
 
         const std::string large = R"({"pad":")" + std::string(4096, 'x') + R"("})";
         const auto rejected = client.Post("/api", large, "application/json");
@@ -163,6 +165,73 @@ namespace
                           "the configured origin is echoed back");
         }
     }
+    // S19: a port another server listens on is an error, not a shared or silent listener.
+    void testPortInUse(TestReport& report)
+    {
+        const ctrace::ServerConfig config = localConfig(18806);
+        const ServerFixture first(config);
+        ConsoleLogger logger;
+        ApiHandler handler(logger, /*executable=*/{});
+        HttpServer second(handler, logger, config);
+        report.expect(!second.run(config.host, config.port),
+                      "a second server on a port in use does not start");
+    }
+
+    // S04, S05: errors are told by the HTTP status too, and the error object stays in the body.
+    void testErrorStatuses(TestReport& report)
+    {
+        const ServerFixture server(localConfig(18807));
+        auto client = server.client();
+        const auto post = [&client](const nlohmann::json& params, const std::string& proto,
+                                    const std::string& method)
+        {
+            return client.Post("/api",
+                               nlohmann::json{{"proto", proto},
+                                              {"id", 7},
+                                              {"type", "request"},
+                                              {"method", method},
+                                              {"params", params}}
+                                   .dump(),
+                               "application/json");
+        };
+        const auto expectAnswer = [&report](const httplib::Result& answer, int status,
+                                            const std::string& code, const std::string& what)
+        {
+            const nlohmann::json body =
+                answer ? nlohmann::json::parse(answer->body, nullptr, false) : nlohmann::json();
+            const std::string got = answer ? std::to_string(answer->status) : "no response";
+            report.expect(answer && answer->status == status && body.is_object() &&
+                              body.value("error", nlohmann::json::object()).value("code", "") ==
+                                  code,
+                          what + " is answered with " + std::to_string(status) + " " + code +
+                              " (got " + got + ")");
+        };
+
+        const nlohmann::json noInput = {{"static_analysis", true}};
+        expectAnswer(post(noInput, "coretrace-9.9", "run_analysis"), 400, "UnsupportedProtocol",
+                     "an unsupported proto");
+        expectAnswer(post(noInput, "coretrace-1.0", "no_such_method"), 400, "UnknownMethod",
+                     "an unknown method");
+        expectAnswer(post({{"static_analysis", true}, {"no_such_param", 1}}, "coretrace-1.0",
+                          "run_analysis"),
+                     400, "InvalidParams", "an unknown parameter");
+        expectAnswer(post({{"jobs", "many"}}, "coretrace-1.0", "run_analysis"), 400,
+                     "InvalidParams", "a parameter of the wrong type");
+        expectAnswer(post(nlohmann::json::object(), "coretrace-1.0", "run_analysis"), 400,
+                     "NoAnalysisSelected", "a request without analysis");
+        expectAnswer(post(noInput, "coretrace-1.0", "run_analysis"), 400, "MissingInput",
+                     "a request without input");
+        expectAnswer(
+            post({{"dynamic_analysis", true}, {"input", "a.c"}}, "coretrace-1.0", "run_analysis"),
+            403, "DynamicAnalysisDisabled", "dynamic analysis without the opt-in");
+        expectAnswer(client.Post("/api", "{not json", "application/json"), 400, "InvalidRequest",
+                     "malformed JSON");
+        expectAnswer(client.Post("/api", R"({"id":1e1000})", "application/json"), 400,
+                     "InvalidRequest", "a number out of range");
+        expectAnswer(client.Post("/api", "[1]", "application/json"), 400, "InvalidRequest",
+                     "a request that is not an object");
+    }
+
     // K5: the shutdown endpoint is token-protected and stops the server gracefully.
     void testGracefulShutdown(TestReport& report)
     {
@@ -269,6 +338,8 @@ int main(int argc, char* argv[])
     testBindPolicy(report);
     testBodyLimit(report);
     testCorsHeaders(report);
+    testPortInUse(report);
+    testErrorStatuses(report);
     testGracefulShutdown(report);
     testDynamicAnalysisNeedsTheServerOptIn(report, argv[1], argv[2]);
 

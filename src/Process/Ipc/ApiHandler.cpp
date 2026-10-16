@@ -211,6 +211,18 @@ namespace
             err = {"InvalidParams", "Params must be a JSON object."};
             return false;
         }
+        // Like the configuration file, a request rejects the keys it does not know.
+        for (const auto& item : params.items())
+        {
+            const std::string& key = item.key();
+            const auto known = [&key](const ParamSpec& spec) { return key == spec.param; };
+            if (key != "config" && key != "ipc" &&
+                std::none_of(param_schema().begin(), param_schema().end(), known))
+            {
+                err = {"InvalidParams", "Unknown parameter '" + key + "'."};
+                return false;
+            }
+        }
 
         // Precedence: defaults < config file < request parameters.
         std::string configPath;
@@ -446,22 +458,41 @@ json ApiHandler::handle_request(const json& request)
     log_request(logger_, request);
 
     json response;
-    response["proto"] = request.value("proto", std::string("coretrace-1.0"));
-    response["id"] = request.value("id", 0);
+    response["proto"] = "coretrace-1.0";
+    response["id"] = 0;
     response["type"] = "response";
-
-    std::string method = request.value("method", "");
-    json params = request.value("params", json::object());
-
-    if (method == "run_analysis")
+    const auto fail = [&response](const char* code, const std::string& message)
     {
-        return handle_run_analysis(response, params);
+        response["status"] = "error";
+        response["error"] = {{"code", code}, {"message", message}};
+        return response;
+    };
+
+    if (!request.is_object())
+    {
+        return fail("InvalidRequest", "The request must be a JSON object.");
+    }
+    if (const auto id = request.find("id"); id != request.end())
+    {
+        response["id"] = *id;
+    }
+    if (request.value("proto", json()) != "coretrace-1.0")
+    {
+        return fail("UnsupportedProtocol", "Unsupported proto: expected 'coretrace-1.0'.");
+    }
+    if (const auto type = request.find("type"); type != request.end() && *type != "request")
+    {
+        return fail("InvalidRequest", "Expected type 'request'.");
     }
 
-    // Méthode inconnue
-    response["status"] = "error";
-    response["error"] = {{"code", "UnknownMethod"}, {"message", "Unknown method: " + method}};
-    return response;
+    const json method = request.value("method", json());
+    if (method != "run_analysis")
+    {
+        return fail("UnknownMethod",
+                    "Unknown method: " +
+                        (method.is_string() ? method.get<std::string>() : method.dump()));
+    }
+    return handle_run_analysis(response, request.value("params", json::object()));
 }
 
 bool ApiHandler::build_config_from_params(const json& params, ctrace::ProgramConfig& config,

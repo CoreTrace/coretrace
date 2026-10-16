@@ -111,17 +111,18 @@ the findings require (C28).
 | Bind address beyond loopback without `--shutdown-token` | Refused at startup (`src/App/Runner.cpp:26-55`) | exit 1 | S01 |
 | Body larger than `server.max_body_bytes` (1 MiB) | httplib limit | 413 | S07 |
 | Invalid JSON | Parse error caught | 400 `InvalidRequest` | S03 |
-| Unknown method | Only `run_analysis` | 200 `UnknownMethod` | S05 |
-| Parameters | The configuration loader's rules: wrong types and values are rejected | 200 `InvalidParams` | S06 |
-| Dynamic analysis without `--serve-allow-dynamic` | Refused; a request's own configuration cannot grant it | 200 `DynamicAnalysisDisabled` | S11 |
+| `proto` other than `coretrace-1.0` | Refused | 400 `UnsupportedProtocol` | S04 |
+| Unknown method | Only `run_analysis` | 400 `UnknownMethod` | S05 |
+| Parameters | The configuration loader's rules: unknown parameters, wrong types and values are rejected | 400 `InvalidParams` | S06 |
+| Dynamic analysis without `--serve-allow-dynamic` | Refused; a request's own configuration cannot grant it | 403 `DynamicAnalysisDisabled` | S11 |
 | Missing input | The verdict says incomplete | 200, `gate.exit_code` 3 | S12 |
 | Other routes and methods | Not served | 404 | S08 |
 | `POST /shutdown` without or with a wrong token | Refused | 403 | S09, S10 |
 | Browser on another origin | No `Access-Control-*` header unless `server.cors_origin` is set | The page cannot read the answer | S13 |
 | Concurrent requests | Worker pool; one tool pool shared by all requests | All answered | S16 |
 
-Known limits ([#191](https://github.com/CoreTrace/coretrace/issues/191)): application errors are answered with HTTP 200, `proto` is not
-checked, unknown parameters are ignored, and a port already in use is not detected (S19). Three
+A port already in use stops the server with exit 1 (S19); an unexpected failure is answered
+with 500 `InternalError`, its details only in the log. Three
 findings about what a request can make the server do are reported privately, as
 [SECURITY.md](../../SECURITY.md) asks.
 
@@ -139,6 +140,5 @@ Most of these behaviors have a test, named after it in `CMakeLists.txt`: for exa
 `ctrace_serve_refuses_an_exposed_host_without_token`, and the unit tests `ctrace_config_tests`,
 `ctrace_files_tests`, `ctrace_process_tests`, `ctrace_server_http_tests`.
 
-Not tested yet: invalid JSON in a configuration file, the HTTP 400, 404 and 503 answers, the
-`UnknownMethod`, `NoAnalysisSelected` and `MissingInput` errors, a port already in use, a
+Not tested yet: invalid JSON in a configuration file, the HTTP 404, 500 and 503 answers, a
 malformed `arguments` field in a compilation database, and signals.

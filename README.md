@@ -341,6 +341,8 @@ Start the HTTP server:
 ./ctrace --ipc serve --serve-host 127.0.0.1 --serve-port 8080 --shutdown-token mytoken
 ```
 
+If the port is already in use, the server exits with code 1.
+
 Send a request:
 
 ```bash
@@ -369,7 +371,11 @@ curl -X POST http://127.0.0.1:8080/api \
 ```
 
 Response notes:
-- `status` is `ok` or `error`.
+- `status` is `ok` or `error`. An error carries `error.code` and `error.message`, and the HTTP
+  status tells its kind: 400 for an invalid request (malformed JSON, a `proto` other than
+  `coretrace-1.0`, an unknown method or parameter, a wrong value), 403 for a refused one
+  (`DynamicAnalysisDisabled`), 500 for a server failure (`InternalError`, details only in the
+  server's log).
 - `result.diagnostics` lists every finding in one model (`tool`, `rule_id`, `file`, `line`, `column`, `severity`, `message`, `cwe`), whatever tool produced it; `result.diagnostics_summary_total` counts them by severity.
 - `result.sarif` is the merged SARIF log when `sarif_format` is true (also written to `report_file`).
 - `result.gate` carries the verdict the CLI would exit with: `fail_on`, `exit_code` (see EXIT CODES) and `failed_tools`.

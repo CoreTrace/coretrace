@@ -67,8 +67,7 @@ namespace ctrace
         ApiHandler apiHandler(logger, executable, config.server.allow_dynamic_analysis,
                               workers > 1 ? std::make_shared<ThreadPool>(workers) : nullptr);
         HttpServer server(apiHandler, logger, config.server);
-        server.run(config.server.host, config.server.port);
-        return EXIT_SUCCESS;
+        return server.run(config.server.host, config.server.port) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     namespace

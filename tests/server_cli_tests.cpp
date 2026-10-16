@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // The server as the command line starts it (`ctrace --ipc serve`): it answers an analysis over
-// HTTP, refuses a shutdown without its token, and exits with code 0 once asked with it.
+// HTTP, refuses a shutdown without its token, and exits with code 0 once asked with it. A second
+// server on its port exits with code 1.
 //
 // Usage: ctrace_server_cli_tests <ctrace> <repository root>
 #include <httplib.h>
@@ -224,6 +225,11 @@ int main(int argc, char* argv[])
     report.expect(serving, "the server answers on the port it was given");
     if (serving)
     {
+        ServerProcess second(ctrace, port);
+        const std::optional<int> secondExit = second.waitExit(std::chrono::seconds(10));
+        report.expect(secondExit == 1, "a second server on the same port exits with code 1 (exit " +
+                                           (secondExit ? std::to_string(*secondExit) : "none") +
+                                           ")");
         checkAnalysis(report, client, repoRoot);
         checkShutdown(report, client, server);
     }

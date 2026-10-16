@@ -21,6 +21,20 @@ namespace
         err["error"] = {{"code", code}, {"message", message}};
         return err;
     }
+
+    /// 200 for a success; for an error, 403 when the server refuses it, 400 otherwise: every
+    /// other error code is about the request itself.
+    int httpStatusFor(const json& response)
+    {
+        if (response.value("status", "") == "ok")
+        {
+            return 200;
+        }
+        return response.value("error", json::object()).value("code", "") ==
+                       "DynamicAnalysisDisabled"
+                   ? 403
+                   : 400;
+    }
 } // namespace
 
 HttpServer::HttpServer(ApiHandler& apiHandler, ILogger& logger, const ctrace::ServerConfig& config)
@@ -33,6 +47,14 @@ HttpServer::HttpServer(ApiHandler& apiHandler, ILogger& logger, const ctrace::Se
     {
         server_.set_payload_max_length(static_cast<size_t>(config.max_body_bytes));
     }
+    // httplib's default adds SO_REUSEPORT, which lets a second server share the port.
+    server_.set_socket_options(
+        [](socket_t sock)
+        {
+            const int yes = 1;
+            setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes),
+                       sizeof(yes));
+        });
 }
 
 void HttpServer::stop()
@@ -40,7 +62,7 @@ void HttpServer::stop()
     server_.stop();
 }
 
-void HttpServer::run(const std::string& host, int port)
+bool HttpServer::run(const std::string& host, int port)
 {
     server_.Options("/api", [this](const httplib::Request&, httplib::Response& res)
                     { handle_options(res); });
@@ -51,11 +73,19 @@ void HttpServer::run(const std::string& host, int port)
     server_.Post("/shutdown", [this](const httplib::Request& req, httplib::Response& res)
                  { handle_post_shutdown(req, res); });
 
-    logger_.info("Listening on http://" + host + ":" + std::to_string(port));
-    server_.listen(host.c_str(), port);
+    const std::string address = host + ":" + std::to_string(port);
+    if (!server_.bind_to_port(host, port))
+    {
+        logger_.error("Cannot listen on " + address +
+                      ": the port is already in use or the address is not available.");
+        return false;
+    }
+    logger_.info("Listening on http://" + address);
+    server_.listen_after_bind();
     shutdown_.finish();
     std::cout << std::flush;
     std::cerr << std::flush;
+    return true;
 }
 
 /// Cross-origin access is opt-in: without a configured origin no header is sent, so a page on
@@ -113,16 +143,29 @@ void HttpServer::handle_post_api(const httplib::Request& req, httplib::Response&
     const GracefulShutdown::RequestGuard guard(shutdown_);
     try
     {
-        const json request = json::parse(req.body);
+        json request;
+        try
+        {
+            request = json::parse(req.body);
+        }
+        // Not only parse_error: a number too large for a double throws out_of_range.
+        catch (const json::exception& e)
+        {
+            res.status = 400;
+            res.set_content(errorEnvelope("InvalidRequest", e.what()).dump(), "application/json");
+            return;
+        }
         const json response = apiHandler_.handle_request(request);
-        res.status = 200;
+        res.status = httpStatusFor(response);
         res.set_content(response.dump(), "application/json");
     }
     catch (const std::exception& e)
     {
+        // The details stay in the server's log: they describe the server, not the request.
         logger_.error(std::string("Exception while handling /api: ") + e.what());
-        res.status = 400;
-        res.set_content(errorEnvelope("InvalidRequest", e.what()).dump(), "application/json");
+        res.status = 500;
+        res.set_content(errorEnvelope("InternalError", "Internal server error.").dump(),
+                        "application/json");
     }
 }
 
