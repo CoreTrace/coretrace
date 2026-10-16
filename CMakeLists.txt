@@ -632,6 +632,21 @@ file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-other-format.json
 add_test(NAME ctrace_exit_3_when_cppcheck_output_cannot_be_parsed
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-other-format.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of cppcheck'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# One line read does not vouch for the others: an error ctrace cannot parse, next to an
+# information it can, still makes the run incomplete, and the information still counts.
+foreach(tool cppcheck tscancode)
+    file(WRITE ${CMAKE_BINARY_DIR}/fake-${tool}-mixed.json
+        "{\"schema_version\": 1, \"tools\": {\"${tool}\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-mixed\"]}}}\n")
+    add_test(NAME ctrace_exit_3_when_part_of_${tool}_output_cannot_be_parsed
+        COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke ${tool} --config ${CMAKE_BINARY_DIR}/fake-${tool}-mixed.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of ${tool}' && printf '%s\\n' \"$out\" | grep -q '(${tool}) Diagnostics summary: info=1, warning=0, error=0'"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endforeach()
+# A finding in a header the run did not name is a finding all the same.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-header.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-header\"]}}}\n")
+add_test(NAME ctrace_exit_3_when_cppcheck_cites_a_header_it_cannot_parse
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-header.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of cppcheck' && printf '%s\\n' \"$out\" | grep -q 'include/bad.h:1: error: Null pointer dereference: p'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
 # its findings (null dereference, signed overflow) with an absolute path.
