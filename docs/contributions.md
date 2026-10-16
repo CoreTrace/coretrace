@@ -6,7 +6,7 @@ the [pull request history](quality/pull-requests-and-reviews.md) covers them.
 
 | | |
 |---|---|
-| Updated | 2026-10-15 |
+| Updated | 2026-10-16 |
 | Scope | The repositories of level 1 of the [open-source scope](open-source-scope.md) |
 | Times | UTC, as GitHub records them |
 
@@ -22,7 +22,7 @@ Issues labelled `good first issue`: each says what to change, where, and how to 
 | [coretrace#145](https://github.com/CoreTrace/coretrace/issues/145) Include guards in `mangle.hpp` | 2026-10-01 | PasVegan | Merged, [#147](https://github.com/CoreTrace/coretrace/pull/147), the same day |
 | [coretrace#146](https://github.com/CoreTrace/coretrace/issues/146) Unit tests for `ctrace_tools::mangle` | 2026-10-01 | tecnolgd | Merged, [#166](https://github.com/CoreTrace/coretrace/pull/166), 2026-10-04 |
 | [coretrace#163](https://github.com/CoreTrace/coretrace/issues/163) Remove the unused `colors.hpp` | 2026-10-02 | thanvish21 | Merged, [#165](https://github.com/CoreTrace/coretrace/pull/165), the same day |
-| [coretrace#164](https://github.com/CoreTrace/coretrace/issues/164) Unit tests for `RunDirectory` | 2026-10-02 | tecnolgd, assigned 2026-10-13 | In progress |
+| [coretrace#164](https://github.com/CoreTrace/coretrace/issues/164) Unit tests for `RunDirectory` | 2026-10-02 | tecnolgd, assigned 2026-10-13 | Merged, [#197](https://github.com/CoreTrace/coretrace/pull/197), 2026-10-16 |
 | [coretrace#167](https://github.com/CoreTrace/coretrace/issues/167) Move `isMangled` out of the public header | 2026-10-04 | tecnolgd | Merged, [#168](https://github.com/CoreTrace/coretrace/pull/168), 2026-10-08 |
 | [coretrace#175](https://github.com/CoreTrace/coretrace/issues/175) Remove `USE_EXTERNAL_CLI11` | 2026-10-13 | — | Open |
 | [coretrace#177](https://github.com/CoreTrace/coretrace/issues/177) `const` reference in `findStackAnalyzerSection` | 2026-10-13 | — | Open |
@@ -31,8 +31,9 @@ Issues labelled `good first issue`: each says what to change, where, and how to 
 | [coretrace-gui#86](https://github.com/CoreTrace/coretrace-gui/issues/86) Keyboard access to the "Analyser" menu | 2026-10-09 | — | Open |
 
 The five tickets of `coretrace` opened from 2026-10-01 to 2026-10-04 were all taken by people
-outside the team: four are merged, each within four days of being opened, and the fifth is in
-progress. One contributor, tecnolgd, came back for a second ticket, then a third.
+outside the team, and all five are merged: four within four days of being opened, the fifth,
+#164, three days after it was assigned. One contributor, tecnolgd, came back for a second
+ticket, then a third.
 
 ### March 2026
 
@@ -59,10 +60,11 @@ below).
 | 2026-10-04 | tecnolgd | [coretrace#166](https://github.com/CoreTrace/coretrace/pull/166), unit tests for `mangle` and a fix for `isMangled` (welcome ticket #146) | 10 h | The review confirmed that the new test fails without the fix, and explained each change of a follow-up commit pushed on the contributor's branch | **Merged with modifications, argued** in the pull request |
 | 2026-10-08 | tecnolgd | [coretrace#168](https://github.com/CoreTrace/coretrace/pull/168), move `isMangled` to its source file (welcome ticket #167) | 3 h | A follow-up commit, explained: it restored the documentation comment and corrected a wording that the issue itself had got wrong | **Merged with modifications, argued** in the pull request |
 | 2026-10-13 | tecnolgd | Asked for [coretrace#164](https://github.com/CoreTrace/coretrace/issues/164) | Same day | — | **Assigned** |
+| 2026-10-15 | tecnolgd | [coretrace#197](https://github.com/CoreTrace/coretrace/pull/197), unit tests for `RunDirectory` (welcome ticket #164) | 20 h | Thanks in the pull request, then a follow-up commit pushed on the contributor's branch, explained in its message: the location is checked as a directory rather than as a string prefix, and the test follows the naming of the other tests | **Merged with modifications** |
 
 Every contribution got a first answer, and every decision is written in the pull request or the
-issue it concerns. Of the eight contributions of October, seven were accepted; the eighth, from
-a bot, was declined with its reason.
+issue it concerns. Of the nine contributions of October, eight were accepted; the ninth, from a
+bot, was declined with its reason.
 
 ## How contributions are handled
 
