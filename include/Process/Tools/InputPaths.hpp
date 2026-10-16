@@ -11,11 +11,23 @@
 
 namespace ctrace
 {
+    /// `path` spelled so that no tool reads it as an option: a relative path that starts with
+    /// `-` gets `./` in front of it, which lexically_normal() drops. Inputs are spelled so before
+    /// they reach the tools, and findings so that they show the same spelling.
+    [[nodiscard]] inline std::string notAnOption(std::string path)
+    {
+        if (path.starts_with('-'))
+        {
+            path.insert(0, "./");
+        }
+        return path;
+    }
+
     /// How the file of a finding is spelled, the same for every tool: an input as the user typed
-    /// it; any other file relative to the working directory when below it, else absolute. Tools
-    /// report paths their own way (absolute, relative to a project root, differently from one
-    /// rule to the next); one spelling per file keeps the console, the API and the SARIF
-    /// fingerprints consistent across tools and machines.
+    /// it; any other file relative to the working directory when below it, with `./` kept before
+    /// a `-` (notAnOption), else absolute. Tools report paths their own way (absolute, relative
+    /// to a project root, differently from one rule to the next); one spelling per file keeps
+    /// the console, the API and the SARIF fingerprints consistent across tools and machines.
     class InputPaths
     {
       public:
@@ -54,7 +66,7 @@ namespace ctrace
             const std::filesystem::path identity = identityOf(file);
             const std::filesystem::path relative = identity.lexically_relative(workingDirectory_);
             const bool below = !relative.empty() && *relative.begin() != "..";
-            return (below ? relative : identity).string();
+            return below ? notAnOption(relative.string()) : identity.string();
         }
 
         /// One spelling per file: absolute, `.` and `..` resolved, symlinks followed where the
