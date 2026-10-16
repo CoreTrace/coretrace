@@ -180,6 +180,18 @@ namespace
         return schema;
     }
 
+    /// Whether `param` is a run_analysis parameter: one of param_schema(), or one of the two
+    /// read on their own, the config file and the IPC type.
+    [[nodiscard]] bool is_known_param(const std::string& param)
+    {
+        if (param == "config" || param == "ipc")
+        {
+            return true;
+        }
+        return std::any_of(param_schema().begin(), param_schema().end(),
+                           [&param](const ParamSpec& spec) { return param == spec.param; });
+    }
+
     /// Loader diagnostics name the sectioned key; clients know the flat parameter.
     std::string with_param_names(std::string message)
     {
@@ -214,12 +226,9 @@ namespace
         // Like the configuration file, a request rejects the keys it does not know.
         for (const auto& item : params.items())
         {
-            const std::string& key = item.key();
-            const auto known = [&key](const ParamSpec& spec) { return key == spec.param; };
-            if (key != "config" && key != "ipc" &&
-                std::none_of(param_schema().begin(), param_schema().end(), known))
+            if (!is_known_param(item.key()))
             {
-                err = {"InvalidParams", "Unknown parameter '" + key + "'."};
+                err = {"InvalidParams", "Unknown parameter '" + item.key() + "'."};
                 return false;
             }
         }
