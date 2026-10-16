@@ -124,13 +124,16 @@ bool HttpServer::run(const std::string& host, int port)
         logger_.error("Cannot listen on " + requested + ": the host does not resolve.");
         return false;
     }
-    if (!server_.bind_to_port(*address, port))
+    // Port 0 lets the system choose one, which bind_to_any_port() returns.
+    const int bound = port == 0 ? server_.bind_to_any_port(*address)
+                                : (server_.bind_to_port(*address, port) ? port : -1);
+    if (bound <= 0)
     {
         logger_.error("Cannot listen on " + requested +
                       ": the port is already in use or the address is not available.");
         return false;
     }
-    logger_.info("Listening on http://" + urlHost(*address) + ":" + std::to_string(port));
+    logger_.info("Listening on http://" + urlHost(*address) + ":" + std::to_string(bound));
     // False when accepting failed, rather than the listener being stopped.
     const bool served = server_.listen_after_bind();
     if (!served)
