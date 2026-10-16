@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "Interrupt.hpp"
 #include "Process.hpp"
 
 #include <cerrno>
@@ -65,17 +66,19 @@ class UnixProcess : public Process
         }
         argv.push_back(nullptr);
 
-        // With a time limit, the child leads its own process group, so that stopping it also
-        // stops whatever it started. Without one, it stays in ours and keeps receiving the
-        // terminal's signals (Ctrl-C) with ctrace.
+        // The child leads its own process group, so that stopping it (time limit, interrupt) also
+        // stops whatever it started. The terminal's Ctrl-C reaches only ctrace, which stops it.
         SpawnAttributes attributes;
-        if (m_timeout.count() > 0 &&
-            (posix_spawnattr_setflags(&attributes.attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
-             posix_spawnattr_setpgroup(&attributes.attributes, 0) != 0))
+        if (posix_spawnattr_setflags(&attributes.attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
+            posix_spawnattr_setpgroup(&attributes.attributes, 0) != 0)
         {
             throw std::runtime_error("Failed to set the process group of '" + command_ + "'");
         }
 
+        if (ctrace::interrupt::toolsMustStop())
+        {
+            throw std::runtime_error("ctrace was interrupted: '" + command_ + "' was not started");
+        }
         pid_t pid = 0;
         const int spawnError = posix_spawn(&pid, resolvedPath_.c_str(), &fileActions.actions,
                                            &attributes.attributes, argv.data(), environ);
@@ -86,7 +89,7 @@ class UnixProcess : public Process
         }
 
         ProcessResult result;
-        const int status = waitForChild(pid, result.timedOut);
+        const int status = waitForChild(pid, result);
         if (WIFEXITED(status))
         {
             result.exitCode = WEXITSTATUS(status);
@@ -105,39 +108,75 @@ class UnixProcess : public Process
     }
 
   private:
-    /// Waits for `pid`, stopping its process group once the time limit has passed.
-    [[nodiscard]] int waitForChild(pid_t pid, bool& timedOut)
+    // ponytail: polls every 20 ms; a SIGCHLD-driven wait if a deadline or an interrupt ever
+    // needs to be acted on faster than that.
+    static constexpr auto kPollInterval = std::chrono::milliseconds(20);
+    /// How long an interrupted tool has to end on SIGTERM before it gets SIGKILL.
+    static constexpr auto kStopGracePeriod = std::chrono::seconds(2);
+
+    /// Waits for `pid`, stopping its process group once the time limit has passed, or once
+    /// ctrace is interrupted.
+    [[nodiscard]] int waitForChild(pid_t pid, ProcessResult& result)
     {
-        // ponytail: polls every 20 ms; a SIGCHLD-driven wait if a deadline ever needs to be
-        // finer than that.
-        constexpr auto kPollInterval = std::chrono::milliseconds(20);
         const auto deadline = std::chrono::steady_clock::now() + m_timeout;
-        const int options = m_timeout.count() > 0 ? WNOHANG : 0;
         int status = 0;
         for (;;)
         {
-            const pid_t waited = waitpid(pid, &status, options);
-            if (waited == pid)
+            if (reaped(pid, status))
             {
                 return status;
             }
-            if (waited == -1 && errno != EINTR)
+            if (ctrace::interrupt::toolsMustStop())
             {
-                throw std::runtime_error("Failed to wait for '" + command_ +
-                                         "': " + std::string(std::strerror(errno)));
+                result.interrupted = true;
+                return stop(pid);
             }
-            if (waited == 0 && std::chrono::steady_clock::now() >= deadline)
+            if (m_timeout.count() > 0 && std::chrono::steady_clock::now() >= deadline)
             {
-                timedOut = true;
+                result.timedOut = true;
                 (void)kill(-pid, SIGKILL);
                 (void)waitpid(pid, &status, 0);
                 return status;
             }
-            if (waited == 0)
-            {
-                std::this_thread::sleep_for(kPollInterval);
-            }
+            std::this_thread::sleep_for(kPollInterval);
         }
+    }
+
+    /// Whether `pid` has ended, its status then in `status`.
+    [[nodiscard]] bool reaped(pid_t pid, int& status) const
+    {
+        const pid_t waited = waitpid(pid, &status, WNOHANG);
+        if (waited == -1 && errno != EINTR)
+        {
+            throw std::runtime_error("Failed to wait for '" + command_ +
+                                     "': " + std::string(std::strerror(errno)));
+        }
+        return waited == pid;
+    }
+
+    /// Stops the process group of `pid`: SIGTERM, then SIGKILL once the tool has ended or the
+    /// grace period has passed, for what it started may outlive it. The tool is reaped last: until
+    /// then, its group id cannot be given to another process.
+    [[nodiscard]] static int stop(pid_t pid)
+    {
+        (void)kill(-pid, SIGTERM);
+        const auto grace = std::chrono::steady_clock::now() + kStopGracePeriod;
+        while (!ended(pid) && std::chrono::steady_clock::now() < grace)
+        {
+            std::this_thread::sleep_for(kPollInterval);
+        }
+        (void)kill(-pid, SIGKILL);
+        int status = 0;
+        (void)waitpid(pid, &status, 0);
+        return status;
+    }
+
+    /// Whether `pid` has ended, leaving it to be reaped.
+    [[nodiscard]] static bool ended(pid_t pid)
+    {
+        siginfo_t info{};
+        return waitid(P_PID, static_cast<id_t>(pid), &info, WEXITED | WNOHANG | WNOWAIT) == 0 &&
+               info.si_pid == pid;
     }
 
     struct SpawnAttributes
