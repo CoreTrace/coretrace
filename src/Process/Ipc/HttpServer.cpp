@@ -12,6 +12,13 @@ using json = nlohmann::json;
 
 namespace
 {
+    /// The text of `value`. A message may quote bytes that are not UTF-8, the parser's or a
+    /// tool's: they are replaced, as JSON must be UTF-8, rather than failing the response.
+    std::string toJsonText(const json& value)
+    {
+        return value.dump(-1, ' ', false, json::error_handler_t::replace);
+    }
+
     json errorEnvelope(const char* code, const std::string& message)
     {
         json err;
@@ -135,7 +142,7 @@ void HttpServer::handle_post_api(const httplib::Request& req, httplib::Response&
     if (shutdown_.is_shutting_down())
     {
         res.status = 503;
-        res.set_content(errorEnvelope("ServerShuttingDown", "Server is shutting down.").dump(),
+        res.set_content(toJsonText(errorEnvelope("ServerShuttingDown", "Server is shutting down.")),
                         "application/json");
         return;
     }
@@ -152,7 +159,8 @@ void HttpServer::handle_post_api(const httplib::Request& req, httplib::Response&
         catch (const json::exception& e)
         {
             res.status = 400;
-            res.set_content(errorEnvelope("InvalidRequest", e.what()).dump(), "application/json");
+            res.set_content(toJsonText(errorEnvelope("InvalidRequest", e.what())),
+                            "application/json");
             return;
         }
         const json response = apiHandler_.handle_request(request);
@@ -164,7 +172,7 @@ void HttpServer::handle_post_api(const httplib::Request& req, httplib::Response&
         // The details stay in the server's log: they describe the server, not the request.
         logger_.error(std::string("Exception while handling /api: ") + e.what());
         res.status = 500;
-        res.set_content(errorEnvelope("InternalError", "Internal server error.").dump(),
+        res.set_content(toJsonText(errorEnvelope("InternalError", "Internal server error.")),
                         "application/json");
     }
 }
