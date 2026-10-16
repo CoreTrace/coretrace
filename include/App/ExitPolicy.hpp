@@ -20,6 +20,7 @@ namespace ctrace
     {
         DiagnosticSummary summary;
         bool toolFailed = false; ///< Some tool could not be started, crashed or exited abnormally.
+        bool toolUnread = false; ///< Some tool ran, but ctrace could not read its findings.
     };
 
     /// The verdict of a run. An incomplete analysis wins over findings: its counters cannot
