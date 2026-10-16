@@ -230,7 +230,8 @@ Type: `uint`
 Default: `0`
 Allowed: `0..INT_MAX`
 Description: graceful shutdown timeout.
-Impact: waits for in-flight requests up to timeout (`0` = wait indefinitely).
+Impact: waits for in-flight requests up to timeout (`0` = wait indefinitely), on `POST
+/shutdown` as on SIGINT or SIGTERM.
 CLI: `--shutdown-timeout-ms`
 
 - `server.max_body_bytes`
