@@ -622,12 +622,13 @@ add_test(NAME ctrace_stack_analyzer_paths_follow_the_input
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # An input named like an option reaches every tool as a file: ctrace keeps a `./` in front of
-# it, which normalization would drop. Its findings are spelled `./-F.cc`.
+# it, which normalization would drop. Its findings are spelled `./-F.cc`: every location, of
+# the stack analyzer and of cppcheck, which rewrites the paths of its file list, and no other.
 set(ctrace_dash_dir ${CMAKE_BINARY_DIR}/dash-inputs)
 file(MAKE_DIRECTORY ${ctrace_dash_dir})
 file(COPY_FILE ${CMAKE_SOURCE_DIR}/tests/buffer_overflow.cc ${ctrace_dash_dir}/-F.cc)
 add_test(NAME ctrace_input_starting_with_dash_is_a_file
-    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer,cppcheck --input -F.cc,./-F.cc > dash.sarif && grep -q '\"ruleId\": \"MemcpyWithStackDest\"' dash.sarif && grep -q '\"uri\": \"./-F.cc\"' dash.sarif && ! grep -q '\"uri\": \"-F.cc\"' dash.sarif"
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer,cppcheck --input -F.cc,./-F.cc > dash.sarif && grep -q '\"ruleId\": \"MemcpyWithStackDest\"' dash.sarif && locations=$($<TARGET_FILE:ctrace_sarif_locations> dash.sarif) && printf '%s\\n' \"$locations\" && test \"$locations\" = \"$(printf 'cppcheck\\t./-F.cc\\nctrace_stack_analyzer\\t./-F.cc')\""
     WORKING_DIRECTORY ${ctrace_dash_dir})
 find_program(CTRACE_TEST_FLAWFINDER flawfinder)
 if(CTRACE_TEST_FLAWFINDER)
