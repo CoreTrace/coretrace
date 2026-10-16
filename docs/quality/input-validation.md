@@ -122,8 +122,23 @@ the findings require (C28).
 | Browser on another origin | No `Access-Control-*` header unless `server.cors_origin` is set | The page cannot read the answer | S13 |
 | Concurrent requests | Worker pool; one tool pool shared by all requests | All answered | S16 |
 
-A port already in use stops the server with exit 1 (S19); an unexpected failure is answered
-with 500 `InternalError`, its details only in the log. Three
+An address and port already in use stop the server with exit 1 (S19). The guarantee is per
+address and port:
+
+- The host is resolved once, and only the first address the resolver gives is bound, with no
+  fallback to the next one when it is taken. A second server on `localhost` therefore fails on
+  the same address as the first, instead of starting on the other of `::1` and `127.0.0.1`.
+  Which address comes first depends on the system's resolver configuration (on macOS,
+  `localhost` gives `::1`): the policy removes the fallback, it does not promise the same choice
+  to two resolutions made under different configurations, and clients must use the address
+  the server logs, or the same name.
+- `SO_REUSEADDR` is kept, so that a server restarts at once on a port its predecessor just
+  closed. On macOS it also lets a server on `127.0.0.1` start while another listens on
+  `0.0.0.0` with the same port: the two addresses differ.
+
+A failure on the server's side is answered with 500 `InternalError`, its details only in the
+log: an unexpected exception, or a resource of the server's side that is not available, such as
+an IPC socket (`ipc: socket`, deprecated) that nobody listens on. Three
 findings about what a request can make the server do are reported privately, as
 [SECURITY.md](../../SECURITY.md) asks.
 
@@ -141,5 +156,5 @@ Most of these behaviors have a test, named after it in `CMakeLists.txt`: for exa
 `ctrace_serve_refuses_an_exposed_host_without_token`, and the unit tests `ctrace_config_tests`,
 `ctrace_files_tests`, `ctrace_process_tests`, `ctrace_server_http_tests`.
 
-Not tested yet: invalid JSON in a configuration file, the HTTP 404, 500 and 503 answers, a
+Not tested yet: invalid JSON in a configuration file, the HTTP 404 and 503 answers, a
 malformed `arguments` field in a compilation database, and signals.
