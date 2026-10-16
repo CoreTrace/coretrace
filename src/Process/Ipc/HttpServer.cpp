@@ -26,8 +26,7 @@ namespace
         json err;
         err["proto"] = ApiHandler::kProtocol;
         err["type"] = "response";
-        err["status"] = "error";
-        err["error"] = {{"code", code}, {"message", message}};
+        ApiHandler::setError(err, code, message);
         return err;
     }
 
@@ -234,10 +233,9 @@ void HttpServer::handle_post_shutdown(const httplib::Request& req, httplib::Resp
     if (!is_authorized_shutdown(req))
     {
         json err;
-        err["status"] = "error";
-        err["error"] = {{"code", "Unauthorized"},
-                        {"message", shutdown_token_.empty() ? "Shutdown token not configured."
-                                                            : "Invalid shutdown token."}};
+        ApiHandler::setError(err, "Unauthorized",
+                             shutdown_token_.empty() ? "Shutdown token not configured."
+                                                     : "Invalid shutdown token.");
         res.status = 403;
         res.set_content(err.dump(), "application/json");
         return;

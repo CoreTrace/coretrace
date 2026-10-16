@@ -453,6 +453,12 @@ namespace
 
 } // namespace
 
+void ApiHandler::setError(json& response, const std::string& code, const std::string& message)
+{
+    response["status"] = "error";
+    response["error"] = {{"code", code}, {"message", message}};
+}
+
 json ApiHandler::handle_request(const json& request)
 {
     log_request(logger_, request);
@@ -461,10 +467,9 @@ json ApiHandler::handle_request(const json& request)
     response["proto"] = kProtocol;
     response["id"] = 0;
     response["type"] = "response";
-    const auto fail = [&response](const char* code, const std::string& message)
+    const auto fail = [&response](const std::string& code, const std::string& message)
     {
-        response["status"] = "error";
-        response["error"] = {{"code", code}, {"message", message}};
+        setError(response, code, message);
         return response;
     };
 
@@ -510,18 +515,15 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     std::vector<std::string> warnings;
     if (!build_config_from_params_impl(params, config, err, &warnings))
     {
-        baseResponse["status"] = "error";
-        baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
+        setError(baseResponse, err.code, err.message);
         return baseResponse;
     }
     if (!allowDynamicAnalysis_ && runsClientCode(config))
     {
-        baseResponse["status"] = "error";
-        baseResponse["error"] = {
-            {"code", "DynamicAnalysisDisabled"},
-            {"message", "Dynamic analysis builds and runs the submitted code on the server, which "
-                        "this server does not allow: start it with --serve-allow-dynamic "
-                        "(server.allow_dynamic_analysis) to enable it."}};
+        setError(baseResponse, "DynamicAnalysisDisabled",
+                 "Dynamic analysis builds and runs the submitted code on the server, which this "
+                 "server does not allow: start it with --serve-allow-dynamic "
+                 "(server.allow_dynamic_analysis) to enable it.");
         return baseResponse;
     }
     ctrace::applyShippedDefaults(config, executable_, warnings);
@@ -533,8 +535,7 @@ json ApiHandler::handle_run_analysis(json& baseResponse, const json& params)
     json result;
     if (!run_analysis(config, pool_, logger_, result, err))
     {
-        baseResponse["status"] = "error";
-        baseResponse["error"] = {{"code", err.code}, {"message", err.message}};
+        setError(baseResponse, err.code, err.message);
         return baseResponse;
     }
 

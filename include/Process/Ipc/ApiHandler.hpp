@@ -77,6 +77,11 @@ class ApiHandler
 
     [[nodiscard]] nlohmann::json handle_request(const nlohmann::json& request);
 
+    /// Makes `response` an error answer: `status` "error" and the `error` object with its
+    /// `code` and `message`, the shape of every error, the transport's included.
+    static void setError(nlohmann::json& response, const std::string& code,
+                         const std::string& message);
+
     /// Translates the flat run_analysis parameters into the configuration through the config
     /// loader, so a request gets the same validation as a config file.
     [[nodiscard]] static bool build_config_from_params(const nlohmann::json& params,
