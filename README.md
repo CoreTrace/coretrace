@@ -16,8 +16,8 @@ Take the archive of the [latest release](https://github.com/CoreTrace/coretrace/
 for your machine, for example:
 
 ```bash
-curl -fsSLO https://github.com/CoreTrace/coretrace/releases/download/v0.84.0/coretrace-v0.84.0-linux-amd64.tar.gz
-tar -xzf coretrace-v0.84.0-linux-amd64.tar.gz
+curl -fsSLO https://github.com/CoreTrace/coretrace/releases/download/v0.85.0/coretrace-v0.85.0-linux-amd64.tar.gz
+tar -xzf coretrace-v0.85.0-linux-amd64.tar.gz
 ```
 
 Save this as `demo.c`:
@@ -35,13 +35,14 @@ int main(void)
 and analyze it:
 
 ```bash
-./coretrace-v0.84.0-linux-amd64/bin/ctrace --input demo.c \
+./coretrace-v0.85.0-linux-amd64/bin/ctrace --input demo.c \
     --invoke ctrace_stack_analyzer,coretrace-concurrency-analyzer --fail-on warning
 ```
 
 ```
 at line 5, column 19
 [ !!Warn ] potential stack buffer overflow on variable 'values' (size 4)
+     ↳ alias path: values
      ↳ index variable may go up to 4 (array last valid index: 3)
      ↳ (this is a write access)
 ```
