@@ -815,6 +815,14 @@ add_test(NAME ctrace_dyn_input_starting_with_dash_is_a_file
 add_test(NAME ctrace_dyn_findings_merge_with_static_ones
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --dyn --invoke ctrace_stack_analyzer --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input tests/double_free.c > ${CMAKE_BINARY_DIR}/runtime-merge.sarif 2>/dev/null && grep -q '\"cwe\": \"CWE-415\"' ${CMAKE_BINARY_DIR}/runtime-merge.sarif && test $(grep -c 'coretrace/v1' ${CMAKE_BINARY_DIR}/runtime-merge.sarif) -eq 1 && grep -q 'alsoReportedBy' ${CMAKE_BINARY_DIR}/runtime-merge.sarif"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# A finding the runtime analyzer reports without a location keeps none: no file is made up for
+# it, and the run does not fail on it.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-no-location.json
+    "{\"schema_version\": 1, \"tools\": {\"coretrace-runtime-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-runtime-analyzer.sh\", \"args\": [\"--fake-no-location\"]}}}\n")
+set(ctrace_no_location_sarif ${CMAKE_BINARY_DIR}/no-location.sarif)
+add_test(NAME ctrace_dyn_finding_without_location_keeps_none
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-no-location.json --input tests/runtime/clean.c > '${ctrace_no_location_sarif}' 2>/dev/null && locations=$($<TARGET_FILE:ctrace_sarif_locations> '${ctrace_no_location_sarif}') && printf '%s\\n' \"$locations\" && test \"$locations\" = \"$(printf 'coretrace-runtime-analyzer\\t(none)')\""
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # A program that could not be built or run is an incomplete analysis, never a clean one.
 file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-fails.json
     "{\"schema_version\": 1, \"tools\": {\"coretrace-runtime-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-runtime-analyzer.sh\", \"args\": [\"--fake-exit=2\"]}}}\n")
