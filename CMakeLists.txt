@@ -625,6 +625,14 @@ add_test(NAME ctrace_sarif_survives_tool_output_that_is_not_utf8
     COMMAND sh -c "rm -f '${ctrace_latin1_sarif}'; out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json --input tests/double_free.c --report-file '${ctrace_latin1_sarif}' 2>/dev/null); status=$?; replaced=$(printf 'caf\\357\\277\\275'); test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q \"$replaced\" && grep -q \"$replaced\" '${ctrace_latin1_sarif}'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# cppcheck reporting on its input in a format ctrace cannot parse has not found nothing: the run
+# is incomplete, and says which tool it could not read.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-other-format.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-other-format\"]}}}\n")
+add_test(NAME ctrace_exit_3_when_cppcheck_output_cannot_be_parsed
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-other-format.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of cppcheck'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
 # its findings (null dereference, signed overflow) with an absolute path.
 add_test(NAME ctrace_stack_analyzer_paths_follow_the_input

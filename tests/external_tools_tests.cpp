@@ -89,6 +89,34 @@ namespace
                       tool.name() + ": one run gets every file through --file-list");
     }
 
+    // A tool that reports on its inputs in a format ctrace cannot parse has not found nothing:
+    // its output is left uninterpreted, so the run is incomplete rather than clean.
+    void testUnreadableOutput(TestReport& report, const std::string& root,
+                              const IAnalysisTool& tool)
+    {
+        ProgramConfig config;
+        config.tools.paths[tool.name()] = root + "/tests/fake-file-list-tool.sh";
+        config.tools.args[tool.name()] = {"--fake-other-format"};
+        ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
+        tool.executeBatch({"a.c", "dir/b.cpp"}, config, output);
+        report.expect(!output.failed() && !output.interpreted(),
+                      tool.name() + ": findings in a format it cannot parse leave it unread");
+    }
+
+    // Messages that cite no input (a configuration warning) are not findings ctrace missed:
+    // the run read nothing to report, and zero findings stands.
+    void testChatterIsNoFinding(TestReport& report, const std::string& root,
+                                const IAnalysisTool& tool)
+    {
+        ProgramConfig config;
+        config.tools.paths[tool.name()] = root + "/tests/fake-file-list-tool.sh";
+        config.tools.args[tool.name()] = {"--fake-chatter"};
+        ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
+        tool.executeBatch({"a.c", "dir/b.cpp"}, config, output);
+        report.expect(!output.failed() && output.interpreted() && output.diagnostics().empty(),
+                      tool.name() + ": a configuration warning is read as zero findings");
+    }
+
     // flawfinder takes its files on the command line: one run gets them all. `echo` stands for
     // flawfinder and shows the arguments of each run.
     void testFlawfinderGetsEveryFile(TestReport& report)
@@ -137,6 +165,10 @@ int main(int argc, char** argv)
     testCppcheckFindsTheSameTogether(report, root);
     testFileListTool(report, root, CppCheckToolImplementation());
     testFileListTool(report, root, TscancodeToolImplementation());
+    testUnreadableOutput(report, root, CppCheckToolImplementation());
+    testUnreadableOutput(report, root, TscancodeToolImplementation());
+    testChatterIsNoFinding(report, root, CppCheckToolImplementation());
+    testChatterIsNoFinding(report, root, TscancodeToolImplementation());
     testFlawfinderGetsEveryFile(report);
     testBatchTimeoutCoversEveryFile(report, root);
 
