@@ -483,6 +483,11 @@ set_tests_properties(ctrace_server_cli_tests PROPERTIES TIMEOUT 120)
 add_test(NAME ctrace_serve_refuses_an_exposed_host_without_token
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --ipc serve --serve-host 0.0.0.0 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Refusing to serve'")
 set_tests_properties(ctrace_serve_refuses_an_exposed_host_without_token PROPERTIES TIMEOUT 30)
+# Port 0 asks the system for a free port: the log must give the one it chose, not 0.
+set(ctrace_port_zero_log ${CMAKE_BINARY_DIR}/serve-port-zero.log)
+add_test(NAME ctrace_serve_logs_the_port_the_system_chose
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --ipc serve --serve-port 0 > '${ctrace_port_zero_log}' 2>&1 & pid=$!; i=0; while [ $i -lt 100 ] && ! grep -q 'Listening on' '${ctrace_port_zero_log}'; do sleep 0.1; i=$((i + 1)); done; kill $pid; cat '${ctrace_port_zero_log}'; grep -Eq 'Listening on http://127\\.0\\.0\\.1:[1-9][0-9]*$' '${ctrace_port_zero_log}'")
+set_tests_properties(ctrace_serve_logs_the_port_the_system_chose PROPERTIES TIMEOUT 30)
 
 # K4: the bridge report explains every option forwarded to the analyzer, at verbose level.
 add_test(NAME ctrace_bridge_report_is_logged
