@@ -73,7 +73,7 @@ Relative paths of models and inputs are resolved from the configuration file's d
 | Binary content, or C that does not compile | The analyzer fails: exit 3 | C12, C13 |
 | A path with spaces | Analyzed | C14 |
 | A directory | Passed to the tools as is; cppcheck analyzes its content | C09 |
-| A name that starts with `-` | Passed to the tools as `./-F.c`, so that none reads it as an option; findings are reported as `./-F.c` | C37 |
+| A name that starts with `-` | Passed to the tools as `./-F.c`, so that none reads it as an option; findings are reported as `./-F.c`, as is any other file below the working directory whose relative path starts with `-` (a header in `-inc/`) | C37 |
 | A file outside the working directory | Analyzed, and reported with its absolute path | — |
 | `compile_commands.json` that is not JSON | `Invalid JSON in compile database '<path>'.`, exit 1 | C20 |
 | Not an array of objects with a `file` string | `'<path>' is not a compile_commands.json document: expected an array of objects with a "file" field.`, exit 1 | C21 |
