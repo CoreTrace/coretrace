@@ -24,7 +24,7 @@ namespace
     json errorEnvelope(const char* code, const std::string& message)
     {
         json err;
-        err["proto"] = "coretrace-1.0";
+        err["proto"] = ApiHandler::kProtocol;
         err["type"] = "response";
         err["status"] = "error";
         err["error"] = {{"code", code}, {"message", message}};

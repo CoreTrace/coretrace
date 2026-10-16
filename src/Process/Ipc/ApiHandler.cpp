@@ -458,7 +458,7 @@ json ApiHandler::handle_request(const json& request)
     log_request(logger_, request);
 
     json response;
-    response["proto"] = "coretrace-1.0";
+    response["proto"] = kProtocol;
     response["id"] = 0;
     response["type"] = "response";
     const auto fail = [&response](const char* code, const std::string& message)
@@ -476,9 +476,10 @@ json ApiHandler::handle_request(const json& request)
     {
         response["id"] = *id;
     }
-    if (request.value("proto", json()) != "coretrace-1.0")
+    if (request.value("proto", json()) != kProtocol)
     {
-        return fail("UnsupportedProtocol", "Unsupported proto: expected 'coretrace-1.0'.");
+        return fail("UnsupportedProtocol",
+                    std::string("Unsupported proto: expected '") + kProtocol + "'.");
     }
     if (const auto type = request.find("type"); type != request.end() && *type != "request")
     {

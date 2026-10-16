@@ -52,6 +52,9 @@ class ConsoleLogger : public ILogger
 class ApiHandler
 {
   public:
+    /// The protocol a request must give in `proto`, and every response carries.
+    static constexpr const char* kProtocol = "coretrace-1.0";
+
     struct ParseError
     {
         std::string code;
