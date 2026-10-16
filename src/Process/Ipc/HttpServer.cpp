@@ -131,11 +131,16 @@ bool HttpServer::run(const std::string& host, int port)
         return false;
     }
     logger_.info("Listening on http://" + urlHost(*address) + ":" + std::to_string(port));
-    server_.listen_after_bind();
+    // False when accepting failed, rather than the listener being stopped.
+    const bool served = server_.listen_after_bind();
+    if (!served)
+    {
+        logger_.error("Stopped accepting connections on " + requested + " after an error.");
+    }
     shutdown_.finish();
     std::cout << std::flush;
     std::cerr << std::flush;
-    return true;
+    return served;
 }
 
 /// Cross-origin access is opt-in: without a configured origin no header is sent, so a page on
