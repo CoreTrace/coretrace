@@ -310,12 +310,19 @@ cmake .. -DCORETRACE_VERSION_OVERRIDE=v0.74.0
 | Code | Meaning |
 |---|---|
 | `0` | Analysis complete, no finding at or above `--fail-on` |
-| `1` | Usage or configuration error |
+| `1` | Usage or configuration error, including a run with no analysis selected (`--static`, `--dyn` or `--invoke`) |
 | `2` | Findings at or above `--fail-on` (default: `error`) |
-| `3` | Analysis incomplete: a tool could not be started, crashed or exited abnormally |
+| `3` | Analysis incomplete: a tool could not be started, crashed or exited abnormally, or `ctrace` could not read its findings |
 
 `--fail-on error|warning|none` (config: `analysis.fail_on`) sets the threshold. `none` never
-fails on findings but still returns `3` on a broken tool. Code `3` takes precedence over `2`.
+fails on findings but still returns `3` on an incomplete analysis. Code `3` takes precedence over
+`2`.
+
+`ctrace` cannot read the findings of `ikos`, of `flawfinder` when it prints no SARIF, or of
+`cppcheck` and `tscancode` when their output cites an input file at a line but no line parses:
+such a run exits `3` and names the tool, since zero findings would be a guess. `--static`
+includes `ikos`, so its runs always end incomplete: to gate on a verdict, pick the tools with
+`--invoke`.
 
 ```bash
 ./ctrace --fail-on warning --input src/main.c --invoke cppcheck,ctrace_stack_analyzer
@@ -403,7 +410,7 @@ Response notes:
   request or in a tool's output, are replaced by U+FFFD in the answer.
 - `result.diagnostics` lists every finding in one model (`tool`, `rule_id`, `file`, `line`, `column`, `severity`, `message`, `cwe`), whatever tool produced it; `result.diagnostics_summary_total` counts them by severity.
 - `result.sarif` is the merged SARIF log when `sarif_format` is true (also written to `report_file`).
-- `result.gate` carries the verdict the CLI would exit with: `fail_on`, `exit_code` (see EXIT CODES) and `failed_tools`.
+- `result.gate` carries the verdict the CLI would exit with: `fail_on`, `exit_code` (see EXIT CODES), `failed_tools` and `unread_tools` (the tools that ran but whose findings CoreTrace could not read).
 - `result.uninterpreted_tools` names the tools whose output CoreTrace could not interpret: their findings are shown in `result.outputs` but are not counted.
 - `result.outputs` groups tool output by tool name.
 - Each output entry has `stream` and `message`. If a tool emits JSON, `message` is returned as a JSON object.
