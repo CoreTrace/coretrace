@@ -39,9 +39,14 @@ namespace ctrace
             return std::nullopt;
         }
 
-        /// `file` as findings show it (see the class comment).
+        /// `file` as findings show it (see the class comment). A finding without a file keeps
+        /// none: an empty path is not the working directory.
         [[nodiscard]] std::string display(const std::filesystem::path& file) const
         {
+            if (file.empty())
+            {
+                return {};
+            }
             if (auto input = asInput(file))
             {
                 return *input;
