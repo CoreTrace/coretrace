@@ -31,4 +31,5 @@ libexec/coretrace/coretrace-python-analyzer/libcrypto.*dylib  libexec/coretrace/
 libexec/coretrace/coretrace-python-analyzer/libssl.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/openssl@3
 libexec/coretrace/coretrace-python-analyzer/liblzma.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/xz
 libexec/coretrace/coretrace-python-analyzer/libmpdec.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/mpdecimal
+libexec/coretrace/coretrace-python-analyzer/libexpat.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/expat
 libexec/coretrace/coretrace-python-analyzer/*.so  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/python@3.12
