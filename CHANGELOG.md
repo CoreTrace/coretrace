@@ -6,6 +6,9 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 
 - Added repository contribution and community documentation.
 - Releases include a macOS disk image, for Apple silicon with macOS 14 or newer.
+- **HTTP server, for clients:** a request must give `proto: coretrace-1.0` and only known
+  parameters, and errors are answered with their HTTP status (400, 403 or 500) instead of 200.
+  A second server on an address and port in use exits with code 1.
 
 ## v0.84.0
 
