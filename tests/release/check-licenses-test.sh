@@ -59,6 +59,12 @@ chmod +x "$prefix/libexec/tool/helper"
 check 1 "an executable missing from the inventory fails and is named" "libexec/tool/helper"
 rm "$prefix/libexec/tool/helper"
 
+# Homebrew installs its libraries read-only, not executable.
+printf 'x' > "$prefix/lib/libbaz.1.dylib"
+chmod 0444 "$prefix/lib/libbaz.1.dylib"
+check 1 "a macOS library missing from the inventory fails and is named" "lib/libbaz.1.dylib"
+rm -f "$prefix/lib/libbaz.1.dylib"
+
 rm "$prefix/licenses/tool/LICENSE"
 check 1 "a license directory left empty fails and is named" "licenses/tool"
 printf 'license\n' > "$prefix/licenses/tool/LICENSE"
