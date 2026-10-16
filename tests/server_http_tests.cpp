@@ -226,6 +226,11 @@ namespace
             403, "DynamicAnalysisDisabled", "dynamic analysis without the opt-in");
         expectAnswer(client.Post("/api", "{not json", "application/json"), 400, "InvalidRequest",
                      "malformed JSON");
+        // A Latin-1 file name: the parser's message quotes the invalid byte.
+        expectAnswer(client.Post("/api",
+                                 "{\"proto\":\"coretrace-1.0\",\"params\":{\"input\":\"caf\xe9.c\"}}",
+                                 "application/json"),
+                     400, "InvalidRequest", "a body that is not valid UTF-8");
         expectAnswer(client.Post("/api", R"({"id":1e1000})", "application/json"), 400,
                      "InvalidRequest", "a number out of range");
         expectAnswer(client.Post("/api", "[1]", "application/json"), 400, "InvalidRequest",
