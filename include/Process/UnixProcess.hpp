@@ -122,14 +122,19 @@ class UnixProcess : public Process
         int status = 0;
         for (;;)
         {
-            if (reaped(pid, status))
-            {
-                return status;
-            }
+            // The tool is reaped only once nothing is left to stop: until then, its group can be
+            // stopped, and its group id cannot be given to another process.
+            const bool toolEnded = ended(pid);
             if (ctrace::interrupt::toolsMustStop())
             {
-                result.interrupted = true;
+                // What the tool started may outlive it in its group, even when it ended first.
+                result.interrupted = !toolEnded;
                 return stop(pid);
+            }
+            if (toolEnded)
+            {
+                (void)waitpid(pid, &status, 0);
+                return status;
             }
             if (m_timeout.count() > 0 && std::chrono::steady_clock::now() >= deadline)
             {
@@ -142,22 +147,10 @@ class UnixProcess : public Process
         }
     }
 
-    /// Whether `pid` has ended, its status then in `status`.
-    [[nodiscard]] bool reaped(pid_t pid, int& status) const
-    {
-        const pid_t waited = waitpid(pid, &status, WNOHANG);
-        if (waited == -1 && errno != EINTR)
-        {
-            throw std::runtime_error("Failed to wait for '" + command_ +
-                                     "': " + std::string(std::strerror(errno)));
-        }
-        return waited == pid;
-    }
-
     /// Stops the process group of `pid`: SIGTERM, then SIGKILL once the tool has ended or the
     /// grace period has passed, for what it started may outlive it. The tool is reaped last: until
     /// then, its group id cannot be given to another process.
-    [[nodiscard]] static int stop(pid_t pid)
+    [[nodiscard]] int stop(pid_t pid) const
     {
         (void)kill(-pid, SIGTERM);
         const auto grace = std::chrono::steady_clock::now() + kStopGracePeriod;
@@ -172,11 +165,19 @@ class UnixProcess : public Process
     }
 
     /// Whether `pid` has ended, leaving it to be reaped.
-    [[nodiscard]] static bool ended(pid_t pid)
+    [[nodiscard]] bool ended(pid_t pid) const
     {
         siginfo_t info{};
-        return waitid(P_PID, static_cast<id_t>(pid), &info, WEXITED | WNOHANG | WNOWAIT) == 0 &&
-               info.si_pid == pid;
+        if (waitid(P_PID, static_cast<id_t>(pid), &info, WEXITED | WNOHANG | WNOWAIT) == -1)
+        {
+            if (errno == EINTR)
+            {
+                return false;
+            }
+            throw std::runtime_error("Failed to wait for '" + command_ +
+                                     "': " + std::string(std::strerror(errno)));
+        }
+        return info.si_pid == pid;
     }
 
     struct SpawnAttributes
