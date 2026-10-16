@@ -122,6 +122,30 @@ int main(int argc, char** argv)
         }
         report.expect(CppCheckToolImplementation::parseDiagnostics("").diagnostics.empty(),
                       "cppcheck: empty output has no diagnostics");
+        report.expect(CppCheckToolImplementation::parseDiagnostics(output).unread.empty(),
+                      "cppcheck: progress lines are not findings lost");
+    }
+
+    // A line that cites a source location but does not parse is a finding lost, whatever the file
+    // (a header the run did not name); a line that names no location is not.
+    {
+        const std::string output =
+            "a.c:3:5: information: kept [kept] [CWE-0]\n"
+            "include/bad.h:1: error: Null pointer dereference: p\n"
+            "[a.c:7]: (error) old format\n"
+            "cppcheck: Found unknown elements in configuration file 'std.cfg'\n"
+            "Checking a.c: FOO=1...\n"
+            "1/2 files checked 50% done\n";
+        const ParsedLines parsed = CppCheckToolImplementation::parseDiagnostics(output);
+        report.expect(
+            parsed.diagnostics.size() == 1 &&
+                parsed.unread ==
+                    std::vector<std::string>{"include/bad.h:1: error: Null pointer dereference: p",
+                                             "[a.c:7]: (error) old format"},
+            "cppcheck: lines that cite a location but do not parse are unread");
+        const ParsedLines tscancode = TscancodeToolImplementation::parseDiagnostics(output);
+        report.expect(tscancode.diagnostics.size() == 1 && tscancode.unread.size() == 2,
+                      "tscancode: lines that cite a location but do not parse are unread");
     }
 
     // A generic SARIF reader covers every tool that writes SARIF itself (flawfinder today).

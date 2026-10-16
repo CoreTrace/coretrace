@@ -103,6 +103,22 @@ namespace
                       tool.name() + ": findings in a format it cannot parse leave it unread");
     }
 
+    // One finding read does not vouch for the others: the tool keeps what it read, and its
+    // findings are marked unread.
+    void testPartlyUnreadableOutput(TestReport& report, const std::string& root,
+                                    const IAnalysisTool& tool)
+    {
+        ProgramConfig config;
+        config.tools.paths[tool.name()] = root + "/tests/fake-file-list-tool.sh";
+        config.tools.args[tool.name()] = {"--fake-mixed"};
+        ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
+        tool.executeBatch({"a.c"}, config, output);
+        report.expect(!output.failed() && output.diagnostics().size() == 1 &&
+                          output.hasUnreadFindings(),
+                      tool.name() + ": a finding it cannot parse marks the findings unread, and "
+                                    "those read still count");
+    }
+
     // Messages that cite no input (a configuration warning) are not findings ctrace missed:
     // the run read nothing to report, and zero findings stands.
     void testChatterIsNoFinding(TestReport& report, const std::string& root,
@@ -113,7 +129,8 @@ namespace
         config.tools.args[tool.name()] = {"--fake-chatter"};
         ToolOutput output(nullptr, tool.name(), /*mirrorToConsole=*/false);
         tool.executeBatch({"a.c", "dir/b.cpp"}, config, output);
-        report.expect(!output.failed() && output.interpreted() && output.diagnostics().empty(),
+        report.expect(!output.failed() && output.interpreted() && output.diagnostics().empty() &&
+                          !output.hasUnreadFindings(),
                       tool.name() + ": a configuration warning is read as zero findings");
     }
 
@@ -167,6 +184,8 @@ int main(int argc, char** argv)
     testFileListTool(report, root, TscancodeToolImplementation());
     testUnreadableOutput(report, root, CppCheckToolImplementation());
     testUnreadableOutput(report, root, TscancodeToolImplementation());
+    testPartlyUnreadableOutput(report, root, CppCheckToolImplementation());
+    testPartlyUnreadableOutput(report, root, TscancodeToolImplementation());
     testChatterIsNoFinding(report, root, CppCheckToolImplementation());
     testChatterIsNoFinding(report, root, TscancodeToolImplementation());
     testFlawfinderGetsEveryFile(report);
