@@ -175,8 +175,8 @@ built on Rocky Linux 9. Each archive is unpacked and run on bare Rocky Linux 9, 
 Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published.
 
 The macOS disk image runs on Apple silicon with macOS 14 or newer. It holds one folder laid out
-as the Linux archive, with the Homebrew libraries `ctrace` and the Python analyzer load (LLVM,
-Clang, Z3, Python, OpenSSL...): copy the folder anywhere, Homebrew is not needed. Before it is
+as the Linux archive, with the Homebrew libraries `ctrace` and the Python analyzer load (LLVM and
+Clang, Python and OpenSSL...): copy the folder anywhere, Homebrew is not needed. Before it is
 published, the image is mounted, its folder copied out, and run with Homebrew moved away. Its
 third-party libraries are listed in `scripts/release/third-party-macos.txt`, and their licenses,
 with each Homebrew formula's version, are under `licenses/homebrew/`.
