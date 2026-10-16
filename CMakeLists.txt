@@ -468,6 +468,8 @@ target_link_libraries(ctrace_server_http_tests
             coretrace::coretrace_concurrency_analyzer_lib httplib::httplib)
 add_test(NAME ctrace_server_http_tests
     COMMAND ctrace_server_http_tests ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
+# A second server that binds a port in use anyway serves forever: its run() never returns.
+set_tests_properties(ctrace_server_http_tests PROPERTIES TIMEOUT 120)
 
 # The server as `ctrace --ipc serve` runs it: an analysis over HTTP, then a clean shutdown.
 add_executable(ctrace_server_cli_tests tests/server_cli_tests.cpp)
