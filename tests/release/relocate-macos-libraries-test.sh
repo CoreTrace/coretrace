@@ -86,6 +86,42 @@ rm "$prefix/lib/libbar.1.dylib" "$prefix/lib/libbar.dylib"
 run 1 "a library that is not in the tree fails and is named" \
     "lib/libfoo.dylib refers to $built/libbar.1.dylib, outside the tree" "$prefix"
 
+# A bundled tool laid out as Nuitka lays out the Python analyzer: its libraries next to it, which
+# it loads through @executable_path, @loader_path and @rpath. Relocation leaves them as they are;
+# the check must find each one in the tree, as dyld would.
+for anchor in executable_path loader_path rpath; do
+    printf 'int dep_%s(void) { return 1; }\n' "$anchor" > "$built/dep_$anchor.c"
+    cc -dynamiclib -o "$built/libdep_$anchor.dylib" -install_name "@$anchor/libdep_$anchor.dylib" \
+        "$built/dep_$anchor.c"
+done
+printf 'int dep_executable_path(void), dep_loader_path(void), dep_rpath(void);\n' > "$built/tool.c"
+printf 'int main(void) { return dep_executable_path() + dep_loader_path() + dep_rpath() == 3 ? 0 : 1; }\n' \
+    >> "$built/tool.c"
+cc -o "$built/tool" "$built/tool.c" "$built/libdep_executable_path.dylib" \
+    "$built/libdep_loader_path.dylib" "$built/libdep_rpath.dylib" -Wl,-rpath,@loader_path
+
+install_tree "$prefix"
+mkdir -p "$prefix/libexec/tool"
+cp "$built/tool" "$built"/libdep_*.dylib "$prefix/libexec/tool/"
+run 0 "a bundled tool whose libraries are next to it passes" "" "$prefix"
+expect '"$prefix/libexec/tool/tool"' "the bundled tool runs"
+for anchor in executable_path loader_path rpath; do
+    mv "$prefix/libexec/tool/libdep_$anchor.dylib" "$work/away.dylib"
+    run 1 "a library a bundled tool loads through @$anchor fails and is named when it is missing" \
+        "libexec/tool/tool loads @$anchor/libdep_$anchor.dylib, which is not in the tree" "$prefix"
+    mv "$work/away.dylib" "$prefix/libexec/tool/libdep_$anchor.dylib"
+done
+
+# A run path outside the tree, Homebrew's for instance, finds nothing once the tree is copied.
+install_tree "$prefix"
+mkdir -p "$prefix/libexec/tool"
+cp "$built/tool" "$built/libdep_executable_path.dylib" "$built/libdep_loader_path.dylib" \
+    "$prefix/libexec/tool/"
+install_name_tool -add_rpath "$built" "$prefix/libexec/tool/tool" 2> /dev/null
+codesign --force --sign - "$prefix/libexec/tool/tool" 2> /dev/null
+run 1 "a library found only through a run path outside the tree fails and is named" \
+    "libexec/tool/tool loads @rpath/libdep_rpath.dylib, which is not in the tree" "$prefix"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures relocate-macos-libraries test(s) failed"
     exit 1
