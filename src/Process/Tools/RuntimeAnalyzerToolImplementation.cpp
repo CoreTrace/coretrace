@@ -72,11 +72,7 @@ namespace ctrace
             return;
         }
         // The analyzer names each finding's file as the source was given to it: the input.
-        const InputPaths paths({file});
-        for (Diagnostic& diagnostic : *diagnostics)
-        {
-            diagnostic.file = paths.display(diagnostic.file);
-        }
+        respellFindings(*diagnostics, {file});
         // In SARIF mode the merged document is the output; text lines would pollute it.
         if (!config.output.sarif_format && !diagnostics->empty())
         {

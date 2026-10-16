@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Tools/AnalysisTools.hpp"
+#include "Process/Tools/InputPaths.hpp"
 #include <coretrace/logger.hpp>
 
 #include <regex>
@@ -97,7 +98,10 @@ namespace ctrace
         {
             return;
         }
-        const std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
+        std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
+        // The tool rewrites the paths of its file list (`./-F.c` becomes `-F.c`): each finding
+        // is spelled as its input.
+        respellFindings(diagnostics, files);
         // In SARIF mode the merged document is the output; text lines would pollute it.
         if (!config.output.sarif_format && !diagnostics.empty())
         {

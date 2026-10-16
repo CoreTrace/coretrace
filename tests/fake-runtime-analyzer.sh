@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # Stands in for coretrace-runtime-analyzer. It checks the command line ctrace must use:
 #   --format sarif --timeout <seconds> -o <run directory>/<name> [args] -- [compiler args] <source>
-# with the run directory existing and the source last, and exits 64 otherwise. Then it prints
-# the SARIF the real tool prints for the fixtures, with the source spelled as it was given:
-# a heap overflow for heap_overflow.c, a double free on line 12 for double_free.c, nothing for
+# with the run directory existing and the source last, not starting with `-`, and exits 64
+# otherwise. Then it prints the SARIF the real tool prints for the fixtures, with the source
+# spelled as it was given: a heap overflow for heap_overflow.c, a double free on line 12 for double_free.c, nothing for
 # others. --fake-exit=<code> ends with that code instead (2: could not build or run),
-# --fake-hang never ends. When CTRACE_FAKE_RUNTIME_LOG is set, the -o path is appended to it.
+# --fake-hang never ends, --fake-no-location reports a leak that has no location. When
+# CTRACE_FAKE_RUNTIME_LOG is set, the -o path is appended to it.
 contract() { echo "fake-runtime-analyzer: $1" >&2; exit 64; }
 [ "$1" = --format ] && [ "$2" = sarif ] || contract "expected --format sarif first"
 [ "$3" = --timeout ] || contract "expected --timeout"
@@ -16,16 +17,19 @@ program="$6"
 [ -d "$(dirname "$program")" ] || contract "the run directory does not exist: $program"
 shift 6
 mode=
+location=yes
 while [ "$#" -gt 0 ] && [ "$1" != -- ]; do
     case "$1" in
         --fake-exit=*) mode="exit ${1#--fake-exit=}" ;;
         --fake-hang) mode=hang ;;
+        --fake-no-location) location=no ;;
     esac
     shift
 done
 [ "$1" = -- ] || contract "expected -- before the compiler arguments"
 for source; do :; done
 [ -f "$source" ] || contract "the source comes last: $source"
+case "$source" in -*) contract "the compiler would read the source as an option: $source" ;; esac
 if [ -n "${CTRACE_FAKE_RUNTIME_LOG:-}" ]; then
     echo "$program" >> "$CTRACE_FAKE_RUNTIME_LOG"
 fi
@@ -36,6 +40,10 @@ esac
 
 # The real tool reports compiler and linker warnings on stderr; ctrace must still read the log.
 echo "ld: warning: object file was built for a newer version" >&2
+if [ "$location" = no ]; then
+    echo '{"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "coretrace-runtime-analyzer"}}, "results": [{"ruleId": "memory-leak", "level": "error", "message": {"text": "leak without a location"}}]}]}'
+    exit 1
+fi
 case "$(basename "$source")" in
     heap_overflow.c) rule=heap-buffer-overflow cwe=CWE-122 line=7 column=15
         message="heap-buffer-overflow WRITE of size 4" ;;

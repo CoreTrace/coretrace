@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "App/Files.hpp"
+#include "Process/Tools/InputPaths.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -8,6 +9,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_set>
+#include <utility>
 
 namespace ctrace
 {
@@ -39,10 +41,12 @@ namespace ctrace
           public:
             void add(const std::filesystem::path& path)
             {
-                const std::string normalized = path.lexically_normal().string();
+                // Normalizing drops a leading `./`: without it, every tool would read a file
+                // named `-F.c` as an option. Not every tool understands `--`; `./` works for all.
+                std::string normalized = notAnOption(path.lexically_normal().string());
                 if (seen_.insert(normalized).second)
                 {
-                    files_.push_back(normalized);
+                    files_.push_back(std::move(normalized));
                 }
             }
 

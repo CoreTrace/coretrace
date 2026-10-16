@@ -12,8 +12,11 @@ namespace ctrace
 {
     struct SourceFileResolution
     {
-        std::vector<std::string> files; ///< Normalized, deduplicated, in input order.
-        std::string error;              ///< Non-empty when an input could not be used.
+        /// Normalized, deduplicated, in input order, each passed to the tools as is. A relative
+        /// path that starts with `-` keeps `./` in front of it (notAnOption): normalizing it
+        /// again would drop it, and the tools would read the file as an option.
+        std::vector<std::string> files;
+        std::string error; ///< Non-empty when an input could not be used.
 
         [[nodiscard]] bool ok() const noexcept
         {

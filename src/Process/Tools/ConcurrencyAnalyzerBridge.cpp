@@ -55,12 +55,6 @@ namespace ctrace
             return Severity::Warning;
         }
 
-        /// An unknown location stays unknown rather than resolving to the working directory.
-        [[nodiscard]] std::string spelled(const InputPaths& paths, const std::string& file)
-        {
-            return file.empty() ? file : paths.display(file);
-        }
-
         [[nodiscard]] std::string cweOf(const concurrency::Diagnostic& finding)
         {
             for (const concurrency::TaxonomyRef& taxonomy : finding.taxonomies)
@@ -109,7 +103,7 @@ namespace ctrace
         Diagnostic diagnostic;
         diagnostic.tool = tool;
         diagnostic.ruleId = std::string(concurrency::toString(finding.ruleId));
-        diagnostic.file = spelled(paths, finding.location.file);
+        diagnostic.file = paths.display(finding.location.file);
         diagnostic.line = finding.location.line;
         diagnostic.column = finding.location.column;
         diagnostic.severity = toSeverity(finding.severity);
@@ -128,7 +122,7 @@ namespace ctrace
         }
         for (const concurrency::RelatedLocation& related : finding.relatedLocations)
         {
-            diagnostic.relatedLocations.push_back({spelled(paths, related.location.file),
+            diagnostic.relatedLocations.push_back({paths.display(related.location.file),
                                                    related.location.line, related.location.column,
                                                    related.label});
         }

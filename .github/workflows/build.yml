@@ -45,6 +45,7 @@ jobs:
             ca-certificates \
             gnupg \
             cppcheck \
+            flawfinder \
             patchelf
           sudo ./scripts/ci/install-llvm-apt.sh 20
           echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
@@ -56,7 +57,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          brew install cmake ninja llvm@20 cppcheck
+          brew install cmake ninja llvm@20 cppcheck flawfinder
           echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
           echo "Clang_DIR=$(brew --prefix llvm@20)/lib/cmake/clang" >> "$GITHUB_ENV"
           echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"

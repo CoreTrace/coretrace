@@ -9,6 +9,8 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 - **HTTP server, for clients:** a request must give `proto: coretrace-1.0` and only known
   parameters, and errors are answered with their HTTP status (400, 403 or 500) instead of 200.
   A second server on an address and port in use exits with code 1.
+- A file whose name starts with `-` is analyzed as a file by every tool, instead of being read
+  as an option, and its findings are spelled `./-F.c`.
 
 ## v0.84.0
 

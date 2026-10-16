@@ -2,6 +2,8 @@
 #ifndef INPUT_PATHS_HPP
 #define INPUT_PATHS_HPP
 
+#include "Process/Tools/Diagnostic.hpp"
+
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -11,11 +13,23 @@
 
 namespace ctrace
 {
+    /// `path` spelled so that no tool reads it as an option: a relative path that starts with
+    /// `-` gets `./` in front of it, which lexically_normal() drops. Inputs are spelled so before
+    /// they reach the tools, and findings so that they show the same spelling.
+    [[nodiscard]] inline std::string notAnOption(std::string path)
+    {
+        if (path.starts_with('-'))
+        {
+            path.insert(0, "./");
+        }
+        return path;
+    }
+
     /// How the file of a finding is spelled, the same for every tool: an input as the user typed
-    /// it; any other file relative to the working directory when below it, else absolute. Tools
-    /// report paths their own way (absolute, relative to a project root, differently from one
-    /// rule to the next); one spelling per file keeps the console, the API and the SARIF
-    /// fingerprints consistent across tools and machines.
+    /// it; any other file relative to the working directory when below it, with `./` kept before
+    /// a `-` (notAnOption), else absolute. Tools report paths their own way (absolute, relative
+    /// to a project root, differently from one rule to the next); one spelling per file keeps
+    /// the console, the API and the SARIF fingerprints consistent across tools and machines.
     class InputPaths
     {
       public:
@@ -39,17 +53,23 @@ namespace ctrace
             return std::nullopt;
         }
 
-        /// `file` as findings show it (see the class comment).
+        /// `file` as findings show it (see the class comment). A finding without a file keeps
+        /// none: an empty path is not the working directory.
         [[nodiscard]] std::string display(const std::filesystem::path& file) const
         {
-            if (auto input = asInput(file))
+            if (file.empty())
             {
-                return *input;
+                return {};
             }
+            // Resolved once: asInput() would resolve it again for a file that is not an input.
             const std::filesystem::path identity = identityOf(file);
+            if (const auto input = inputs_.find(identity); input != inputs_.end())
+            {
+                return input->second;
+            }
             const std::filesystem::path relative = identity.lexically_relative(workingDirectory_);
             const bool below = !relative.empty() && *relative.begin() != "..";
-            return (below ? relative : identity).string();
+            return below ? notAnOption(relative.string()) : identity.string();
         }
 
         /// One spelling per file: absolute, `.` and `..` resolved, symlinks followed where the
@@ -66,6 +86,23 @@ namespace ctrace
         std::map<std::filesystem::path, std::string> inputs_;
         std::filesystem::path workingDirectory_;
     };
+
+    /// Spells the file of every finding as InputPaths::display() does, for a tool that reports
+    /// the files it was given its own way: cppcheck and tscancode rewrite the paths of their file
+    /// list, the runtime analyzer names its source. Resolves nothing when there is no finding.
+    inline void respellFindings(std::vector<Diagnostic>& diagnostics,
+                                const std::vector<std::string>& inputs)
+    {
+        if (diagnostics.empty())
+        {
+            return;
+        }
+        const InputPaths paths(inputs);
+        for (Diagnostic& diagnostic : diagnostics)
+        {
+            diagnostic.file = paths.display(diagnostic.file);
+        }
+    }
 } // namespace ctrace
 
 #endif // INPUT_PATHS_HPP
