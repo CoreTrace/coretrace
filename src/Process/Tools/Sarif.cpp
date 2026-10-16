@@ -354,4 +354,9 @@ namespace ctrace
         }
         return diagnosticsFromSarif(log, tool);
     }
+
+    std::string sarifText(const nlohmann::json& log)
+    {
+        return log.dump(2, ' ', false, nlohmann::json::error_handler_t::replace);
+    }
 } // namespace ctrace
