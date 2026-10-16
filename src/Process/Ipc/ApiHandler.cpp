@@ -417,7 +417,8 @@ namespace
         const ctrace::AnalysisOutcome outcome = invoker.outcome();
         result["gate"] = {{"fail_on", ctrace::failOnName(config.analysis.fail_on)},
                           {"exit_code", ctrace::exitCodeFor(config.analysis.fail_on, outcome)},
-                          {"failed_tools", invoker.failedTools()}};
+                          {"failed_tools", invoker.failedTools()},
+                          {"unread_tools", invoker.unreadTools()}};
         if (output_capture)
         {
             json outputs = json::object();
