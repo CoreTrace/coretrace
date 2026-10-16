@@ -12,13 +12,16 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <spawn.h>
 #include <sys/socket.h>
@@ -72,7 +75,8 @@ namespace
     class ServerProcess
     {
       public:
-        ServerProcess(const std::string& ctrace, int port)
+        /// `output`, when given, receives what the process prints, on stdout and on stderr.
+        ServerProcess(const std::string& ctrace, int port, const std::string& output = {})
         {
             std::vector<std::string> args = {ctrace,
                                              "--ipc",
@@ -89,10 +93,19 @@ namespace
                 argv.push_back(arg.data());
             }
             argv.push_back(nullptr);
-            if (::posix_spawn(&pid_, ctrace.c_str(), nullptr, nullptr, argv.data(), environ) != 0)
+            posix_spawn_file_actions_t actions;
+            ::posix_spawn_file_actions_init(&actions);
+            if (!output.empty())
+            {
+                ::posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, output.c_str(),
+                                                   O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                ::posix_spawn_file_actions_adddup2(&actions, STDOUT_FILENO, STDERR_FILENO);
+            }
+            if (::posix_spawn(&pid_, ctrace.c_str(), &actions, nullptr, argv.data(), environ) != 0)
             {
                 pid_ = -1;
             }
+            ::posix_spawn_file_actions_destroy(&actions);
         }
 
         ~ServerProcess()
@@ -225,11 +238,25 @@ int main(int argc, char* argv[])
     report.expect(serving, "the server answers on the port it was given");
     if (serving)
     {
-        ServerProcess second(ctrace, port);
-        const std::optional<int> secondExit = second.waitExit(std::chrono::seconds(10));
-        report.expect(secondExit == 1, "a second server on the same port exits with code 1 (exit " +
-                                           (secondExit ? std::to_string(*secondExit) : "none") +
-                                           ")");
+        // In a scope of its own: a second server that started anyway is killed before the
+        // checks below, which it could otherwise answer.
+        {
+            const std::filesystem::path output =
+                std::filesystem::temp_directory_path() /
+                ("ctrace-second-server-" + std::to_string(port) + ".log");
+            ServerProcess second(ctrace, port, output.string());
+            const std::optional<int> secondExit = second.waitExit(std::chrono::seconds(10));
+            report.expect(secondExit == 1,
+                          "a second server on the same port exits with code 1 (exit " +
+                              (secondExit ? std::to_string(*secondExit) : "none") + ")");
+            std::ifstream log(output);
+            const std::string printed((std::istreambuf_iterator<char>(log)),
+                                      std::istreambuf_iterator<char>());
+            report.expect(printed.find("Cannot listen on 127.0.0.1:" + std::to_string(port)) !=
+                              std::string::npos,
+                          "it says it cannot listen on that port");
+            std::filesystem::remove(output);
+        }
         checkAnalysis(report, client, repoRoot);
         checkShutdown(report, client, server);
     }
