@@ -121,10 +121,88 @@ jobs:
             dist/${{ matrix.arch }}/*.sha256
           if-no-files-found: error
 
+  build-macos-binary:
+    name: Build macOS binary (arm64)
+    # Apple silicon. The Homebrew libraries the image ships are built for the runner's macOS,
+    # the oldest one the image then runs on: macos-14 gives macOS 14 (Sonoma).
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve artifact version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="sha-$(git rev-parse --short=12 HEAD)"
+          fi
+          echo "value=${version}" >> "${GITHUB_OUTPUT}"
+
+      # Homebrew's Python, rather than setup-python's: the licenses of what the Python analyzer
+      # ships are collected from Homebrew's kegs, as the LLVM ones are.
+      - name: Install the toolchain
+        run: |
+          set -euo pipefail
+          brew install cmake ninja llvm@20 python@3.12
+          "$(brew --prefix python@3.12)/bin/python3.12" -m venv "${RUNNER_TEMP}/nuitka"
+          "${RUNNER_TEMP}/nuitka/bin/python" -m pip install nuitka==4.2.2
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          llvm="$(brew --prefix llvm@20)"
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCORETRACE_VERSION_OVERRIDE="${{ steps.version.outputs.value }}" \
+            -DLLVM_DIR="${llvm}/lib/cmake/llvm" \
+            -DClang_DIR="${llvm}/lib/cmake/clang" \
+            -DCLANG_EXECUTABLE="${llvm}/bin/clang" \
+            -DENABLE_PYTHON_ANALYZER=ON \
+            -DPython3_EXECUTABLE="${RUNNER_TEMP}/nuitka/bin/python"
+          cmake --build build
+          ./build/ctrace --version
+
+      - name: Package the disk image
+        run: sh scripts/release/package-macos.sh build "${{ steps.version.outputs.value }}" dist/macos
+
+      # The image as users receive it: mounted, its folder copied out, then run with Homebrew moved
+      # away, so that only what the image ships, the system's libraries and the SDK's C headers
+      # can be found. Its licenses are checked again, then the Python analyzer runs, then C sources
+      # are analyzed by the stack analyzer and by the concurrency analyzer.
+      - name: Verify the disk image
+        run: |
+          set -euo pipefail
+          name="${RELEASE_BASENAME}-${{ steps.version.outputs.value }}-macos-arm64"
+          (cd dist/macos && shasum -a 256 -c "${name}.dmg.sha256")
+          hdiutil attach -readonly -nobrowse -mountpoint "${RUNNER_TEMP}/image" "dist/macos/${name}.dmg"
+          cp -R "${RUNNER_TEMP}/image/${name}" "${RUNNER_TEMP}/coretrace"
+          hdiutil detach "${RUNNER_TEMP}/image"
+          sudo mv /opt/homebrew /opt/homebrew.hidden
+          trap 'sudo mv /opt/homebrew.hidden /opt/homebrew' EXIT
+          sh scripts/release/check-licenses.sh "${RUNNER_TEMP}/coretrace" scripts/release/third-party-macos.txt
+          sh tests/python/check-installed.sh "${RUNNER_TEMP}/coretrace" "${RUNNER_TEMP}/check-installed"
+          sh tests/release/check-c-analysis.sh "${RUNNER_TEMP}/coretrace" "${RUNNER_TEMP}/check-c"
+          sh tests/release/check-concurrency-analysis.sh "${RUNNER_TEMP}/coretrace" "${RUNNER_TEMP}/check-concurrency"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.RELEASE_BASENAME }}-${{ steps.version.outputs.value }}-macos-arm64
+          path: |
+            dist/macos/*.dmg
+            dist/macos/*.sha256
+          if-no-files-found: error
+
   publish-release-assets:
     name: Attach binaries to GitHub Release
     runs-on: ubuntu-24.04
-    needs: build-linux-binaries
+    needs: [build-linux-binaries, build-macos-binary]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
@@ -138,7 +216,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: ${{ env.RELEASE_BASENAME }}-*-linux-*
+          pattern: ${{ env.RELEASE_BASENAME }}-*
           path: dist
           merge-multiple: true
 
@@ -151,13 +229,16 @@ jobs:
       - name: Attest the provenance of the archives
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/*.tar.gz
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.dmg
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.tar.gz
+            dist/*.dmg
             dist/*.sha256
           fail_on_unmatched_files: true
           generate_release_notes: true

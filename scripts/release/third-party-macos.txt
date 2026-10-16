@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The third-party code the macOS release image ships, and where its license is, in the format of
+# third-party.txt (the Linux archives' inventory): a glob relative to the image's folder, then the
+# licenses of the files it matches. check-licenses.sh fails the packaging when a library or an
+# executable matches no line, or when a license a matching line names is missing.
+#
+# Where the licenses come from:
+#   <...>licenses/homebrew/<formula>  collect-licenses.sh brew copies them from the formula's keg
+#       on the machine that built the image, with the keg's VERSION, after checking that the keg
+#       has each shipped library of the line;
+#   licenses/<component>  installed by CMake from the sources compiled into ctrace;
+#   the others  shipped by the bundled tools (scripts/build-python-analyzer.sh).
+
+# ctrace, and the code compiled into it.
+bin/ctrace  LICENSE licenses/coretrace-stack-analyzer licenses/coretrace-concurrency-analyzer licenses/coretrace-compiler licenses/coretrace-log licenses/cpp-httplib licenses/nlohmann-json licenses/CLI11
+config/models/*  licenses/coretrace-stack-analyzer
+
+# Libraries from Homebrew's kegs, which ctrace loads from lib/. Clang's headers come with LLVM.
+lib/libLLVM.dylib  licenses/homebrew/llvm@20
+lib/libclang-cpp.dylib  licenses/homebrew/llvm@20
+lib/clang/*/include/*  licenses/homebrew/llvm@20
+lib/libz3.*dylib  licenses/homebrew/z3
+lib/libzstd.*dylib  licenses/homebrew/zstd
+
+# coretrace-python-analyzer, compiled by Nuitka with Homebrew's Python 3.12 and the libraries it
+# loads, all from Homebrew's kegs. Nuitka's runtime library is compiled into the executable.
+libexec/coretrace/coretrace-python-analyzer/coretrace-python-analyzer  libexec/coretrace/coretrace-python-analyzer/licenses/coretrace-python-analyzer libexec/coretrace/coretrace-python-analyzer/licenses/nuitka libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/python@3.12
+libexec/coretrace/coretrace-python-analyzer/Python  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/python@3.12
+libexec/coretrace/coretrace-python-analyzer/libcrypto.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/openssl@3
+libexec/coretrace/coretrace-python-analyzer/libssl.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/openssl@3
+libexec/coretrace/coretrace-python-analyzer/liblzma.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/xz
+libexec/coretrace/coretrace-python-analyzer/libmpdec.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/mpdecimal
+libexec/coretrace/coretrace-python-analyzer/libexpat.*dylib  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/expat
+libexec/coretrace/coretrace-python-analyzer/*.so  libexec/coretrace/coretrace-python-analyzer/licenses/homebrew/python@3.12
