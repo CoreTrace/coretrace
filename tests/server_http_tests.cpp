@@ -7,8 +7,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <thread>
 
@@ -227,10 +229,11 @@ namespace
         expectAnswer(client.Post("/api", "{not json", "application/json"), 400, "InvalidRequest",
                      "malformed JSON");
         // A Latin-1 file name: the parser's message quotes the invalid byte.
-        expectAnswer(client.Post("/api",
-                                 "{\"proto\":\"coretrace-1.0\",\"params\":{\"input\":\"caf\xe9.c\"}}",
-                                 "application/json"),
-                     400, "InvalidRequest", "a body that is not valid UTF-8");
+        expectAnswer(
+            client.Post("/api",
+                        "{\"proto\":\"coretrace-1.0\",\"params\":{\"input\":\"caf\xe9.c\"}}",
+                        "application/json"),
+            400, "InvalidRequest", "a body that is not valid UTF-8");
         expectAnswer(client.Post("/api", R"({"id":1e1000})", "application/json"), 400,
                      "InvalidRequest", "a number out of range");
         expectAnswer(client.Post("/api", "[1]", "application/json"), 400, "InvalidRequest",
@@ -327,6 +330,52 @@ namespace
                       "with the opt-in, the dynamic analysis runs (" +
                           response.value("error", nlohmann::json::object()).dump() + ")");
     }
+
+    // A tool may print bytes that are not UTF-8, such as a message in Latin-1: the result still
+    // reaches the client, those bytes replaced by U+FFFD, in JSON and in SARIF.
+    void testToolOutputThatIsNotUtf8(TestReport& report, const std::string& buildDir,
+                                     const std::string& sourceDir)
+    {
+        const std::string latin1Tool = buildDir + "/fake-cppcheck-latin1.json";
+        {
+            std::ofstream(latin1Tool)
+                << nlohmann::json{{"schema_version", 1},
+                                  {"tools",
+                                   {{"cppcheck",
+                                     {{"path", sourceDir + "/tests/fake-file-list-tool.sh"},
+                                      {"args", {"--fake-latin1"}}}}}}}
+                       .dump();
+        }
+        const ServerFixture server(localConfig(18808));
+        auto client = server.client();
+        const std::string replaced = "caf\xEF\xBF\xBD";
+        for (const bool sarif : {false, true})
+        {
+            nlohmann::json request = analysisRequest(sourceDir + "/tests/double_free.c",
+                                                     {"cppcheck"}, false, latin1Tool);
+            const std::string reportFile = buildDir + "/latin1-report.sarif";
+            std::filesystem::remove(reportFile);
+            request["params"]["sarif_format"] = sarif;
+            request["params"]["report_file"] = reportFile;
+            const auto answer = client.Post("/api", request.dump(), "application/json");
+            const std::string format = sarif ? "SARIF" : "JSON";
+            report.expect(
+                answer && answer->status == 200 && answer->body.find(replaced) != std::string::npos,
+                "a tool output that is not UTF-8 keeps the " + format +
+                    " result, the byte replaced (got " +
+                    (answer ? std::to_string(answer->status) + " " + answer->body.substr(0, 160)
+                            : "no response") +
+                    ")");
+            if (sarif)
+            {
+                std::ifstream written(reportFile);
+                const std::string document((std::istreambuf_iterator<char>(written)),
+                                           std::istreambuf_iterator<char>());
+                report.expect(document.find(replaced) != std::string::npos,
+                              "the SARIF report file is written, the byte replaced");
+            }
+        }
+    }
 } // namespace
 
 int main(int argc, char* argv[])
@@ -347,6 +396,7 @@ int main(int argc, char* argv[])
     testErrorStatuses(report);
     testGracefulShutdown(report);
     testDynamicAnalysisNeedsTheServerOptIn(report, argv[1], argv[2]);
+    testToolOutputThatIsNotUtf8(report, argv[1], argv[2]);
 
     if (report.failures == 0)
     {
