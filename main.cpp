@@ -22,11 +22,13 @@ namespace
         coretrace::set_source_location(false);
         coretrace::set_thread_safe(false);
 
+        using ctrace::interrupt::OnInterrupt;
         if (config.runtime.ipc == "serve")
         {
+            ctrace::interrupt::install(OnInterrupt::LetToolsFinish);
             return ctrace::run_server(config, executable);
         }
-        ctrace::interrupt::install(ctrace::interrupt::OnInterrupt::StopTools);
+        ctrace::interrupt::install(OnInterrupt::StopTools);
         return ctrace::run_cli_analysis(config);
     }
 } // namespace
