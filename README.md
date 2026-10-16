@@ -319,9 +319,9 @@ fails on findings but still returns `3` on a broken tool. Code `3` takes precede
 
 Interrupting a run (Ctrl+C, SIGINT or SIGTERM) stops the external tools it runs, with what they
 started, and removes their run directories. The run gives no report, and `ctrace` ends by the
-signal it received: the shell shows `130` or `143`. The stack and concurrency analyzers are
-linked into `ctrace` and cannot be stopped, so `ctrace` waits for them; interrupt again to quit
-at once.
+signal it received: the shell shows `130` or `143`. No tool starts after the interrupt. The
+stack and concurrency analyzers are linked into `ctrace` and cannot be stopped, so `ctrace` waits
+for one already running; interrupt again to quit at once.
 
 ```bash
 ./ctrace --fail-on warning --input src/main.c --invoke cppcheck,ctrace_stack_analyzer
