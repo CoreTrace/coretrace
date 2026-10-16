@@ -85,11 +85,12 @@ done < "$work/relocated"
 
 root=$(cd "$prefix" && pwd -P)
 
-# Whether path $1, relative to the prefix and possibly holding .., names a file of the tree.
+# Whether path $1, relative to the prefix and possibly holding .., names a file of the tree: the
+# file it finally designates, symbolic links followed, must exist and be inside the tree.
 in_tree() {
-    directory=$(cd "$prefix/$(dirname "$1")" 2> /dev/null && pwd -P) || return 1
-    case $directory/ in
-        "$root"/*) [ -e "$directory/${1##*/}" ] ;;
+    target=$(realpath "$prefix/$1" 2> /dev/null) || return 1
+    case $target in
+        "$root"/*) [ -f "$target" ] ;;
         *) return 1 ;;
     esac
 }
