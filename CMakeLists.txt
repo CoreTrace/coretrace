@@ -409,6 +409,10 @@ set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSIO
 # log still reaches stdout and the verdict stands.
 add_test(NAME ctrace_exit_1_without_input
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No input files resolved'")
+# Nothing selected to run is a usage error too: a CI step that forgot --static would otherwise
+# pass forever, having checked nothing (C35).
+add_test(NAME ctrace_exit_1_without_analysis
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No analysis selected'")
 add_test(NAME ctrace_unwritable_sarif_report_keeps_the_verdict
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${CMAKE_SOURCE_DIR}/tests/double_free.c/report.sarif 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Unable to write the SARIF report' && printf '%s\\n' \"$out\" | grep -q '\"name\": \"cppcheck\"'")
 
