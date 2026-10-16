@@ -127,7 +127,9 @@ The failed runs of `coretrace`, and what each one caught, are in
 1. Make `scripts/ci/coverage.sh` fail when the critical path or the server path falls below its
    floor.
 2. Add tests for the four least covered files of the critical path.
-3. Cover `RunDirectory`: [#164](https://github.com/CoreTrace/coretrace/issues/164), a welcome
-   ticket.
+3. **Done:** cover `RunDirectory`: [#164](https://github.com/CoreTrace/coretrace/issues/164), a
+   welcome ticket, merged with [#197](https://github.com/CoreTrace/coretrace/pull/197) on
+   2026-10-16. The test counts above are those of the 2026-10-13 measure; `main` now runs 20
+   unit tests.
 4. Test the timeout path of the linked analyzers along with
    [#172](https://github.com/CoreTrace/coretrace/issues/172).
