@@ -340,6 +340,11 @@ target_link_libraries(ctrace_tool_diagnostics_tests PRIVATE nlohmann_json::nlohm
 add_test(NAME ctrace_tool_diagnostics_tests
     COMMAND ctrace_tool_diagnostics_tests ${CMAKE_SOURCE_DIR})
 
+# Not a test: prints where the results of a SARIF log are, for the tests that check paths
+# with a JSON parser rather than by searching the text.
+add_executable(ctrace_sarif_locations tests/sarif_locations.cpp)
+target_link_libraries(ctrace_sarif_locations PRIVATE nlohmann_json::nlohmann_json)
+
 # Each file reaches only the tools of its language.
 add_executable(ctrace_tool_routing_tests
     tests/tool_routing_tests.cpp
@@ -901,6 +906,7 @@ endforeach()
 # Applied last so every executable we own exists by now.
 foreach(coretrace_target
     ctrace
+    ctrace_sarif_locations
     ctrace_config_tests
     ctrace_tool_arguments_tests
     ctrace_files_tests
