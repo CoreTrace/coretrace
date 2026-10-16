@@ -115,7 +115,7 @@ the findings require (C28).
 | Unknown method | Only `run_analysis` | 400 `UnknownMethod` | S05 |
 | Parameters | The configuration loader's rules: unknown parameters, wrong types and values are rejected | 400 `InvalidParams` | S06 |
 | Dynamic analysis without `--serve-allow-dynamic` | Refused; a request's own configuration cannot grant it | 403 `DynamicAnalysisDisabled` | S11 |
-| Missing input | The verdict says incomplete | 200, `gate.exit_code` 3 | S12 |
+| Missing input | Resolution leaves no source file | 400 `MissingInput` | S12 |
 | Other routes and methods | Not served | 404 | S08 |
 | `POST /shutdown` without or with a wrong token | Refused | 403 | S09, S10 |
 | Browser on another origin | No `Access-Control-*` header unless `server.cors_origin` is set | The page cannot read the answer | S13 |
