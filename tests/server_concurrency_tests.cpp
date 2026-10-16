@@ -187,8 +187,7 @@ namespace
                                  {"smt_timeout_ms", 80U},
                                  {"stack_analyzer_mode", "abi"},
                                  {"ipc", "server"},
-                                 {"jobs", 1U},
-                                 {"not_a_known_param", 42}};
+                                 {"jobs", 1U}};
             const bool ok = ApiHandler::build_config_from_params(params, config, err);
             report.expect(ok, "params: valid request is accepted (" + err.message + ")");
             report.expect((config.files.input == std::vector<std::string>{"a.c", "b.c"}),
@@ -225,6 +224,14 @@ namespace
                 json{{"smt_timeout_ms", 5000000000ULL}}, config, err);
             report.expect(!ok && err.message == "smt_timeout_ms is too large.",
                           "params: smt_timeout_ms range error keeps its text");
+        }
+        {
+            ctrace::ProgramConfig config;
+            const bool ok = ApiHandler::build_config_from_params(
+                json{{"static_analysis", true}, {"not_a_known_param", 42}}, config, err);
+            report.expect(!ok && err.code == "InvalidParams" &&
+                              err.message.find("not_a_known_param") != std::string::npos,
+                          "params: an unknown parameter is rejected like in the config file");
         }
         {
             ctrace::ProgramConfig config;

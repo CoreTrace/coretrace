@@ -27,6 +27,10 @@ namespace ctrace
     /// the document goes.
     [[nodiscard]] nlohmann::json renderSarif(const std::vector<Diagnostic>& diagnostics);
 
+    /// The text of a SARIF log, indented. A tool may print bytes that are not UTF-8 (a message
+    /// in Latin-1): they are replaced by U+FFFD, as SARIF is UTF-8, instead of failing the run.
+    [[nodiscard]] std::string sarifText(const nlohmann::json& log);
+
     /// Same, from the raw text a tool printed: the JSON document is located inside the text
     /// (tools print progress lines around it) and parsed. Nothing when no document parses.
     [[nodiscard]] std::optional<std::vector<Diagnostic>>

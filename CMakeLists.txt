@@ -490,6 +490,8 @@ target_link_libraries(ctrace_server_http_tests
             coretrace::coretrace_concurrency_analyzer_lib httplib::httplib)
 add_test(NAME ctrace_server_http_tests
     COMMAND ctrace_server_http_tests ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
+# A second server that binds a port in use anyway serves forever: its run() never returns.
+set_tests_properties(ctrace_server_http_tests PROPERTIES TIMEOUT 120)
 
 # The server as `ctrace --ipc serve` runs it: an analysis over HTTP, then a clean shutdown.
 add_executable(ctrace_server_cli_tests tests/server_cli_tests.cpp)
@@ -503,6 +505,11 @@ set_tests_properties(ctrace_server_cli_tests PROPERTIES TIMEOUT 120)
 add_test(NAME ctrace_serve_refuses_an_exposed_host_without_token
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --ipc serve --serve-host 0.0.0.0 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'Refusing to serve'")
 set_tests_properties(ctrace_serve_refuses_an_exposed_host_without_token PROPERTIES TIMEOUT 30)
+# Port 0 asks the system for a free port: the log must give the one it chose, not 0.
+set(ctrace_port_zero_log ${CMAKE_BINARY_DIR}/serve-port-zero.log)
+add_test(NAME ctrace_serve_logs_the_port_the_system_chose
+    COMMAND sh -c "$<TARGET_FILE:ctrace> --ipc serve --serve-port 0 > '${ctrace_port_zero_log}' 2>&1 & pid=$!; i=0; while [ $i -lt 100 ] && ! grep -q 'Listening on' '${ctrace_port_zero_log}'; do sleep 0.1; i=$((i + 1)); done; kill $pid; cat '${ctrace_port_zero_log}'; grep -Eq 'Listening on http://127\\.0\\.0\\.1:[1-9][0-9]*$' '${ctrace_port_zero_log}'")
+set_tests_properties(ctrace_serve_logs_the_port_the_system_chose PROPERTIES TIMEOUT 30)
 
 # K4: the bridge report explains every option forwarded to the analyzer, at verbose level.
 add_test(NAME ctrace_bridge_report_is_logged
@@ -593,6 +600,15 @@ set_tests_properties(ctrace_sarif_report_file_is_the_merged_log PROPERTIES
 set(ctrace_dedup_sarif ${CMAKE_BINARY_DIR}/ctrace-dedup.sarif)
 add_test(NAME ctrace_sarif_merges_cross_tool_duplicates
     COMMAND sh -c "$<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck,ctrace_stack_analyzer --config ${CMAKE_SOURCE_DIR}/config/tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${ctrace_dedup_sarif} > /dev/null && test $(grep -c 'coretrace/v1' ${ctrace_dedup_sarif}) -eq 1 && grep -q 'alsoReportedBy' ${ctrace_dedup_sarif}")
+
+# A tool may print bytes that are not UTF-8: the SARIF log still comes out, on stdout and in the
+# report file, those bytes replaced by U+FFFD.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-latin1\"]}}}\n")
+set(ctrace_latin1_sarif ${CMAKE_BINARY_DIR}/latin1.sarif)
+add_test(NAME ctrace_sarif_survives_tool_output_that_is_not_utf8
+    COMMAND sh -c "rm -f '${ctrace_latin1_sarif}'; out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json --input tests/double_free.c --report-file '${ctrace_latin1_sarif}' 2>/dev/null); status=$?; replaced=$(printf 'caf\\357\\277\\275'); test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q \"$replaced\" && grep -q \"$replaced\" '${ctrace_latin1_sarif}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
 # its findings (null dereference, signed overflow) with an absolute path.
