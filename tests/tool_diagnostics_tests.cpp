@@ -372,6 +372,8 @@ int main(int argc, char** argv)
         report.expect(paths.asInput(cwd / "tests/double_free.c") == "tests/double_free.c" &&
                           !paths.asInput(cwd / "include/header.h").has_value(),
                       "InputPaths: asInput recognizes the inputs only");
+        report.expect(paths.display("").empty(),
+                      "InputPaths: a finding without a file stays without one");
     }
 
     // A SARIF result suppressed in source is not a finding; a rejected suppression is.
