@@ -111,6 +111,7 @@ the findings require (C28).
 | Bind address beyond loopback without `--shutdown-token` | Refused at startup (`src/App/Runner.cpp:26-55`) | exit 1 | S01 |
 | Body larger than `server.max_body_bytes` (1 MiB) | httplib limit | 413 | S07 |
 | Invalid JSON | Parse error caught | 400 `InvalidRequest` | S03 |
+| Body, or a tool's output, that is not UTF-8 | The answer is written with the invalid bytes replaced by U+FFFD | 400 `InvalidRequest` for the body; the full result for a tool's output, in JSON and in SARIF | — |
 | `proto` other than `coretrace-1.0` | Refused | 400 `UnsupportedProtocol` | S04 |
 | Unknown method | Only `run_analysis` | 400 `UnknownMethod` | S05 |
 | Parameters | The configuration loader's rules: unknown parameters, wrong types and values are rejected | 400 `InvalidParams` | S06 |
