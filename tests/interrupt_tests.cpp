@@ -260,6 +260,59 @@ namespace
         std::cout << workspace.printed();
     }
 
+    // A tool that ended before ctrace acted on the interrupt may leave what it started behind,
+    // in its process group: that group is stopped all the same. The tool interrupts ctrace, then
+    // exits; with one job, the thread that waits on the tool handles the signal before it can see
+    // the tool end.
+    void testToolThatEndedFirst(TestReport& report, const std::string& ctrace,
+                                const fs::path& repoRoot, const fs::path& work)
+    {
+        const Workspace workspace(work / "interrupt-ended-first", repoRoot);
+        ::setenv("CTRACE_FAKE_SLEEP", "600", 1);
+        ::setenv("CTRACE_FAKE_INTERRUPT_PARENT", "1", 1);
+        ::setenv("TMPDIR", workspace.tmp.c_str(), 1);
+        Child run({ctrace, "--jobs", "1", "--invoke", "cppcheck", "--config",
+                   workspace.config.string(), "--input",
+                   (repoRoot / "tests/double_free.c").string()},
+                  workspace.log);
+        ::unsetenv("TMPDIR");
+        ::unsetenv("CTRACE_FAKE_INTERRUPT_PARENT");
+
+        const std::vector<pid_t> tool = workspace.waitForTool();
+        const std::optional<int> status = run.waitEnd(std::chrono::seconds(10));
+        report.expect(tool.size() == 2 && endedBy(status, SIGTERM),
+                      "ended first: ctrace ends by the signal");
+        report.expect(allGone(tool), "ended first: what the tool left in its group is stopped");
+        killLeftovers(tool);
+        std::cout << workspace.printed();
+    }
+
+    // Once interrupted, a run starts no other tool: a linked analyzer, which cannot be stopped,
+    // would keep ctrace running for as long as it takes.
+    void testNoToolStartsAfterInterrupt(TestReport& report, const std::string& ctrace,
+                                        const fs::path& repoRoot, const fs::path& work)
+    {
+        const Workspace workspace(work / "interrupt-no-start", repoRoot);
+        ::setenv("CTRACE_FAKE_SLEEP", "600", 1);
+        ::setenv("TMPDIR", workspace.tmp.c_str(), 1);
+        Child run({ctrace, "--jobs", "1", "--invoke", "cppcheck,ctrace_stack_analyzer", "--config",
+                   workspace.config.string(), "--input",
+                   (repoRoot / "tests/double_free.c").string()},
+                  workspace.log);
+        ::unsetenv("TMPDIR");
+
+        const std::vector<pid_t> tool = workspace.waitForTool();
+        run.signal(SIGINT);
+        const std::optional<int> status = run.waitEnd(std::chrono::seconds(30));
+        const std::string printed = workspace.printed();
+        report.expect(tool.size() == 2 && endedBy(status, SIGINT),
+                      "no start: ctrace ends by the signal");
+        report.expect(printed.find("Running CoreTrace Stack Analyzer") == std::string::npos,
+                      "no start: the stack analyzer does not start after the interrupt");
+        killLeftovers(tool);
+        std::cout << printed;
+    }
+
     /// A loopback port nobody listens on, as the kernel hands them out.
     int freePort()
     {
@@ -356,6 +409,8 @@ int main(int argc, char* argv[])
 
     testInterruptedRun(report, ctrace, repoRoot, work, SIGINT);
     testInterruptedRun(report, ctrace, repoRoot, work, SIGTERM);
+    testToolThatEndedFirst(report, ctrace, repoRoot, work);
+    testNoToolStartsAfterInterrupt(report, ctrace, repoRoot, work);
     testServerDrains(report, ctrace, repoRoot, work);
 
     if (report.failures == 0)
