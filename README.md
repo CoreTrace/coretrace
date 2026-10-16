@@ -319,10 +319,11 @@ fails on findings but still returns `3` on an incomplete analysis. Code `3` take
 `2`.
 
 `ctrace` cannot read the findings of `ikos`, of `flawfinder` when it prints no SARIF, or of
-`cppcheck` and `tscancode` when their output cites an input file at a line but no line parses:
-such a run exits `3` and names the tool, since zero findings would be a guess. `--static`
-includes `ikos`, so its runs always end incomplete: to gate on a verdict, pick the tools with
-`--invoke`.
+`cppcheck` and `tscancode` when a line of their output cites a source location (`file:line`, in
+any format and any file, a header included) but does not parse. Such a run exits `3` and names
+the tool, since its counts would be a guess; the findings read still count, and the tool's raw
+output is shown. `--static` includes `ikos`, so its runs always end incomplete: to gate on a
+verdict, pick the tools with `--invoke`.
 
 ```bash
 ./ctrace --fail-on warning --input src/main.c --invoke cppcheck,ctrace_stack_analyzer
