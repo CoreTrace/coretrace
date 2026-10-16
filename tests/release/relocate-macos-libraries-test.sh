@@ -122,6 +122,24 @@ codesign --force --sign - "$prefix/libexec/tool/tool" 2> /dev/null
 run 1 "a library found only through a run path outside the tree fails and is named" \
     "libexec/tool/tool loads @rpath/libdep_rpath.dylib, which is not in the tree" "$prefix"
 
+# A library may be a symbolic link, as Homebrew's versioned names are: it is in the tree only if
+# the file it finally points to is.
+install_tree "$prefix"
+mkdir -p "$prefix/libexec/tool" "$prefix/libexec/shared"
+cp "$built/tool" "$built/libdep_executable_path.dylib" "$built/libdep_rpath.dylib" \
+    "$prefix/libexec/tool/"
+cp "$built/libdep_loader_path.dylib" "$prefix/libexec/shared/"
+ln -s ../shared/libdep_loader_path.dylib "$prefix/libexec/tool/libdep_loader_path.dylib"
+run 0 "a library linked to a file of the tree passes" "" "$prefix"
+rm "$prefix/libexec/tool/libdep_loader_path.dylib"
+ln -s "$built/libdep_loader_path.dylib" "$prefix/libexec/tool/libdep_loader_path.dylib"
+run 1 "a library linked to a file outside the tree fails and is named" \
+    "libexec/tool/tool loads @loader_path/libdep_loader_path.dylib, which is not in the tree" "$prefix"
+rm "$prefix/libexec/tool/libdep_loader_path.dylib"
+ln -s ../shared/missing.dylib "$prefix/libexec/tool/libdep_loader_path.dylib"
+run 1 "a library linked to nothing fails and is named" \
+    "libexec/tool/tool loads @loader_path/libdep_loader_path.dylib, which is not in the tree" "$prefix"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures relocate-macos-libraries test(s) failed"
     exit 1
