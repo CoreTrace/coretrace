@@ -61,11 +61,12 @@ namespace ctrace
             {
                 return {};
             }
-            if (auto input = asInput(file))
-            {
-                return *input;
-            }
+            // Resolved once: asInput() would resolve it again for a file that is not an input.
             const std::filesystem::path identity = identityOf(file);
+            if (const auto input = inputs_.find(identity); input != inputs_.end())
+            {
+                return input->second;
+            }
             const std::filesystem::path relative = identity.lexically_relative(workingDirectory_);
             const bool below = !relative.empty() && *relative.begin() != "..";
             return below ? notAnOption(relative.string()) : identity.string();
