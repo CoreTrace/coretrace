@@ -148,9 +148,9 @@ SIGINT and SIGTERM are recorded by a handler (`include/Process/Interrupt.hpp`), 
 where ctrace waits ([#188](https://github.com/CoreTrace/coretrace/issues/188)):
 
 - A run stops the external tools it runs: SIGTERM to each tool's process group, which holds
-  what the tool started, then SIGKILL after 2 s (`include/Process/UnixProcess.hpp`). A tool that
-  ended just before is reaped only after its group is stopped, so that nothing it started
-  survives. No tool starts after the interrupt, a linked analyzer included
+  what the tool started, then SIGKILL after 2 s (`include/Process/UnixProcess.hpp`). A tool's
+  group never outlives it: what the tool left there is killed when it ends, so that an interrupt
+  handled just after, on any thread, leaves nothing behind. No tool starts after the interrupt, a linked analyzer included
   (`ToolInvoker::runTool`), and the run directories are removed as the tool runs return. The
   run gives no report or verdict, and `ctrace` ends by the signal it received: 130 or 143 in a
   shell (C31–C34). A linked analyzer (stack, concurrency) already running cannot be stopped
