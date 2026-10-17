@@ -39,6 +39,8 @@ namespace ctrace
         // checks are what a static analysis run is expected to report.
         args.push_back("--enable=warning,style,performance,portability");
         args.push_back("--inline-suppr");
+        // Its "Checking <file> ..." progress lines would mix with the findings.
+        args.push_back("--quiet");
         appendBuildContext(args, config);
         // tools.cppcheck.jobs only: without it cppcheck keeps its own default.
         if (config.tools.cppcheck_jobs != 0)
@@ -51,12 +53,12 @@ namespace ctrace
         return args;
     }
 
-    std::vector<Diagnostic> CppCheckToolImplementation::parseDiagnostics(const std::string& output)
+    ParsedLines CppCheckToolImplementation::parseDiagnostics(const std::string& output)
     {
         // One line per finding, exactly as kOutputTemplate lays it out.
         static const std::regex linePattern(
             R"(^(.+?):(\d+):(\d+): (\w+): (.*) \[([^\]]+)\] \[CWE-(\d+)\]$)");
-        std::vector<Diagnostic> diagnostics;
+        ParsedLines parsed;
         std::istringstream stream(output);
         std::string line;
         while (std::getline(stream, line))
@@ -64,6 +66,10 @@ namespace ctrace
             std::smatch match;
             if (!std::regex_match(line, match, linePattern))
             {
+                if (citesASourceLocation(line))
+                {
+                    parsed.unread.push_back(line);
+                }
                 continue;
             }
             Diagnostic diagnostic;
@@ -78,9 +84,9 @@ namespace ctrace
             {
                 diagnostic.cwe = "CWE-" + match[7].str();
             }
-            diagnostics.push_back(std::move(diagnostic));
+            parsed.diagnostics.push_back(std::move(diagnostic));
         }
-        return diagnostics;
+        return parsed;
     }
 
     void CppCheckToolImplementation::executeBatch(const std::vector<std::string>& files,
@@ -98,16 +104,11 @@ namespace ctrace
         {
             return;
         }
-        std::vector<Diagnostic> diagnostics = parseDiagnostics(run->output);
+        ParsedLines parsed = parseDiagnostics(run->output);
         // The tool rewrites the paths of its file list (`./-F.c` becomes `-F.c`): each finding
         // is spelled as its input.
-        respellFindings(diagnostics, files);
-        // In SARIF mode the merged document is the output; text lines would pollute it.
-        if (!config.output.sarif_format && !diagnostics.empty())
-        {
-            output.result(renderLines(diagnostics));
-        }
-        output.diagnostics(diagnostics);
+        respellFindings(parsed.diagnostics, files);
+        reportParsedLines(config, std::move(parsed), run->output, output);
     }
 
     std::string CppCheckToolImplementation::name() const

@@ -105,7 +105,7 @@ int main(int argc, char** argv)
             "[unreadVariable] [CWE-563]\n"
             "nofile:0:0: information: Active checkers: 167/856 [checkersReport] [CWE-0]\n"
             "1/2 files checked 50% done\n";
-        const auto items = CppCheckToolImplementation::parseDiagnostics(output);
+        const auto items = CppCheckToolImplementation::parseDiagnostics(output).diagnostics;
         report.expect(items.size() == 3, "cppcheck: only diagnostic lines are parsed (got " +
                                              std::to_string(items.size()) + ")");
         if (items.size() == 3)
@@ -120,8 +120,32 @@ int main(int argc, char** argv)
             report.expect(items[1].severity == Severity::Warning, "cppcheck: style is a warning");
             report.expect(items[2].severity == Severity::Info, "cppcheck: information is info");
         }
-        report.expect(CppCheckToolImplementation::parseDiagnostics("").empty(),
+        report.expect(CppCheckToolImplementation::parseDiagnostics("").diagnostics.empty(),
                       "cppcheck: empty output has no diagnostics");
+        report.expect(CppCheckToolImplementation::parseDiagnostics(output).unread.empty(),
+                      "cppcheck: progress lines are not findings lost");
+    }
+
+    // A line that cites a source location but does not parse is a finding lost, whatever the file
+    // (a header the run did not name); a line that names no location is not.
+    {
+        const std::string output =
+            "a.c:3:5: information: kept [kept] [CWE-0]\n"
+            "include/bad.h:1: error: Null pointer dereference: p\n"
+            "[a.c:7]: (error) old format\n"
+            "cppcheck: Found unknown elements in configuration file 'std.cfg'\n"
+            "Checking a.c: FOO=1...\n"
+            "1/2 files checked 50% done\n";
+        const ParsedLines parsed = CppCheckToolImplementation::parseDiagnostics(output);
+        report.expect(
+            parsed.diagnostics.size() == 1 &&
+                parsed.unread ==
+                    std::vector<std::string>{"include/bad.h:1: error: Null pointer dereference: p",
+                                             "[a.c:7]: (error) old format"},
+            "cppcheck: lines that cite a location but do not parse are unread");
+        const ParsedLines tscancode = TscancodeToolImplementation::parseDiagnostics(output);
+        report.expect(tscancode.diagnostics.size() == 1 && tscancode.unread.size() == 2,
+                      "tscancode: lines that cite a location but do not parse are unread");
     }
 
     // A generic SARIF reader covers every tool that writes SARIF itself (flawfinder today).
@@ -179,7 +203,7 @@ int main(int argc, char** argv)
                                    "[src/util.c:3]: (Warning) Unused variable\n"
                                    "[src/util.c:4]: (Information) fyi\n"
                                    "not a diagnostic line\n";
-        const auto items = TscancodeToolImplementation::parseDiagnostics(output);
+        const auto items = TscancodeToolImplementation::parseDiagnostics(output).diagnostics;
         report.expect(items.size() == 3, "tscancode: only diagnostic lines become diagnostics");
         if (items.size() == 3)
         {

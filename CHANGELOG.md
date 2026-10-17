@@ -2,6 +2,15 @@
 
 Notable changes are grouped by release. See [all releases](https://github.com/CoreTrace/coretrace/releases) for older versions.
 
+## Unreleased
+
+- **Exit codes:** a run that checks nothing no longer passes the gate. With no analysis
+  selected (`--static`, `--dyn` or `--invoke`), `ctrace` exits 1. A tool whose findings
+  CoreTrace cannot read makes the analysis incomplete (exit code 3) instead of clean: `ikos`,
+  so every `--static` run; `flawfinder` printing no SARIF; `cppcheck` or `tscancode` reporting
+  in a format CoreTrace does not parse. The server's `result.gate` names them in
+  `unread_tools`.
+
 ## v0.85.0
 
 - Releases include a macOS disk image, for Apple silicon with macOS 14 or newer.

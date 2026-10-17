@@ -17,22 +17,23 @@ in a non-zero exit code, with a message on stderr:
 | Exit code | Meaning | Examples |
 |---:|---|---|
 | 0 | Analysis complete, no finding at or above `--fail-on` | C11, C14, C30 |
-| 1 | Usage or configuration error: nothing was analyzed | C01–C06, C15–C23 |
+| 1 | Usage or configuration error: nothing was analyzed | C01–C06, C15–C23, C35 |
 | 2 | Findings at or above `--fail-on` | C29 |
-| 3 | Analysis incomplete: a tool could not start, crashed, timed out or failed | C10, C12, C13, C24–C26 |
+| 3 | Analysis incomplete: a tool could not start, crashed, timed out or failed, or its findings could not be read | C10, C12, C13, C24–C27 |
 
 A failed tool (3) wins over findings (2) and over `--fail-on none`
-(`include/App/ExitPolicy.hpp:27-44`). The server returns the same verdict in `result.gate`.
+(`include/App/ExitPolicy.hpp:28-45`). The server returns the same verdict in `result.gate`.
 `main.cpp:55-68` catches any exception that escapes, logs it and exits 1.
 
-Two exceptions to fail-closed remain, tracked in [#189](https://github.com/CoreTrace/coretrace/issues/189): a run with no analysis selected
-(C35) and tool output that cannot be read (C27) both exit 0.
+A run that checks nothing does not pass the gate ([#189](https://github.com/CoreTrace/coretrace/issues/189)): with no analysis selected
+(`--static`, `--dyn` or `--invoke`) it exits 1 (C35), and a tool whose findings cannot be read
+makes it incomplete (C27).
 
 ## 1. Command line
 
-All options are declared in one table (`src/App/Config.cpp:62-153`). Their values go through the
+All options are declared in one table (`src/App/Config.cpp:62-154`). Their values go through the
 same loader as the configuration file, so the CLI and the file share the same rules
-(`Config.cpp:359-371`).
+(`Config.cpp:360-372`).
 
 | Input | Check | On error |
 |---|---|---|
@@ -47,7 +48,7 @@ same loader as the configuration file, so the CLI and the file share the same ru
 
 `--config` and a server request's `config` are read by `src/App/ToolConfig.cpp`. Validation stops
 at the first error, which is printed with the file name, and the run exits 1 before any tool
-starts (`Config.cpp:344-355`, `main.cpp:43-49`).
+starts (`Config.cpp:345-356`, `main.cpp:43-49`).
 
 | Rejected | Message | Scenario |
 |---|---|---|
@@ -90,8 +91,8 @@ C++ tools (`src/ctrace_tools/languageType.cpp`).
 | Tool exits with an error | Exit status checked (`include/Process/Process.hpp:42-58`) | `cppcheck exited with exit code 1`, exit 3 | C07 |
 | Tool killed by a signal | Same | `cppcheck was terminated by signal 11`, exit 3 | C25 |
 | Tool that hangs | Deadline: `tools.<name>.timeout_s`, 600 s per file by default; the tool runs in its own process group, killed with SIGKILL at the deadline | `did not finish within its time limit and was stopped`, exit 3, no process left | C26 |
-| Tool that throws inside `ctrace` | Caught per tool (`include/Process/Tools/ToolsInvoker.hpp:288-308`) | The other tools go on; exit 3 | — |
-| Output that cannot be read | Lines that do not match are dropped; such a tool never changes the exit code ([#189](https://github.com/CoreTrace/coretrace/issues/189)) | exit 0 | C27 |
+| Tool that throws inside `ctrace` | Caught per tool (`include/Process/Tools/ToolsInvoker.hpp:305-325`) | The other tools go on; exit 3 | — |
+| Output that cannot be read | `ikos`, and `flawfinder` without SARIF, are never read; `cppcheck` and `tscancode` are not fully read when a line cites a source location (`a.c:3`, `include/b.h:1`, any format and any file) but does not parse, whatever the other lines. Lines that cite no location, such as a configuration warning, are not findings (`cppcheck` runs with `--quiet`) | `could not read the output of cppcheck`, exit 3, the findings read still counted and the raw output shown; the server names it in `result.gate.unread_tools` | C27 |
 | Linked analyzers (stack, concurrency) | A compilation or analysis error marks them failed | exit 3 (C13); they take no timeout ([#172](https://github.com/CoreTrace/coretrace/issues/172)) | — |
 
 Temporary files: each tool run gets its own directory (`mkdtemp`), removed when the run ends

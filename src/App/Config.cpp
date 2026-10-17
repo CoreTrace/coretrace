@@ -126,7 +126,8 @@ namespace ctrace
              Kind::List, "files", "input"},
             {"--fail-on", "LEVEL",
              "Exit code 2 when a finding at or above LEVEL is reported: error|warning|none "
-             "(default: error). Exit code 3 when a tool could not run.",
+             "(default: error). Exit code 3 when a tool could not run or its output could not "
+             "be read.",
              Kind::Text, "analysis", "fail_on"},
             {"--ipc", "METHOD", "Specifies the IPC method to use: standardIO|socket|serve.",
              Kind::Text, "runtime", "ipc"},
