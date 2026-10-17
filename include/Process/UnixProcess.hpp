@@ -67,7 +67,8 @@ class UnixProcess : public Process
         argv.push_back(nullptr);
 
         // The child leads its own process group, so that stopping it (time limit, interrupt) also
-        // stops whatever it started. The terminal's Ctrl-C reaches only ctrace, which stops it.
+        // stops whatever it started, and nothing it started outlives it. The terminal's Ctrl-C
+        // reaches only ctrace, which stops it.
         SpawnAttributes attributes;
         if (posix_spawnattr_setflags(&attributes.attributes, POSIX_SPAWN_SETPGROUP) != 0 ||
             posix_spawnattr_setpgroup(&attributes.attributes, 0) != 0)
@@ -114,27 +115,28 @@ class UnixProcess : public Process
     /// How long an interrupted tool has to end on SIGTERM before it gets SIGKILL.
     static constexpr auto kStopGracePeriod = std::chrono::seconds(2);
 
-    /// Waits for `pid`, stopping its process group once the time limit has passed, or once
-    /// ctrace is interrupted.
+    /// Waits for `pid`, stopping its process group once the time limit has passed, once ctrace
+    /// is interrupted, or once the tool has ended.
     [[nodiscard]] int waitForChild(pid_t pid, ProcessResult& result)
     {
         const auto deadline = std::chrono::steady_clock::now() + m_timeout;
         int status = 0;
         for (;;)
         {
-            // The tool is reaped only once nothing is left to stop: until then, its group can be
-            // stopped, and its group id cannot be given to another process.
-            const bool toolEnded = ended(pid);
-            if (ctrace::interrupt::toolsMustStop())
+            if (ended(pid))
             {
-                // What the tool started may outlive it in its group, even when it ended first.
-                result.interrupted = !toolEnded;
-                return stop(pid);
-            }
-            if (toolEnded)
-            {
+                // What the tool left in its group would outlive the run, unwatched: an interrupt
+                // handled on another thread just after this point could no longer reach it. It
+                // ends with the tool, which is reaped last, so that its group id cannot have been
+                // given to another process.
+                (void)kill(-pid, SIGKILL);
                 (void)waitpid(pid, &status, 0);
                 return status;
+            }
+            if (ctrace::interrupt::toolsMustStop())
+            {
+                result.interrupted = true;
+                return stop(pid);
             }
             if (m_timeout.count() > 0 && std::chrono::steady_clock::now() >= deadline)
             {
