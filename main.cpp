@@ -2,6 +2,7 @@
 #include "App/Config.hpp"
 #include "App/Runner.hpp"
 #include "App/ShippedDefaults.hpp"
+#include "Process/Interrupt.hpp"
 
 #include <coretrace/logger.hpp>
 
@@ -21,10 +22,13 @@ namespace
         coretrace::set_source_location(false);
         coretrace::set_thread_safe(false);
 
+        using ctrace::interrupt::OnInterrupt;
         if (config.runtime.ipc == "serve")
         {
+            ctrace::interrupt::install(OnInterrupt::LetToolsFinish);
             return ctrace::run_server(config, executable);
         }
+        ctrace::interrupt::install(OnInterrupt::StopTools);
         return ctrace::run_cli_analysis(config);
     }
 } // namespace
@@ -54,7 +58,12 @@ int main(int argc, char* argv[])
     // Last resort: a failure nobody handled is reported, not a process abort.
     try
     {
-        return run(*loaded.config, loaded.executable);
+        const int exitCode = run(*loaded.config, loaded.executable);
+        if (const int signal = ctrace::interrupt::received(); signal != 0)
+        {
+            ctrace::interrupt::exitBy(signal);
+        }
+        return exitCode;
     }
     catch (const std::exception& error)
     {

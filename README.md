@@ -317,6 +317,12 @@ cmake .. -DCORETRACE_VERSION_OVERRIDE=v0.74.0
 `--fail-on error|warning|none` (config: `analysis.fail_on`) sets the threshold. `none` never
 fails on findings but still returns `3` on a broken tool. Code `3` takes precedence over `2`.
 
+Interrupting a run (Ctrl+C, SIGINT or SIGTERM) stops the external tools it runs, with what they
+started, and removes their run directories. The run gives no report, and `ctrace` ends by the
+signal it received: the shell shows `130` or `143`. No tool starts after the interrupt. The
+stack and concurrency analyzers are linked into `ctrace` and cannot be stopped, so `ctrace` waits
+for one already running; interrupt again to quit at once.
+
 ```bash
 ./ctrace --fail-on warning --input src/main.c --invoke cppcheck,ctrace_stack_analyzer
 ```
@@ -423,7 +429,8 @@ curl -i -X POST http://127.0.0.1:8080/shutdown \
 ```
 
 The server responds with `202 Accepted` and stops accepting new requests while allowing in-flight requests to finish
-(up to `--shutdown-timeout-ms` if configured).
+(up to `--shutdown-timeout-ms` if configured). SIGINT and SIGTERM start the same shutdown, after
+which the server ends by the signal; a second one ends it at once.
 
 Each `run_analysis` request gets the same shipped defaults as the CLI: the stack analyzer
 models and the bundled tools found next to the server's `ctrace` binary fill whatever the

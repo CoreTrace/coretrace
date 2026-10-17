@@ -2,6 +2,14 @@
 
 Notable changes are grouped by release. See [all releases](https://github.com/CoreTrace/coretrace/releases) for older versions.
 
+## Unreleased
+
+- **Interrupting `ctrace`:** Ctrl+C, SIGINT or SIGTERM stops the external tools of a run and
+  removes their run directories, instead of leaving them behind, and starts no other tool; the
+  run gives no report and ends by the signal (130 or 143 in a shell). What a tool leaves running
+  in the background ends with it. A server drains as `POST /shutdown` does before it
+  ends. A second interrupt quits at once.
+
 ## v0.85.0
 
 - Releases include a macOS disk image, for Apple silicon with macOS 14 or newer.

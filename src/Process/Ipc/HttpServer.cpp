@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Process/Ipc/HttpServer.hpp"
+#include "Process/Interrupt.hpp"
 
 #include <nlohmann/json.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <exception>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 
 using json = nlohmann::json;
 
@@ -133,8 +136,27 @@ bool HttpServer::run(const std::string& host, int port)
         return false;
     }
     logger_.info("Listening on http://" + urlHost(*address) + ":" + std::to_string(bound));
+    // SIGINT or SIGTERM starts the drain of POST /shutdown. The signal handler can only record
+    // the signal: this thread acts on it, once the listener runs and so can be stopped.
+    // ponytail: polls every 50 ms; a self-pipe written by the handler if that is ever too slow.
+    std::atomic<bool> listening{true};
+    std::thread onInterrupt(
+        [this, &listening]
+        {
+            while (listening.load())
+            {
+                if (ctrace::interrupt::received() != 0 && server_.is_running())
+                {
+                    (void)shutdown_.request([this] { server_.stop(); });
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        });
     // False when accepting failed, rather than the listener being stopped.
     const bool served = server_.listen_after_bind();
+    listening.store(false);
+    onInterrupt.join();
     if (!served)
     {
         logger_.error("Stopped accepting connections on " + requested + " after an error.");
