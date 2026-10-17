@@ -262,27 +262,37 @@ namespace
 
     // A tool that ended before ctrace acted on the interrupt may leave what it started behind,
     // in its process group: that group is stopped all the same. The tool interrupts ctrace, then
-    // exits; with one job, the thread that waits on the tool handles the signal before it can see
-    // the tool end.
+    // exits. With one job, the thread that waits on the tool handles the signal before it can see
+    // the tool end; with several, another thread may handle it after the tool was seen ending.
     void testToolThatEndedFirst(TestReport& report, const std::string& ctrace,
-                                const fs::path& repoRoot, const fs::path& work)
+                                const fs::path& repoRoot, const fs::path& work, bool oneJob)
     {
-        const Workspace workspace(work / "interrupt-ended-first", repoRoot);
+        const std::string name = oneJob ? "ended first, one job" : "ended first, parallel";
+        const Workspace workspace(
+            work / (oneJob ? "interrupt-ended-first-1" : "interrupt-ended-first"), repoRoot);
         ::setenv("CTRACE_FAKE_SLEEP", "600", 1);
         ::setenv("CTRACE_FAKE_INTERRUPT_PARENT", "1", 1);
         ::setenv("TMPDIR", workspace.tmp.c_str(), 1);
-        Child run({ctrace, "--jobs", "1", "--invoke", "cppcheck", "--config",
-                   workspace.config.string(), "--input",
-                   (repoRoot / "tests/double_free.c").string()},
-                  workspace.log);
+        std::vector<std::string> args = {ctrace,
+                                         "--invoke",
+                                         "cppcheck",
+                                         "--config",
+                                         workspace.config.string(),
+                                         "--input",
+                                         (repoRoot / "tests/double_free.c").string()};
+        if (oneJob)
+        {
+            args.insert(args.begin() + 1, {"--jobs", "1"});
+        }
+        Child run(args, workspace.log);
         ::unsetenv("TMPDIR");
         ::unsetenv("CTRACE_FAKE_INTERRUPT_PARENT");
 
         const std::vector<pid_t> tool = workspace.waitForTool();
         const std::optional<int> status = run.waitEnd(std::chrono::seconds(10));
         report.expect(tool.size() == 2 && endedBy(status, SIGTERM),
-                      "ended first: ctrace ends by the signal");
-        report.expect(allGone(tool), "ended first: what the tool left in its group is stopped");
+                      name + ": ctrace ends by the signal");
+        report.expect(allGone(tool), name + ": what the tool left in its group is stopped");
         killLeftovers(tool);
         std::cout << workspace.printed();
     }
@@ -409,7 +419,8 @@ int main(int argc, char* argv[])
 
     testInterruptedRun(report, ctrace, repoRoot, work, SIGINT);
     testInterruptedRun(report, ctrace, repoRoot, work, SIGTERM);
-    testToolThatEndedFirst(report, ctrace, repoRoot, work);
+    testToolThatEndedFirst(report, ctrace, repoRoot, work, /*oneJob=*/true);
+    testToolThatEndedFirst(report, ctrace, repoRoot, work, /*oneJob=*/false);
     testNoToolStartsAfterInterrupt(report, ctrace, repoRoot, work);
     testServerDrains(report, ctrace, repoRoot, work);
 
