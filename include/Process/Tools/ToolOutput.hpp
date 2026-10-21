@@ -112,6 +112,18 @@ namespace ctrace
             return interpreted_;
         }
 
+        /// Some of the tool's findings could not be read. Those read still count, but no count
+        /// is then a fact: the analysis is incomplete.
+        void findingsUnread() noexcept
+        {
+            findingsUnread_ = true;
+        }
+
+        [[nodiscard]] bool hasUnreadFindings() const noexcept
+        {
+            return findingsUnread_;
+        }
+
         /// True once the tool reported a failure of its own run.
         [[nodiscard]] bool failed() const noexcept
         {
@@ -146,6 +158,7 @@ namespace ctrace
         std::string tool_;
         bool mirror_;
         bool interpreted_ = false;
+        bool findingsUnread_ = false;
         bool failed_ = false;
         std::vector<Diagnostic> diagnostics_;
         std::vector<std::pair<std::ostream*, std::string>> console_;

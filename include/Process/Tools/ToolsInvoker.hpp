@@ -238,10 +238,27 @@ namespace ctrace
             return names;
         }
 
-        /// The run's verdict input: every finding counted, and whether any tool failed.
+        /// The run's verdict input: every finding counted, whether any tool failed, and whether
+        /// the findings of any other could not be read.
         [[nodiscard]] AnalysisOutcome outcome() const
         {
-            return {diagnosticsSummaryTotal(), !failedTools().empty()};
+            return {diagnosticsSummaryTotal(), !failedTools().empty(), !unreadTools().empty()};
+        }
+
+        /// Tools that ran without failing, but whose findings ctrace could not read: their zero
+        /// findings are not a fact, so the run is incomplete.
+        [[nodiscard]] std::vector<std::string> unreadTools() const
+        {
+            std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
+            std::vector<std::string> names;
+            for (const auto& [name, collected] : m_diagnosticsByTool)
+            {
+                if ((!collected.interpreted || collected.findingsUnread) && !collected.failed)
+                {
+                    names.push_back(name);
+                }
+            }
+            return names;
         }
 
         /// Tools that ran without ever reporting structured findings. Their output may hold
@@ -521,6 +538,7 @@ namespace ctrace
         {
             std::vector<Diagnostic> items;
             bool interpreted = false;
+            bool findingsUnread = false;
             bool failed = false;
         };
 
@@ -543,6 +561,7 @@ namespace ctrace
             std::lock_guard<std::mutex> lock(m_diagnosticsMutex);
             CollectedDiagnostics& collected = m_diagnosticsByTool[tool_name];
             collected.interpreted = collected.interpreted || output.interpreted();
+            collected.findingsUnread = collected.findingsUnread || output.hasUnreadFindings();
             collected.failed = collected.failed || output.failed();
             collected.items.insert(collected.items.end(), output.diagnostics().begin(),
                                    output.diagnostics().end());

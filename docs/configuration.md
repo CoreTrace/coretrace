@@ -28,7 +28,8 @@ Allowed: `true|false`
 Description: enable static analysis pipeline.
 Impact: runs the static tool set when true: `cppcheck`, `flawfinder`, `tscancode`, `ikos`,
 `ctrace_stack_analyzer`, `coretrace-concurrency-analyzer` and `coretrace-python-analyzer`, each
-on the files of its language.
+on the files of its language. CoreTrace does not read the findings of `ikos`, so a run with it
+is incomplete (exit code 3).
 CLI: `--static`
 
 - `analysis.dynamic`
@@ -111,7 +112,7 @@ Impact: every tool's findings are normalized and rendered into a single document
 `run` per tool, printed to stdout and written to `output.report_file`. Tools print nothing
 else to stdout in this mode; the stack analyzer's own report is not written (its findings
 are in the merged document), and a tool whose output is not interpreted (ikos) is reported
-with a warning and kept in `result.outputs` in server mode. Without this flag each finding
+with a warning, kept in `result.outputs` in server mode, and makes the analysis incomplete. Without this flag each finding
 is printed as `file:line:col: severity: message [tool/rule]`.
 CLI: `--sarif-format`
 

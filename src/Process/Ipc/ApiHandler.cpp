@@ -294,8 +294,7 @@ namespace
     bool run_analysis(const ctrace::ProgramConfig& config, const std::shared_ptr<ThreadPool>& pool,
                       ILogger& logger, json& result, ParseError& err)
     {
-        if (!config.analysis.static_enabled && !config.analysis.dynamic_enabled &&
-            config.analysis.invoke.empty())
+        if (!config.analysis.selectsAnalysis())
         {
             err = {"NoAnalysisSelected",
                    "Enable static_analysis, dynamic_analysis, or invoke tools."};
@@ -418,7 +417,8 @@ namespace
         const ctrace::AnalysisOutcome outcome = invoker.outcome();
         result["gate"] = {{"fail_on", ctrace::failOnName(config.analysis.fail_on)},
                           {"exit_code", ctrace::exitCodeFor(config.analysis.fail_on, outcome)},
-                          {"failed_tools", invoker.failedTools()}};
+                          {"failed_tools", invoker.failedTools()},
+                          {"unread_tools", invoker.unreadTools()}};
         if (output_capture)
         {
             json outputs = json::object();

@@ -403,12 +403,22 @@ add_test(NAME ctrace_exit_0_when_below_threshold
     COMMAND sh -c "$<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/dead_code.cc --invoke cppcheck; test $? -eq 0")
 add_test(NAME ctrace_exit_3_when_a_tool_cannot_run
     COMMAND sh -c "$<TARGET_FILE:ctrace> --config ${CMAKE_SOURCE_DIR}/tests/missing-tool-config.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --invoke cppcheck; test $? -eq 3")
+# A tool whose output ctrace cannot read leaves the run incomplete too: its zero findings are
+# not a fact (C27). echo stands in for a flawfinder that prints no SARIF.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-flawfinder-text.json
+    "{\"schema_version\": 1, \"tools\": {\"flawfinder\": {\"path\": \"/bin/echo\"}}}\n")
+add_test(NAME ctrace_exit_3_when_a_tool_output_cannot_be_read
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke flawfinder --config ${CMAKE_BINARY_DIR}/fake-flawfinder-text.json --input ${CMAKE_SOURCE_DIR}/tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of flawfinder'")
 add_test(NAME ctrace_help_lists_fail_on COMMAND ctrace --help)
 set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSION "--fail-on")
 # Nothing to analyze is a usage error. A SARIF report that cannot be written is a warning: the
 # log still reaches stdout and the verdict stands.
 add_test(NAME ctrace_exit_1_without_input
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No input files resolved'")
+# Nothing selected to run is a usage error too: a CI step that forgot --static would otherwise
+# pass forever, having checked nothing (C35).
+add_test(NAME ctrace_exit_1_without_analysis
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --input ${CMAKE_SOURCE_DIR}/tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No analysis selected'")
 add_test(NAME ctrace_unwritable_sarif_report_keeps_the_verdict
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --input ${CMAKE_SOURCE_DIR}/tests/double_free.c --report-file ${CMAKE_SOURCE_DIR}/tests/double_free.c/report.sarif 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q 'Unable to write the SARIF report' && printf '%s\\n' \"$out\" | grep -q '\"name\": \"cppcheck\"'")
 
@@ -621,6 +631,29 @@ file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json
 set(ctrace_latin1_sarif ${CMAKE_BINARY_DIR}/latin1.sarif)
 add_test(NAME ctrace_sarif_survives_tool_output_that_is_not_utf8
     COMMAND sh -c "rm -f '${ctrace_latin1_sarif}'; out=$($<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-latin1-cli.json --input tests/double_free.c --report-file '${ctrace_latin1_sarif}' 2>/dev/null); status=$?; replaced=$(printf 'caf\\357\\277\\275'); test $status -eq 0 && printf '%s\\n' \"$out\" | grep -q \"$replaced\" && grep -q \"$replaced\" '${ctrace_latin1_sarif}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# cppcheck reporting on its input in a format ctrace cannot parse has not found nothing: the run
+# is incomplete, and says which tool it could not read.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-other-format.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-other-format\"]}}}\n")
+add_test(NAME ctrace_exit_3_when_cppcheck_output_cannot_be_parsed
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-other-format.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of cppcheck'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# One line read does not vouch for the others: an error ctrace cannot parse, next to an
+# information it can, still makes the run incomplete, and the information still counts.
+foreach(tool cppcheck tscancode)
+    file(WRITE ${CMAKE_BINARY_DIR}/fake-${tool}-mixed.json
+        "{\"schema_version\": 1, \"tools\": {\"${tool}\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-mixed\"]}}}\n")
+    add_test(NAME ctrace_exit_3_when_part_of_${tool}_output_cannot_be_parsed
+        COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke ${tool} --config ${CMAKE_BINARY_DIR}/fake-${tool}-mixed.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of ${tool}' && printf '%s\\n' \"$out\" | grep -q '(${tool}) Diagnostics summary: info=1, warning=0, error=0'"
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endforeach()
+# A finding in a header the run did not name is a finding all the same.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-header.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\", \"args\": [\"--fake-header\"]}}}\n")
+add_test(NAME ctrace_exit_3_when_cppcheck_cites_a_header_it_cannot_parse
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-header.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of cppcheck' && printf '%s\\n' \"$out\" | grep -q 'include/bad.h:1: error: Null pointer dereference: p'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of

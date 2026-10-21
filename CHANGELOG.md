@@ -4,6 +4,12 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 
 ## Unreleased
 
+- **Exit codes:** a run that checks nothing no longer passes the gate. With no analysis
+  selected (`--static`, `--dyn` or `--invoke`), `ctrace` exits 1. A tool whose findings
+  CoreTrace cannot read makes the analysis incomplete (exit code 3) instead of clean: `ikos`,
+  so every `--static` run; `flawfinder` printing no SARIF; `cppcheck` or `tscancode` reporting
+  in a format CoreTrace does not parse. The server's `result.gate` names them in
+  `unread_tools`.
 - **Interrupting `ctrace`:** Ctrl+C, SIGINT or SIGTERM stops the external tools of a run and
   removes their run directories, instead of leaving them behind, and starts no other tool; the
   run gives no report and ends by the signal (130 or 143 in a shell). What a tool leaves running
