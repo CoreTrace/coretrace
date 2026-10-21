@@ -3,6 +3,7 @@
 
 #include "App/ExitPolicy.hpp"
 #include "App/Files.hpp"
+#include "Process/Interrupt.hpp"
 #include "Process/Ipc/HttpServer.hpp"
 #include "Process/Tools/ReportFile.hpp"
 #include "Process/Tools/Sarif.hpp"
@@ -170,6 +171,15 @@ namespace ctrace
             coretrace::log(coretrace::Level::Info, "Running specific tools on {} file(s)\n",
                            sourceFiles.size());
             invoker.runSpecificTools(config.analysis.invoke, sourceFiles);
+        }
+
+        // The tools were stopped: a report or a verdict would pass findings off as complete.
+        if (const int signal = interrupt::received(); signal != 0)
+        {
+            coretrace::log(coretrace::Level::Error,
+                           "Interrupted: the analysis stopped before its end; no report or "
+                           "verdict is given.\n");
+            return interrupt::exitCode(signal);
         }
 
         if (config.output.sarif_format)

@@ -4,6 +4,7 @@
 
 #include "AnalysisTools.hpp"
 #include "App/ExitPolicy.hpp"
+#include "Process/Interrupt.hpp"
 #include "Process/Ipc/IpcStrategy.hpp"
 
 #include <coretrace/logger.hpp>
@@ -304,6 +305,12 @@ namespace ctrace
         /// other tools still run. Runs of one tool may go on at the same time.
         template <typename Execute> void runTool(const std::string& tool_name, Execute&& execute)
         {
+            // An interrupted run starts no tool: a linked analyzer could not be stopped once
+            // started, and the run gives no report anyway.
+            if (interrupt::toolsMustStop())
+            {
+                return;
+            }
             auto tool_it = tools.find(tool_name);
             if (tool_it == tools.end())
             {

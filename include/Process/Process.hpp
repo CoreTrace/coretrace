@@ -11,10 +11,11 @@
 /// How an external tool ended, plus everything it printed.
 struct ProcessResult
 {
-    int exitCode = -1;     ///< Exit status when the child exited normally; -1 otherwise.
-    int signal = 0;        ///< Terminating signal when the child was killed; 0 otherwise.
-    bool timedOut = false; ///< The child outlived its time limit and was stopped.
-    std::string output;    ///< Combined stdout and stderr, in emission order.
+    int exitCode = -1;        ///< Exit status when the child exited normally; -1 otherwise.
+    int signal = 0;           ///< Terminating signal when the child was killed; 0 otherwise.
+    bool timedOut = false;    ///< The child outlived its time limit and was stopped.
+    bool interrupted = false; ///< ctrace was interrupted, and stopped the child.
+    std::string output;       ///< Combined stdout and stderr, in emission order.
 
     [[nodiscard]] bool succeeded() const noexcept
     {
@@ -25,7 +26,7 @@ struct ProcessResult
     /// (e.g. 1 for "findings"): it exited normally with one of `completedCodes`.
     [[nodiscard]] bool completedWith(std::initializer_list<int> completedCodes) const noexcept
     {
-        if (signal != 0)
+        if (signal != 0 || interrupted)
         {
             return false;
         }
@@ -42,7 +43,11 @@ struct ProcessResult
     [[nodiscard]] std::string describeFailure(std::string_view toolName) const
     {
         std::string message(toolName);
-        if (timedOut)
+        if (interrupted)
+        {
+            message += " was stopped: ctrace was interrupted";
+        }
+        else if (timedOut)
         {
             message += " did not finish within its time limit and was stopped";
         }

@@ -242,6 +242,22 @@ namespace
 
     // A deadline stops a child that runs too long, and everything it started: the whole
     // process group, so that a grandchild holding the output does not outlive it.
+    /// Whether `pid` is gone within 5 s. Killed, a grandchild stays a zombie until init reaps it,
+    /// and kill(pid, 0) still succeeds on a zombie: give it a moment to go away.
+    bool goneSoon(pid_t pid)
+    {
+        bool gone = false;
+        for (int attempt = 0; pid > 0 && attempt < 100 && !gone; ++attempt)
+        {
+            gone = ::kill(pid, 0) != 0;
+            if (!gone)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        }
+        return gone;
+    }
+
     void testDeadlineStopsTheProcessGroup(TestReport& report, const fs::path& base)
     {
         const fs::path pidFile = base / "grandchild.pid";
@@ -263,18 +279,29 @@ namespace
         std::ifstream in(pidFile);
         pid_t grandchild = 0;
         in >> grandchild;
-        // Killed, the grandchild stays a zombie until init reaps it, and kill(pid, 0) still
-        // succeeds on a zombie: give it a moment to go away.
-        bool gone = false;
-        for (int attempt = 0; grandchild > 0 && attempt < 100 && !gone; ++attempt)
+        report.expect(goneSoon(grandchild), "deadline: the grandchild is stopped with it");
+    }
+
+    // A tool's process group ends with it: what it started and left running would outlive the
+    // run, unwatched, and an interrupt that came after the tool ended could no longer reach it.
+    void testLeftoverChildrenEndWithTheTool(TestReport& report)
+    {
+        const ProcessResult result = runShell("sleep 600 & echo $!");
+        pid_t leftover = 0;
+        try
         {
-            gone = ::kill(grandchild, 0) != 0;
-            if (!gone)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
+            leftover = static_cast<pid_t>(std::stol(result.output));
         }
-        report.expect(gone, "deadline: the grandchild is stopped with it");
+        catch (const std::exception&)
+        {
+        }
+        const bool gone = goneSoon(leftover);
+        report.expect(result.succeeded() && leftover > 0 && gone,
+                      "what a tool leaves running in its group ends with it");
+        if (!gone && leftover > 0)
+        {
+            ::kill(leftover, SIGKILL);
+        }
     }
 
     void testFastChildIsUnaffectedByADeadline(TestReport& report)
@@ -326,6 +353,7 @@ int main()
     testArgumentsArePassedVerbatim(report);
     testDeadlineStopsTheProcessGroup(report, base);
     testFastChildIsUnaffectedByADeadline(report);
+    testLeftoverChildrenEndWithTheTool(report);
     fs::remove_all(base);
 
     if (report.failures == 0)

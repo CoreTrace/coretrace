@@ -515,6 +515,14 @@ target_link_libraries(ctrace_server_cli_tests
 add_test(NAME ctrace_server_cli_tests
     COMMAND ctrace_server_cli_tests $<TARGET_FILE:ctrace> ${CMAKE_SOURCE_DIR})
 set_tests_properties(ctrace_server_cli_tests PROPERTIES TIMEOUT 120)
+# Interrupting ctrace: SIGINT or SIGTERM stops the running tool and removes its run directory;
+# a server drains first. A hung tool that was not stopped would keep the test waiting.
+add_executable(ctrace_interrupt_tests tests/interrupt_tests.cpp)
+target_link_libraries(ctrace_interrupt_tests
+    PRIVATE nlohmann_json::nlohmann_json httplib::httplib)
+add_test(NAME ctrace_interrupt_tests
+    COMMAND ctrace_interrupt_tests $<TARGET_FILE:ctrace> ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+set_tests_properties(ctrace_interrupt_tests PROPERTIES TIMEOUT 120)
 # The bind policy holds from the command line: no token, no host beyond the loopback. A
 # server that started anyway would never return, hence the timeout.
 add_test(NAME ctrace_serve_refuses_an_exposed_host_without_token

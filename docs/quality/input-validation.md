@@ -23,7 +23,7 @@ in a non-zero exit code, with a message on stderr:
 
 A failed tool (3) wins over findings (2) and over `--fail-on none`
 (`include/App/ExitPolicy.hpp:28-45`). The server returns the same verdict in `result.gate`.
-`main.cpp:55-68` catches any exception that escapes, logs it and exits 1.
+`main.cpp:59-77` catches any exception that escapes, logs it and exits 1.
 
 A run that checks nothing does not pass the gate ([#189](https://github.com/CoreTrace/coretrace/issues/189)): with no analysis selected
 (`--static`, `--dyn` or `--invoke`) it exits 1 (C35), and a tool whose findings cannot be read
@@ -48,7 +48,7 @@ same loader as the configuration file, so the CLI and the file share the same ru
 
 `--config` and a server request's `config` are read by `src/App/ToolConfig.cpp`. Validation stops
 at the first error, which is printed with the file name, and the run exits 1 before any tool
-starts (`Config.cpp:345-356`, `main.cpp:43-49`).
+starts (`Config.cpp:345-356`, `main.cpp:47-53`).
 
 | Rejected | Message | Scenario |
 |---|---|---|
@@ -87,11 +87,11 @@ C++ tools (`src/ctrace_tools/languageType.cpp`).
 
 | Failure | Detection | Result | Scenario |
 |---|---|---|---|
-| Tool not installed | Lookup in `PATH` before starting (`include/Process/UnixProcess.hpp:226-295`) | `Command not found in PATH: cppcheck`, exit 3 | C24 |
-| Tool exits with an error | Exit status checked (`include/Process/Process.hpp:42-58`) | `cppcheck exited with exit code 1`, exit 3 | C07 |
+| Tool not installed | Lookup in `PATH` before starting (`include/Process/UnixProcess.hpp:268-317`) | `Command not found in PATH: cppcheck`, exit 3 | C24 |
+| Tool exits with an error | Exit status checked (`include/Process/Process.hpp:43-63`) | `cppcheck exited with exit code 1`, exit 3 | C07 |
 | Tool killed by a signal | Same | `cppcheck was terminated by signal 11`, exit 3 | C25 |
 | Tool that hangs | Deadline: `tools.<name>.timeout_s`, 600 s per file by default; the tool runs in its own process group, killed with SIGKILL at the deadline | `did not finish within its time limit and was stopped`, exit 3, no process left | C26 |
-| Tool that throws inside `ctrace` | Caught per tool (`include/Process/Tools/ToolsInvoker.hpp:305-325`) | The other tools go on; exit 3 | — |
+| Tool that throws inside `ctrace` | Caught per tool (`include/Process/Tools/ToolsInvoker.hpp:306-332`) | The other tools go on; exit 3 | — |
 | Output that cannot be read | `ikos`, and `flawfinder` without SARIF, are never read; `cppcheck` and `tscancode` are not fully read when a line cites a source location (`a.c:3`, `include/b.h:1`, any format and any file) but does not parse, whatever the other lines. Lines that cite no location, such as a configuration warning, are not findings (`cppcheck` runs with `--quiet`) | `could not read the output of cppcheck`, exit 3, the findings read still counted and the raw output shown; the server names it in `result.gate.unread_tools` | C27 |
 | Linked analyzers (stack, concurrency) | A compilation or analysis error marks them failed | exit 3 (C13); they take no timeout ([#172](https://github.com/CoreTrace/coretrace/issues/172)) | — |
 
@@ -101,7 +101,7 @@ Temporary files: each tool run gets its own directory (`mkdtemp`), removed when 
 ## 5. Reports
 
 A report that cannot be written is a warning, not a failure: the verdict is unchanged, because
-the analysis itself completed (`src/App/Runner.cpp:83-92`).
+the analysis itself completed (`src/App/Runner.cpp:84-93`).
 `Unable to write the SARIF report: failed to create report directory '/no/such/dir'`, exit 2 as
 the findings require (C28).
 
@@ -109,7 +109,7 @@ the findings require (C28).
 
 | Input | Check | Answer | Scenario |
 |---|---|---|---|
-| Bind address beyond loopback without `--shutdown-token` | Refused at startup (`src/App/Runner.cpp:26-55`) | exit 1 | S01 |
+| Bind address beyond loopback without `--shutdown-token` | Refused at startup (`src/App/Runner.cpp:27-56`) | exit 1 | S01 |
 | Body larger than `server.max_body_bytes` (1 MiB) | httplib limit | 413 | S07 |
 | Invalid JSON | Parse error caught | 400 `InvalidRequest` | S03 |
 | Body, or a tool's output, that is not UTF-8 | The answer is written with the invalid bytes replaced by U+FFFD | 400 `InvalidRequest` for the body; the full result for a tool's output, in JSON and in SARIF | — |
@@ -145,9 +145,21 @@ findings about what a request can make the server do are reported privately, as
 
 ## 7. Signals
 
-`ctrace` installs no signal handler: SIGINT and SIGTERM stop it at once (130, 143). The external
-tool it was running survives, and its run directory stays behind (C31–C34, [#188](https://github.com/CoreTrace/coretrace/issues/188)). A server
-stopped by a signal does not drain its requests; `POST /shutdown` does (S17).
+SIGINT and SIGTERM are recorded by a handler (`include/Process/Interrupt.hpp`), and acted on
+where ctrace waits ([#188](https://github.com/CoreTrace/coretrace/issues/188)):
+
+- A run stops the external tools it runs: SIGTERM to each tool's process group, which holds
+  what the tool started, then SIGKILL after 2 s (`include/Process/UnixProcess.hpp`). A tool's
+  group never outlives it: what the tool left there is killed when it ends, so that an interrupt
+  handled just after, on any thread, leaves nothing behind. No tool starts after the interrupt, a linked analyzer included
+  (`ToolInvoker::runTool`), and the run directories are removed as the tool runs return. The
+  run gives no report or verdict, and `ctrace` ends by the signal it received: 130 or 143 in a
+  shell (C31–C34). A linked analyzer (stack, concurrency) already running cannot be stopped
+  ([#172](https://github.com/CoreTrace/coretrace/issues/172)): `ctrace` waits for it.
+- A server drains as `POST /shutdown` does (S17): it stops accepting connections, answers the
+  requests in flight, their tools left to finish, then ends by the signal (S18, S21).
+- A second interrupt ends `ctrace` at once, whatever is still running.
+- A signal ignored when `ctrace` started (a background job of a script) stays ignored.
 
 ## Tests
 
@@ -155,7 +167,8 @@ Most of these behaviors have a test, named after it in `CMakeLists.txt`: for exa
 `ctrace_exit_1_without_input`, `ctrace_exit_3_when_a_tool_cannot_run`,
 `ctrace_unwritable_sarif_report_keeps_the_verdict`, `ctrace_dyn_hung_tool_is_stopped`,
 `ctrace_serve_refuses_an_exposed_host_without_token`, and the unit tests `ctrace_config_tests`,
-`ctrace_files_tests`, `ctrace_process_tests`, `ctrace_server_http_tests`.
+`ctrace_files_tests`, `ctrace_process_tests`, `ctrace_server_http_tests`. Signals are tested by
+`ctrace_interrupt_tests`.
 
 Not tested yet: invalid JSON in a configuration file, the HTTP 404 and 503 answers, a
-malformed `arguments` field in a compilation database, and signals.
+malformed `arguments` field in a compilation database.
