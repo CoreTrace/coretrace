@@ -148,6 +148,26 @@ int main(int argc, char** argv)
                       "tscancode: lines that cite a location but do not parse are unread");
     }
 
+    // A path may hold any character but `/` as a name: parentheses (`(generated)`, a directory
+    // build systems write), brackets, spaces and quotes do not hide the location.
+    {
+        const std::vector<std::string> lines = {
+            "/tmp/pr205/(generated)/bad.c:1: error: Null pointer dereference: p",
+            "src/v[2]/b.c:4: error: Array index out of bounds",
+            "my dir/it's.c:5: error: Uninitialized variable: x"};
+        std::string output;
+        for (const std::string& line : lines)
+        {
+            output += line + "\n";
+        }
+        report.expect(CppCheckToolImplementation::parseDiagnostics(output).unread == lines,
+                      "cppcheck: a path with parentheses, brackets or quotes still cites a "
+                      "location");
+        report.expect(TscancodeToolImplementation::parseDiagnostics(output).unread == lines,
+                      "tscancode: a path with parentheses, brackets or quotes still cites a "
+                      "location");
+    }
+
     // A generic SARIF reader covers every tool that writes SARIF itself (flawfinder today).
     {
         const nlohmann::json log = nlohmann::json::parse(R"({
