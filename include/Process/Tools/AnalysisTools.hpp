@@ -141,11 +141,14 @@ namespace ctrace
     };
 
     /// Whether `line` cites a source location, `<file>:<line>` in whatever format (`a.c:3:5:`,
-    /// `[a.c:3]:`, `include/b.h:3:`), any file: a line about a finding. A `.` or a `/` tells a
-    /// path from another word, so that `12:30` is not one; a configuration warning names no line.
+    /// `[a.c:3]:`, `include/b.h:3:`), any file: a line about a finding. A path may hold any
+    /// character, parentheses and brackets included (`out/(generated)/a.c`): the location is a
+    /// `:<digit>` right after a word, the run of characters back to a space or a colon, that holds
+    /// a `.` or a `/`. That tells a path from another word, so that `12:30` is not one; a
+    /// configuration warning names no line.
     [[nodiscard]] inline bool citesASourceLocation(const std::string& line)
     {
-        static const std::regex location(R"((^|[\s\['"(])[^\s\[\]'"():]*[./][^\s\[\]'"():]*:\d)");
+        static const std::regex location(R"([^\s:]*[./][^\s:]*:\d)");
         return std::regex_search(line, location);
     }
 
