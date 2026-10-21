@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -129,6 +130,59 @@ namespace ctrace
                                                ? configured->second
                                                : ToolsConfig::kDefaultTimeoutSeconds);
         return perFile * static_cast<std::chrono::seconds::rep>(inputs);
+    }
+
+    /// What a text parser made of a tool's output: the findings it read, and the lines that cite
+    /// a source location it could not read, each a finding lost.
+    struct ParsedLines
+    {
+        std::vector<Diagnostic> diagnostics;
+        std::vector<std::string> unread;
+    };
+
+    /// Whether `line` cites a source location, `<file>:<line>` in whatever format (`a.c:3:5:`,
+    /// `[a.c:3]:`, `include/b.h:3:`), any file: a line about a finding. A path may hold any
+    /// character, parentheses and brackets included (`out/(generated)/a.c`): the location is a
+    /// `:<digit>` right after a word, the run of characters back to a space or a colon, that holds
+    /// a `.` or a `/`. That tells a path from another word, so that `12:30` is not one; a
+    /// configuration warning names no line.
+    [[nodiscard]] inline bool citesASourceLocation(const std::string& line)
+    {
+        static const std::regex location(R"([^\s:]*[./][^\s:]*:\d)");
+        return std::regex_search(line, location);
+    }
+
+    /// Hands what a text parser read of `rawOutput` to `output`. When every finding was read, they
+    /// are shown as lines (not in SARIF mode, where the merged document is the output). When a
+    /// line could not be read, the raw output is kept instead, shown or, in SARIF mode, recorded
+    /// for the API, and the findings are marked unread: the run is incomplete, not clean. The
+    /// findings read still count.
+    inline void reportParsedLines(const ProgramConfig& config, ParsedLines parsed,
+                                  const std::string& rawOutput, ToolOutput& output)
+    {
+        if (parsed.unread.empty())
+        {
+            if (!config.output.sarif_format && !parsed.diagnostics.empty())
+            {
+                output.result(renderLines(parsed.diagnostics));
+            }
+            output.diagnostics(std::move(parsed.diagnostics));
+            return;
+        }
+        if (config.output.sarif_format)
+        {
+            output.record("stdout", rawOutput);
+        }
+        else
+        {
+            output.result(rawOutput);
+        }
+        output.findingsUnread();
+        // Nothing read leaves the tool uninterpreted, as a tool whose output is never read.
+        if (!parsed.diagnostics.empty())
+        {
+            output.diagnostics(std::move(parsed.diagnostics));
+        }
     }
 
     /// Writes `files` to `path`, one per line: the `--file-list` of cppcheck and tscancode, which
@@ -394,8 +448,9 @@ namespace ctrace
                           ToolOutput& output) const override;
         std::string name() const override;
 
-        /// Reads tscancode's `[file:line]: (severity) message` lines.
-        [[nodiscard]] static std::vector<Diagnostic> parseDiagnostics(const std::string& output);
+        /// Reads tscancode's `[file:line]: (severity) message` lines. Another line that cites a
+        /// source location is unread.
+        [[nodiscard]] static ParsedLines parseDiagnostics(const std::string& output);
     };
 
     class CppCheckToolImplementation : public AnalysisToolBase
@@ -410,8 +465,9 @@ namespace ctrace
         /// `fileList` names the files to analyze, one per line (writeFileList).
         [[nodiscard]] static std::vector<std::string>
         buildArguments(const ctrace::ProgramConfig& config, const std::filesystem::path& fileList);
-        /// Reads lines laid out by kOutputTemplate; other lines (progress) are ignored.
-        [[nodiscard]] static std::vector<Diagnostic> parseDiagnostics(const std::string& output);
+        /// Reads lines laid out by kOutputTemplate. Another line that cites a source location is
+        /// unread; the rest (progress, configuration warnings) is ignored.
+        [[nodiscard]] static ParsedLines parseDiagnostics(const std::string& output);
         void execute(const std::string& file, const ctrace::ProgramConfig& config,
                      ToolOutput& output) const override
         {

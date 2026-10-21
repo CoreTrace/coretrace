@@ -127,6 +127,13 @@ namespace ctrace
                            "Config file in use: none (CLI/runtime values only)\n");
         }
 
+        if (!config.analysis.selectsAnalysis())
+        {
+            coretrace::log(coretrace::Level::Error,
+                           "No analysis selected: give --static, --dyn or --invoke.\n");
+            return exit_code::kUsage;
+        }
+
         ctrace::SourceFileResolution resolution = ctrace::resolveSourceFiles(config);
         if (!resolution.ok())
         {
@@ -178,7 +185,14 @@ namespace ctrace
                            "Analysis incomplete: {} could not run (exit code {})\n",
                            ctrace_tools::strings::joinByComma(invoker.failedTools()), exitCode);
         }
-        else
+        if (outcome.toolUnread)
+        {
+            coretrace::log(coretrace::Level::Error,
+                           "Analysis incomplete: ctrace could not read the output of {} (exit "
+                           "code {})\n",
+                           ctrace_tools::strings::joinByComma(invoker.unreadTools()), exitCode);
+        }
+        if (!outcome.toolFailed && !outcome.toolUnread)
         {
             coretrace::log(coretrace::Level::Info,
                            "Verdict: info={}, warning={}, error={}, fail-on={} (exit code {})\n",

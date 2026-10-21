@@ -64,6 +64,13 @@ namespace ctrace
         bool dynamic_enabled = false;    ///< `analysis.dynamic`: run the dynamic tool set.
         std::vector<std::string> invoke; ///< `analysis.invoke`: explicit tool selection.
         FailOn fail_on = FailOn::Error;  ///< `analysis.fail_on`: exit-code gate policy.
+
+        /// Whether the run has anything to run: a run that selects nothing checks nothing, and
+        /// must not pass a gate as a clean one.
+        [[nodiscard]] bool selectsAnalysis() const noexcept
+        {
+            return static_enabled || dynamic_enabled || !invoke.empty();
+        }
     };
 
     struct FilesConfig

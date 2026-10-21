@@ -425,6 +425,25 @@ namespace
             }
         }
     }
+
+    // A tool whose output cannot be read leaves the run incomplete, as on the command line:
+    // the gate exits 3 and names the tool. echo stands in for a flawfinder that prints no SARIF.
+    void testUnreadToolOutput(TestReport& report, const std::string& buildDir,
+                              const std::string& sourceDir)
+    {
+        ConsoleLogger logger;
+        ApiHandler handler(logger, /*executable=*/{});
+        const nlohmann::json response = handler.handle_request(
+            analysisRequest(sourceDir + "/tests/double_free.c", {"flawfinder"}, false,
+                            buildDir + "/fake-flawfinder-text.json"));
+        const nlohmann::json gate =
+            response.value(nlohmann::json::json_pointer("/result/gate"), nlohmann::json::object());
+        report.expect(response.value("status", "") == "ok" && gate.value("exit_code", -1) == 3 &&
+                          gate.value("unread_tools", nlohmann::json::array()) ==
+                              nlohmann::json::array({"flawfinder"}),
+                      "a tool whose output cannot be read makes the gate exit 3 and is named (" +
+                          gate.dump() + ")");
+    }
 } // namespace
 
 int main(int argc, char* argv[])
@@ -447,6 +466,7 @@ int main(int argc, char* argv[])
     testDynamicAnalysisNeedsTheServerOptIn(report, argv[1], argv[2]);
     testToolOutputThatIsNotUtf8(report, argv[1], argv[2]);
     testUnreachableIpcSocket(report, argv[2]);
+    testUnreadToolOutput(report, argv[1], argv[2]);
 
     if (report.failures == 0)
     {

@@ -13,20 +13,21 @@ namespace ctrace
         inline constexpr int kClean = 0;      ///< Analysis complete, nothing at/above --fail-on.
         inline constexpr int kUsage = 1;      ///< Command-line or configuration error.
         inline constexpr int kFindings = 2;   ///< Findings at or above --fail-on.
-        inline constexpr int kIncomplete = 3; ///< A tool could not run; results are partial.
+        inline constexpr int kIncomplete = 3; ///< A tool could not run, or its output be read.
     } // namespace exit_code
 
     struct AnalysisOutcome
     {
         DiagnosticSummary summary;
         bool toolFailed = false; ///< Some tool could not be started, crashed or exited abnormally.
+        bool toolUnread = false; ///< Some tool ran, but ctrace could not read its findings.
     };
 
     /// The verdict of a run. An incomplete analysis wins over findings: its counters cannot
     /// be trusted, and `--fail-on none` only silences findings, never a broken toolchain.
     [[nodiscard]] constexpr int exitCodeFor(FailOn policy, const AnalysisOutcome& outcome) noexcept
     {
-        if (outcome.toolFailed)
+        if (outcome.toolFailed || outcome.toolUnread)
         {
             return exit_code::kIncomplete;
         }

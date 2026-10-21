@@ -62,6 +62,11 @@ int main()
                   "none policy: a tool failure still marks the run incomplete");
     report.expect(exitCodeFor(FailOn::Error, outcome(0, 0, 5, true)) == exit_code::kIncomplete,
                   "a tool failure takes precedence over findings");
+    AnalysisOutcome unread = outcome(0, 0, 0);
+    unread.toolUnread = true;
+    report.expect(exitCodeFor(FailOn::None, unread) == exit_code::kIncomplete,
+                  "a tool whose output could not be read marks the run incomplete, whatever the "
+                  "policy: its zero findings are not a fact");
     report.expect(exit_code::kClean == 0 && exit_code::kUsage == 1 && exit_code::kFindings == 2 &&
                       exit_code::kIncomplete == 3,
                   "the four codes are distinct and documented");

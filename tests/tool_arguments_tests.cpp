@@ -172,6 +172,9 @@ int main()
                       "cppcheck: warning, style, performance and portability checks are enabled");
         report.expect(contains(args, "--inline-suppr"),
                       "cppcheck: inline suppression comments are honoured");
+        // Without --quiet, cppcheck prints a "Checking <file> ..." line per file: noise among
+        // the lines ctrace reads.
+        report.expect(contains(args, "--quiet"), "cppcheck: progress messages are silenced");
         report.expect(!contains(args, "-j") && args.back() == "--file-list=files.txt",
                       "cppcheck: no -j without tools.cppcheck.jobs; file list last");
 
