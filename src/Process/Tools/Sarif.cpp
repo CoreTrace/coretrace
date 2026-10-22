@@ -74,6 +74,61 @@ namespace ctrace
             return false;
         }
 
+        /// The text of the SARIF message `key` of `rule`; empty when it has none, or only repeats
+        /// the rule's `id`, which says nothing about it.
+        [[nodiscard]] std::string textOf(const nlohmann::json& rule, const char* key,
+                                         const std::string& id)
+        {
+            const auto message = rule.find(key);
+            if (message == rule.end() || !message->is_object())
+            {
+                return {};
+            }
+            const auto text = message->find("text");
+            if (text == message->end() || !text->is_string() || *text == id)
+            {
+                return {};
+            }
+            return text->get<std::string>();
+        }
+
+        /// What each rule of a run's tool checks, by rule id, as `tool.driver.rules` describes
+        /// it. The texts are optional: a list that is not well formed describes nothing rather
+        /// than failing the tool.
+        [[nodiscard]] std::map<std::string, RuleDescription>
+        ruleDescriptionsOf(const nlohmann::json& run)
+        {
+            std::map<std::string, RuleDescription> described;
+            const nlohmann::json* rules = &run;
+            for (const char* key : {"tool", "driver", "rules"})
+            {
+                const auto member = rules->find(key);
+                if (member == rules->end())
+                {
+                    return described;
+                }
+                rules = &*member;
+            }
+            if (!rules->is_array())
+            {
+                return described;
+            }
+            for (const nlohmann::json& rule : *rules)
+            {
+                const auto id = rule.find("id");
+                if (id == rule.end() || !id->is_string())
+                {
+                    continue;
+                }
+                const auto helpUri = rule.find("helpUri");
+                described[*id] = {
+                    textOf(rule, "shortDescription", *id), textOf(rule, "fullDescription", *id),
+                    helpUri != rule.end() && helpUri->is_string() ? helpUri->get<std::string>()
+                                                                  : std::string()};
+            }
+            return described;
+        }
+
         void readLocation(const nlohmann::json& result, Diagnostic& diagnostic)
         {
             const auto locations = result.find("locations");
@@ -106,6 +161,7 @@ namespace ctrace
             {
                 continue;
             }
+            const std::map<std::string, RuleDescription> described = ruleDescriptionsOf(run);
             for (const nlohmann::json& result : *results)
             {
                 if (isSuppressed(result))
@@ -115,6 +171,10 @@ namespace ctrace
                 Diagnostic diagnostic;
                 diagnostic.tool = tool;
                 diagnostic.ruleId = result.value("ruleId", "");
+                if (const auto rule = described.find(diagnostic.ruleId); rule != described.end())
+                {
+                    diagnostic.ruleDescription = rule->second;
+                }
                 diagnostic.severity = severityFromLevel(result.value("level", "warning"));
                 diagnostic.message =
                     result.value("message", nlohmann::json::object()).value("text", "");
