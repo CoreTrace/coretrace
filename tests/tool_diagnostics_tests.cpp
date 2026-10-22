@@ -168,6 +168,48 @@ int main(int argc, char** argv)
                       "location");
     }
 
+    // A rule a tool describes in its own SARIF keeps its description through the model, as
+    // flawfinder writes it (a title and a link, no long description). A text that only repeats
+    // the rule's id, as the Python analyzer writes it, says nothing and is dropped; a rule the
+    // log does not list has none.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"({
+          "version": "2.1.0",
+          "runs": [{
+            "tool": {"driver": {"name": "Flawfinder", "rules": [
+              {"id": "FF1001", "name": "buffer/strcpy",
+               "shortDescription": {"text": "Does not check for buffer overflows (CWE-120)."},
+               "helpUri": "https://cwe.mitre.org/data/definitions/120.html"},
+              {"id": "R1", "shortDescription": {"text": "R1"},
+               "fullDescription": {"text": "What R1 detects."}},
+              {"id": "R2", "shortDescription": {"text": "R2"}}
+            ]}},
+            "results": [
+              {"ruleId": "FF1001", "message": {"text": "a"}},
+              {"ruleId": "R1", "message": {"text": "b"}},
+              {"ruleId": "R2", "message": {"text": "c"}},
+              {"ruleId": "UNLISTED", "message": {"text": "d"}}
+            ]
+          }]
+        })");
+        const std::vector<Diagnostic> items =
+            diagnosticsFromSarif(log, "flawfinder").value_or(std::vector<Diagnostic>{});
+        const auto describedAs = [&](std::size_t index, const RuleDescription& expected)
+        {
+            return index < items.size() && items[index].ruleDescription.title == expected.title &&
+                   items[index].ruleDescription.description == expected.description &&
+                   items[index].ruleDescription.helpUri == expected.helpUri;
+        };
+        report.expect(describedAs(0, {"Does not check for buffer overflows (CWE-120).", "",
+                                      "https://cwe.mitre.org/data/definitions/120.html"}),
+                      "sarif: a rule's title and help link reach its findings");
+        report.expect(describedAs(1, {"", "What R1 detects.", ""}),
+                      "sarif: a title that repeats the rule id is dropped, the rest kept");
+        report.expect(describedAs(2, {}) && describedAs(3, {}),
+                      "sarif: a rule described by its id alone, or not listed, has no "
+                      "description");
+    }
+
     // A generic SARIF reader covers every tool that writes SARIF itself (flawfinder today).
     {
         const nlohmann::json log = nlohmann::json::parse(R"({
