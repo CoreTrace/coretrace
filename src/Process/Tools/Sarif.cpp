@@ -120,11 +120,13 @@ namespace ctrace
                 {
                     continue;
                 }
+                const std::string ruleId = id->get<std::string>();
                 const auto helpUri = rule.find("helpUri");
-                described[*id] = {
-                    textOf(rule, "shortDescription", *id), textOf(rule, "fullDescription", *id),
-                    helpUri != rule.end() && helpUri->is_string() ? helpUri->get<std::string>()
-                                                                  : std::string()};
+                described[ruleId] = {textOf(rule, "shortDescription", ruleId),
+                                     textOf(rule, "fullDescription", ruleId),
+                                     helpUri != rule.end() && helpUri->is_string()
+                                         ? helpUri->get<std::string>()
+                                         : std::string()};
             }
             return described;
         }
