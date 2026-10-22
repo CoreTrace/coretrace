@@ -329,6 +329,48 @@ int main(int argc, char** argv)
                       "renderSarif: no related location and no confidence are left out");
     }
 
+    // A rule its tool describes is described in the log, so that a SARIF consumer (GitHub code
+    // scanning) can explain the finding; a rule without a description keeps its id alone. The
+    // results, their fingerprints included, do not change.
+    {
+        Diagnostic race{"coretrace-concurrency-analyzer",
+                        "DataRaceGlobal",
+                        "race.c",
+                        14,
+                        9,
+                        Severity::Error,
+                        "race",
+                        "CWE-362"};
+        const nlohmann::json bare = renderSarif({race});
+        race.ruleDescription = {"Unsynchronized concurrent access to a shared global",
+                                "Detects shared global accesses that can run concurrently "
+                                "without a common recognized lock.",
+                                "https://example.org/rules/DataRaceGlobal"};
+        const nlohmann::json described = renderSarif({race});
+        // Copies: a key the renderer left out reads as null instead of asserting.
+        nlohmann::json rule = described["runs"][0]["tool"]["driver"]["rules"][0];
+        report.expect(rule["id"] == "DataRaceGlobal" &&
+                          rule["shortDescription"]["text"] ==
+                              "Unsynchronized concurrent access to a shared global" &&
+                          rule["fullDescription"]["text"] ==
+                              "Detects shared global accesses that can run concurrently "
+                              "without a common recognized lock." &&
+                          rule["helpUri"] == "https://example.org/rules/DataRaceGlobal",
+                      "renderSarif: a described rule has its title, description and help link");
+        report.expect(bare["runs"][0]["tool"]["driver"]["rules"][0] ==
+                          nlohmann::json{{"id", "DataRaceGlobal"}},
+                      "renderSarif: a rule without a description keeps its id alone");
+        report.expect(described["runs"][0]["results"] == bare["runs"][0]["results"],
+                      "renderSarif: a rule's description changes no result, fingerprints "
+                      "included");
+
+        race.ruleDescription = {"", "Only a description.", ""};
+        nlohmann::json partial = renderSarif({race})["runs"][0]["tool"]["driver"]["rules"][0];
+        report.expect(!partial.contains("shortDescription") && !partial.contains("helpUri") &&
+                          partial["fullDescription"]["text"] == "Only a description.",
+                      "renderSarif: only the parts of a description the tool gives are written");
+    }
+
     // One weakness seen by two tools is one SARIF result: same file (however each tool spells
     // it), same line, same CWE. The most severe report is kept, in its tool's run, and names
     // the others; every tool that reported keeps its run.
