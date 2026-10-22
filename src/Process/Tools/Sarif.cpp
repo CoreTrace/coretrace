@@ -237,6 +237,27 @@ namespace ctrace
             return static_cast<int>(severity);
         }
 
+        /// A rule as the log lists it: its id, and what its tool says it checks, the parts the
+        /// tool gave only.
+        [[nodiscard]] nlohmann::json ruleOf(const Diagnostic& diagnostic)
+        {
+            nlohmann::json rule = {{"id", diagnostic.ruleId}};
+            const RuleDescription& described = diagnostic.ruleDescription;
+            if (!described.title.empty())
+            {
+                rule["shortDescription"]["text"] = described.title;
+            }
+            if (!described.description.empty())
+            {
+                rule["fullDescription"]["text"] = described.description;
+            }
+            if (!described.helpUri.empty())
+            {
+                rule["helpUri"] = described.helpUri;
+            }
+            return rule;
+        }
+
         /// The reports of other tools that a kept result stands for.
         using Duplicates = std::map<const Diagnostic*, std::vector<const Diagnostic*>>;
 
@@ -318,7 +339,7 @@ namespace ctrace
             {
                 if (!diagnostic->ruleId.empty() && rules.insert(diagnostic->ruleId).second)
                 {
-                    run["tool"]["driver"]["rules"].push_back({{"id", diagnostic->ruleId}});
+                    run["tool"]["driver"]["rules"].push_back(ruleOf(*diagnostic));
                 }
                 nlohmann::json result = resultOf(*diagnostic);
                 if (const auto others = duplicates.find(diagnostic); others != duplicates.end())

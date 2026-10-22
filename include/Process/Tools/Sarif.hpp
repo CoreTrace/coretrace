@@ -19,7 +19,8 @@ namespace ctrace
     diagnosticsFromSarif(const nlohmann::json& log, const std::string& tool);
 
     /// Renders every finding of a run as one SARIF 2.1.0 log: one `run` per tool (sorted by
-    /// tool name), the rules each tool reported, a `coretrace/v1` partial fingerprint per
+    /// tool name), the rules each tool reported, with what the tool says they check when it says
+    /// it (RuleDescription), a `coretrace/v1` partial fingerprint per
     /// result (tool, rule, file and message; not the line, so an alert survives edits above
     /// it), the CWE and the confidence as properties, and the related locations. One weakness
     /// reported by several tools (same file, line and CWE) is one result, the most severe
