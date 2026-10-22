@@ -13,7 +13,8 @@
 namespace ctrace
 {
     /// Reads every active result of a SARIF 2.1.0 log into the diagnostic model, attributed to
-    /// `tool`; suppressed results are not findings. Returns nothing when the document is not a
+    /// `tool`; suppressed results are not findings. Each finding carries what its rule checks, as
+    /// the log's `tool.driver.rules` describe it. Returns nothing when the document is not a
     /// SARIF log (no `runs` array).
     [[nodiscard]] std::optional<std::vector<Diagnostic>>
     diagnosticsFromSarif(const nlohmann::json& log, const std::string& tool);
