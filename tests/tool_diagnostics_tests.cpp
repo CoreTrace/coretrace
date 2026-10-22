@@ -9,6 +9,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -208,6 +209,36 @@ int main(int argc, char** argv)
         report.expect(describedAs(2, {}) && describedAs(3, {}),
                       "sarif: a rule described by its id alone, or not listed, has no "
                       "description");
+    }
+
+    // The rules' texts are optional: a list that is not well formed costs the descriptions,
+    // never the findings.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"({
+          "version": "2.1.0",
+          "runs": [
+            {"tool": {"driver": {"name": "a", "rules": "not a list"}},
+             "results": [{"ruleId": "A", "message": {"text": "a"}}]},
+            {"tool": {"driver": {"name": "b",
+               "rules": [42, {"id": 7}, {"id": "B", "shortDescription": "not an object",
+                                          "helpUri": 3}]}},
+             "results": [{"ruleId": "B", "message": {"text": "b"}}]},
+            {"tool": "not an object",
+             "results": [{"ruleId": "C", "message": {"text": "c"}}]}
+          ]
+        })");
+        const std::vector<Diagnostic> items =
+            diagnosticsFromSarif(log, "tool").value_or(std::vector<Diagnostic>{});
+        report.expect(items.size() == 3 &&
+                          std::all_of(items.begin(), items.end(),
+                                      [](const Diagnostic& item)
+                                      {
+                                          return item.ruleDescription.title.empty() &&
+                                                 item.ruleDescription.description.empty() &&
+                                                 item.ruleDescription.helpUri.empty();
+                                      }),
+                      "sarif: rules that are not well formed cost their descriptions, not the "
+                      "findings");
     }
 
     // A generic SARIF reader covers every tool that writes SARIF itself (flawfinder today).
