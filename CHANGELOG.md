@@ -15,6 +15,9 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
   run gives no report and ends by the signal (130 or 143 in a shell). What a tool leaves running
   in the background ends with it. A server drains as `POST /shutdown` does before it
   ends. A second interrupt quits at once.
+- **SARIF:** a rule of the merged log carries the title, description and documentation link its
+  tool gives, so that GitHub code scanning can explain the finding; flawfinder's rule titles and
+  CWE links come first, the analyzers' when they describe their rules.
 
 ## v0.85.0
 
