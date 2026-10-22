@@ -13,18 +13,20 @@
 namespace ctrace
 {
     /// Reads every active result of a SARIF 2.1.0 log into the diagnostic model, attributed to
-    /// `tool`; suppressed results are not findings. Returns nothing when the document is not a
+    /// `tool`; suppressed results are not findings. Each finding carries what its rule checks, as
+    /// the log's `tool.driver.rules` describe it. Returns nothing when the document is not a
     /// SARIF log (no `runs` array).
     [[nodiscard]] std::optional<std::vector<Diagnostic>>
     diagnosticsFromSarif(const nlohmann::json& log, const std::string& tool);
 
     /// Renders every finding of a run as one SARIF 2.1.0 log: one `run` per tool (sorted by
-    /// tool name), the rules each tool reported, a `coretrace/v1` partial fingerprint per
-    /// result (tool, rule, file and message; not the line, so an alert survives edits above
-    /// it), the CWE and the confidence as properties, and the related locations. One weakness
-    /// reported by several tools (same file, line and CWE) is one result, the most severe
-    /// report, whose `alsoReportedBy` property names the others. Pure: the caller decides where
-    /// the document goes.
+    /// tool name), the rules each tool reported, with what the tool says they check when it says
+    /// it (RuleDescription), a `coretrace/v1` partial fingerprint per result (tool, rule, file
+    /// and message; not the line, so an alert survives edits above it), the CWE and the
+    /// confidence as properties, and the related locations. One weakness reported by several
+    /// tools (same file, line and CWE) is one result, the most severe report, whose
+    /// `alsoReportedBy` property names the others. Pure: the caller decides where the document
+    /// goes.
     [[nodiscard]] nlohmann::json renderSarif(const std::vector<Diagnostic>& diagnostics);
 
     /// The text of a SARIF log, indented. A tool may print bytes that are not UTF-8 (a message

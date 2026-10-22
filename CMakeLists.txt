@@ -656,6 +656,15 @@ add_test(NAME ctrace_exit_3_when_cppcheck_cites_a_header_it_cannot_parse
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --config ${CMAKE_BINARY_DIR}/fake-cppcheck-header.json --input tests/double_free.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 3 && printf '%s\\n' \"$out\" | grep -q 'could not read the output of cppcheck' && printf '%s\\n' \"$out\" | grep -q 'include/bad.h:1: error: Null pointer dereference: p'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# A rule its tool describes keeps its description in the merged log, so that GitHub code
+# scanning can explain the finding: flawfinder's rule title and CWE link.
+file(WRITE ${CMAKE_BINARY_DIR}/fake-flawfinder-described.json
+    "{\"schema_version\": 1, \"tools\": {\"flawfinder\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-flawfinder-sarif.sh\"}}}\n")
+set(ctrace_described_sarif ${CMAKE_BINARY_DIR}/described.sarif)
+add_test(NAME ctrace_sarif_describes_the_rules_its_tools_describe
+    COMMAND sh -c "rm -f '${ctrace_described_sarif}'; $<TARGET_FILE:ctrace> --sarif-format --fail-on none --invoke flawfinder --config ${CMAKE_BINARY_DIR}/fake-flawfinder-described.json --input tests/double_free.c --report-file '${ctrace_described_sarif}' > /dev/null 2>&1; grep -A1 '\"shortDescription\"' '${ctrace_described_sarif}' | grep -q 'Does not check for buffer overflows when copying to destination' && grep -q '\"helpUri\": \"https://cwe.mitre.org/data/definitions/120.html\"' '${ctrace_described_sarif}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # Every tool spells a file the same way: the input as typed. The stack analyzer wrote some of
 # its findings (null dereference, signed overflow) with an absolute path.
 add_test(NAME ctrace_stack_analyzer_paths_follow_the_input

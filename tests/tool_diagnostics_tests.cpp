@@ -9,6 +9,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -166,6 +167,78 @@ int main(int argc, char** argv)
         report.expect(TscancodeToolImplementation::parseDiagnostics(output).unread == lines,
                       "tscancode: a path with parentheses, brackets or quotes still cites a "
                       "location");
+    }
+
+    // A rule a tool describes in its own SARIF keeps its description through the model, as
+    // flawfinder writes it (a title and a link, no long description). A text that only repeats
+    // the rule's id, as the Python analyzer writes it, says nothing and is dropped; a rule the
+    // log does not list has none.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"({
+          "version": "2.1.0",
+          "runs": [{
+            "tool": {"driver": {"name": "Flawfinder", "rules": [
+              {"id": "FF1001", "name": "buffer/strcpy",
+               "shortDescription": {"text": "Does not check for buffer overflows (CWE-120)."},
+               "helpUri": "https://cwe.mitre.org/data/definitions/120.html"},
+              {"id": "R1", "shortDescription": {"text": "R1"},
+               "fullDescription": {"text": "What R1 detects."}},
+              {"id": "R2", "shortDescription": {"text": "R2"}}
+            ]}},
+            "results": [
+              {"ruleId": "FF1001", "message": {"text": "a"}},
+              {"ruleId": "R1", "message": {"text": "b"}},
+              {"ruleId": "R2", "message": {"text": "c"}},
+              {"ruleId": "UNLISTED", "message": {"text": "d"}}
+            ]
+          }]
+        })");
+        const std::vector<Diagnostic> items =
+            diagnosticsFromSarif(log, "flawfinder").value_or(std::vector<Diagnostic>{});
+        const auto describedAs = [&](std::size_t index, const RuleDescription& expected)
+        {
+            return index < items.size() && items[index].ruleDescription.title == expected.title &&
+                   items[index].ruleDescription.description == expected.description &&
+                   items[index].ruleDescription.helpUri == expected.helpUri;
+        };
+        report.expect(describedAs(0, {"Does not check for buffer overflows (CWE-120).", "",
+                                      "https://cwe.mitre.org/data/definitions/120.html"}),
+                      "sarif: a rule's title and help link reach its findings");
+        report.expect(describedAs(1, {"", "What R1 detects.", ""}),
+                      "sarif: a title that repeats the rule id is dropped, the rest kept");
+        report.expect(describedAs(2, {}) && describedAs(3, {}),
+                      "sarif: a rule described by its id alone, or not listed, has no "
+                      "description");
+    }
+
+    // The rules' texts are optional: a list that is not well formed costs the descriptions,
+    // never the findings.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"({
+          "version": "2.1.0",
+          "runs": [
+            {"tool": {"driver": {"name": "a", "rules": "not a list"}},
+             "results": [{"ruleId": "A", "message": {"text": "a"}}]},
+            {"tool": {"driver": {"name": "b",
+               "rules": [42, {"id": 7}, {"id": "B", "shortDescription": "not an object",
+                                          "helpUri": 3}]}},
+             "results": [{"ruleId": "B", "message": {"text": "b"}}]},
+            {"tool": "not an object",
+             "results": [{"ruleId": "C", "message": {"text": "c"}}]}
+          ]
+        })");
+        const std::vector<Diagnostic> items =
+            diagnosticsFromSarif(log, "tool").value_or(std::vector<Diagnostic>{});
+        report.expect(items.size() == 3 &&
+                          std::all_of(items.begin(), items.end(),
+                                      [](const Diagnostic& item)
+                                      {
+                                          return item.ruleDescription.title.empty() &&
+                                                 item.ruleDescription.description.empty() &&
+                                                 item.ruleDescription.helpUri.empty();
+                                      }),
+                      "sarif: rules that are not well formed cost their descriptions, not the "
+                      "findings");
     }
 
     // A generic SARIF reader covers every tool that writes SARIF itself (flawfinder today).
@@ -327,6 +400,48 @@ int main(int argc, char** argv)
         const nlohmann::json bare = renderSarif({plain})["runs"][0]["results"][0];
         report.expect(!bare.contains("relatedLocations") && !bare.contains("properties"),
                       "renderSarif: no related location and no confidence are left out");
+    }
+
+    // A rule its tool describes is described in the log, so that a SARIF consumer (GitHub code
+    // scanning) can explain the finding; a rule without a description keeps its id alone. The
+    // results, their fingerprints included, do not change.
+    {
+        Diagnostic race{"coretrace-concurrency-analyzer",
+                        "DataRaceGlobal",
+                        "race.c",
+                        14,
+                        9,
+                        Severity::Error,
+                        "race",
+                        "CWE-362"};
+        const nlohmann::json bare = renderSarif({race});
+        race.ruleDescription = {"Unsynchronized concurrent access to a shared global",
+                                "Detects shared global accesses that can run concurrently "
+                                "without a common recognized lock.",
+                                "https://example.org/rules/DataRaceGlobal"};
+        const nlohmann::json described = renderSarif({race});
+        // Copies: a key the renderer left out reads as null instead of asserting.
+        nlohmann::json rule = described["runs"][0]["tool"]["driver"]["rules"][0];
+        report.expect(rule["id"] == "DataRaceGlobal" &&
+                          rule["shortDescription"]["text"] ==
+                              "Unsynchronized concurrent access to a shared global" &&
+                          rule["fullDescription"]["text"] ==
+                              "Detects shared global accesses that can run concurrently "
+                              "without a common recognized lock." &&
+                          rule["helpUri"] == "https://example.org/rules/DataRaceGlobal",
+                      "renderSarif: a described rule has its title, description and help link");
+        report.expect(bare["runs"][0]["tool"]["driver"]["rules"][0] ==
+                          nlohmann::json{{"id", "DataRaceGlobal"}},
+                      "renderSarif: a rule without a description keeps its id alone");
+        report.expect(described["runs"][0]["results"] == bare["runs"][0]["results"],
+                      "renderSarif: a rule's description changes no result, fingerprints "
+                      "included");
+
+        race.ruleDescription = {"", "Only a description.", ""};
+        nlohmann::json partial = renderSarif({race})["runs"][0]["tool"]["driver"]["rules"][0];
+        report.expect(!partial.contains("shortDescription") && !partial.contains("helpUri") &&
+                          partial["fullDescription"]["text"] == "Only a description.",
+                      "renderSarif: only the parts of a description the tool gives are written");
     }
 
     // One weakness seen by two tools is one SARIF result: same file (however each tool spells
