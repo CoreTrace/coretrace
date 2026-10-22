@@ -352,6 +352,16 @@ other file relative to the working directory when below it, else absolute. The l
 the fingerprints of a run are therefore the same whichever tool reports the finding and on
 whichever machine the run happens, when it runs from the repository root.
 
+A rule is described as its tool describes it, so that code scanning can explain a finding: its
+title as `shortDescription`, what it detects as `fullDescription`, and its documentation link as
+`helpUri`. Today flawfinder gives a title and a CWE link. The concurrency, stack, Python and
+runtime analyzers do not describe their rules yet
+([coretrace-concurrency-analyzer#214](https://github.com/CoreTrace/coretrace-concurrency-analyzer/issues/214),
+[coretrace-stack-analyzer#242](https://github.com/CoreTrace/coretrace-stack-analyzer/issues/242),
+[coretrace-python-analyzer#270](https://github.com/CoreTrace/coretrace-python-analyzer/issues/270),
+[coretrace-runtime-analyzer#29](https://github.com/CoreTrace/coretrace-runtime-analyzer/issues/29)):
+their rules keep their id alone.
+
 A weakness reported by several tools, same file, same line and same CWE, is one result: the
 most severe report is kept in its tool's run, and its `alsoReportedBy` property names the other
 tools and rules. Reports without a CWE cannot be matched and are all kept; the console output
