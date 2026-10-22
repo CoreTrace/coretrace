@@ -27,6 +27,15 @@ namespace ctrace
         std::string message;
     };
 
+    /// What a rule checks, in its tool's words; empty when the tool does not say. A SARIF
+    /// consumer (GitHub code scanning, an IDE) shows it to explain a finding.
+    struct RuleDescription
+    {
+        std::string title;       ///< A name for the rule: SARIF `shortDescription`.
+        std::string description; ///< What the rule detects: SARIF `fullDescription`.
+        std::string helpUri;     ///< Where the rule is documented.
+    };
+
     /// One finding, whatever tool produced it. Every tool normalizes its own format to this
     /// model; counting, gating and merging only ever see this.
     struct Diagnostic
@@ -43,6 +52,7 @@ namespace ctrace
         // stop at the CWE without -Wmissing-field-initializers.
         std::string confidence{}; ///< "low", "medium" or "high" when the tool rates its finding.
         std::vector<RelatedLocation> relatedLocations{};
+        RuleDescription ruleDescription{}; ///< The same for every finding of the rule.
     };
 
     struct DiagnosticSummary
