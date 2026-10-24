@@ -362,6 +362,13 @@ runtime analyzers do not describe their rules yet
 [coretrace-runtime-analyzer#29](https://github.com/CoreTrace/coretrace-runtime-analyzer/issues/29)):
 their rules keep their id alone.
 
+A finding keeps the other places it involves and how sure its tool is, whichever tool reports
+it: the related locations (`relatedLocations`, such as the other access of a data race or the
+allocation of a heap overflow), which the message links to so that code scanning shows them as
+links, and the confidence (`properties.confidence`, `low`, `medium` or `high`). The stack
+analyzer's confidence, a number, is not carried yet
+([coretrace-stack-analyzer#244](https://github.com/CoreTrace/coretrace-stack-analyzer/issues/244)).
+
 A weakness reported by several tools, same file, same line and same CWE, is one result: the
 most severe report is kept in its tool's run, and its `alsoReportedBy` property names the other
 tools and rules. Reports without a CWE cannot be matched and are all kept; the console output
