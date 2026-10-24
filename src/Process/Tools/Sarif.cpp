@@ -345,6 +345,36 @@ namespace ctrace
             return physical;
         }
 
+        /// `text` as literal SARIF message text, beside embedded links (SARIF 2.1.0 §3.11.6).
+        [[nodiscard]] std::string escaped(std::string_view text)
+        {
+            std::string out;
+            for (const char c : text)
+            {
+                if (c == '\\' || c == '[' || c == ']')
+                    out += '\\';
+                out += c;
+            }
+            return out;
+        }
+
+        /// The message of a result, ending with an embedded link to each related location, which
+        /// GitHub code scanning shows as a link to the place; unchanged without any.
+        [[nodiscard]] std::string linkedMessage(const Diagnostic& diagnostic)
+        {
+            if (diagnostic.relatedLocations.empty())
+                return diagnostic.message;
+            std::string text = escaped(diagnostic.message) + " (";
+            for (std::size_t index = 0; index < diagnostic.relatedLocations.size(); ++index)
+            {
+                if (index != 0)
+                    text += ", ";
+                text += "[" + escaped(diagnostic.relatedLocations[index].message) + "](" +
+                        std::to_string(index) + ")";
+            }
+            return text + ")";
+        }
+
         [[nodiscard]] nlohmann::json resultOf(const Diagnostic& diagnostic)
         {
             nlohmann::json result;
@@ -353,16 +383,18 @@ namespace ctrace
                 result["ruleId"] = diagnostic.ruleId;
             }
             result["level"] = levelOf(diagnostic.severity);
-            result["message"]["text"] = diagnostic.message;
+            result["message"]["text"] = linkedMessage(diagnostic);
             if (!diagnostic.file.empty())
             {
                 result["locations"] = nlohmann::json::array(
                     {{{"physicalLocation",
                        physicalLocationOf(diagnostic.file, diagnostic.line, diagnostic.column)}}});
             }
-            for (const RelatedLocation& related : diagnostic.relatedLocations)
+            for (std::size_t index = 0; index < diagnostic.relatedLocations.size(); ++index)
             {
+                const RelatedLocation& related = diagnostic.relatedLocations[index];
                 nlohmann::json location;
+                location["id"] = index;
                 if (!related.file.empty())
                 {
                     location["physicalLocation"] =
