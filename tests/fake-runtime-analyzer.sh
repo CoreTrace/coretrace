@@ -4,7 +4,7 @@
 #   --format sarif --timeout <seconds> -o <run directory>/<name> [args] -- [compiler args] <source>
 # with the run directory existing and the source last, not starting with `-`, and exits 64
 # otherwise. Then it prints the SARIF the real tool prints for the fixtures, with the source
-# spelled as it was given: a heap overflow for heap_overflow.c, a double free on line 12 for double_free.c, nothing for
+# spelled as it was given, with its confidence: a heap overflow for heap_overflow.c, allocated on line 6, a double free on line 12 for double_free.c, nothing for
 # others. --fake-exit=<code> ends with that code instead (2: could not build or run),
 # --fake-hang never ends, --fake-no-location reports a leak that has no location. When
 # CTRACE_FAKE_RUNTIME_LOG is set, the -o path is appended to it.
@@ -46,7 +46,8 @@ if [ "$location" = no ]; then
 fi
 case "$(basename "$source")" in
     heap_overflow.c) rule=heap-buffer-overflow cwe=CWE-122 line=7 column=15
-        message="heap-buffer-overflow WRITE of size 4" ;;
+        message="heap-buffer-overflow WRITE of size 4"
+        related=', "relatedLocations": [{"id": 0, "message": {"text": "allocated here"}, "physicalLocation": {"artifactLocation": {"uri": "'"$source"'"}, "region": {"startLine": 6, "startColumn": 19}}}]' ;;
     double_free.c) rule=double-free cwe=CWE-415 line=12 column=5 message="double free" ;;
     *) rule= ;;
 esac
@@ -63,10 +64,10 @@ cat <<SARIF
       "ruleId": "$rule",
       "level": "error",
       "message": {"text": "$message"},
-      "properties": {"cwe": "$cwe"},
+      "properties": {"cwe": "$cwe", "confidence": "high"},
       "locations": [{"physicalLocation": {
         "artifactLocation": {"uri": "$source"},
-        "region": {"startLine": $line, "startColumn": $column}}}]
+        "region": {"startLine": $line, "startColumn": $column}}}]${related:-}
     }]
   }]
 }
