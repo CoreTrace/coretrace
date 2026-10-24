@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -131,6 +132,95 @@ namespace ctrace
             return described;
         }
 
+        /// The text of a SARIF message without its embedded links (SARIF 2.1.0 §3.11.6): each
+        /// `[text](id)` becomes its text, and the brackets and backslashes escaped around them
+        /// become themselves. The merged log links the message to its related locations again.
+        [[nodiscard]] std::string plainText(std::string_view text)
+        {
+            std::string plain;
+            for (std::size_t at = 0; at < text.size(); ++at)
+            {
+                const char c = text[at];
+                if (c == '\\' && at + 1 < text.size() &&
+                    (text[at + 1] == '\\' || text[at + 1] == '[' || text[at + 1] == ']'))
+                {
+                    plain += text[++at];
+                    continue;
+                }
+                if (c == '[')
+                {
+                    // An embedded link: an unescaped ']' right before '(' and a closing ')'.
+                    std::size_t close = at + 1;
+                    while (close < text.size() && text[close] != ']')
+                        close += text[close] == '\\' ? 2 : 1;
+                    const std::size_t end = close + 1 < text.size() && text[close + 1] == '('
+                                                ? text.find(')', close + 2)
+                                                : std::string_view::npos;
+                    if (close < text.size() && end != std::string_view::npos)
+                    {
+                        plain += plainText(text.substr(at + 1, close - at - 1));
+                        at = end;
+                        continue;
+                    }
+                }
+                plain += c;
+            }
+            return plain;
+        }
+
+        /// The confidence a result's properties give, `low`, `medium` or `high` in any case;
+        /// empty for another value or none.
+        [[nodiscard]] std::string confidenceOf(const nlohmann::json& result)
+        {
+            const auto properties = result.find("properties");
+            if (properties == result.end() || !properties->is_object())
+                return {};
+            const auto confidence = properties->find("confidence");
+            if (confidence == properties->end() || !confidence->is_string())
+                return {};
+            std::string level = confidence->get<std::string>();
+            std::transform(level.begin(), level.end(), level.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            return level == "low" || level == "medium" || level == "high" ? level : std::string();
+        }
+
+        /// The related locations of a result: each place, when it has one, and its message.
+        /// An entry that is not an object is skipped.
+        [[nodiscard]] std::vector<RelatedLocation> relatedLocationsOf(const nlohmann::json& result)
+        {
+            std::vector<RelatedLocation> related;
+            const auto locations = result.find("relatedLocations");
+            if (locations == result.end() || !locations->is_array())
+                return related;
+            for (const nlohmann::json& location : *locations)
+            {
+                if (!location.is_object())
+                    continue;
+                RelatedLocation place;
+                const nlohmann::json& physical =
+                    location.value("physicalLocation", nlohmann::json::object());
+                if (physical.is_object())
+                {
+                    const nlohmann::json& artifact =
+                        physical.value("artifactLocation", nlohmann::json::object());
+                    const nlohmann::json& region =
+                        physical.value("region", nlohmann::json::object());
+                    if (artifact.is_object())
+                        place.file = artifact.value("uri", "");
+                    if (region.is_object())
+                    {
+                        place.line = region.value("startLine", 0U);
+                        place.column = region.value("startColumn", 0U);
+                    }
+                }
+                const nlohmann::json& message = location.value("message", nlohmann::json::object());
+                if (message.is_object())
+                    place.message = plainText(message.value("text", ""));
+                related.push_back(std::move(place));
+            }
+            return related;
+        }
+
         void readLocation(const nlohmann::json& result, Diagnostic& diagnostic)
         {
             const auto locations = result.find("locations");
@@ -179,8 +269,10 @@ namespace ctrace
                 }
                 diagnostic.severity = severityFromLevel(result.value("level", "warning"));
                 diagnostic.message =
-                    result.value("message", nlohmann::json::object()).value("text", "");
+                    plainText(result.value("message", nlohmann::json::object()).value("text", ""));
                 diagnostic.cwe = cweOf(result, diagnostic.message);
+                diagnostic.confidence = confidenceOf(result);
+                diagnostic.relatedLocations = relatedLocationsOf(result);
                 readLocation(result, diagnostic);
                 diagnostics.push_back(std::move(diagnostic));
             }
@@ -253,6 +345,36 @@ namespace ctrace
             return physical;
         }
 
+        /// `text` as literal SARIF message text, beside embedded links (SARIF 2.1.0 §3.11.6).
+        [[nodiscard]] std::string escaped(std::string_view text)
+        {
+            std::string out;
+            for (const char c : text)
+            {
+                if (c == '\\' || c == '[' || c == ']')
+                    out += '\\';
+                out += c;
+            }
+            return out;
+        }
+
+        /// The message of a result, ending with an embedded link to each related location, which
+        /// GitHub code scanning shows as a link to the place; unchanged without any.
+        [[nodiscard]] std::string linkedMessage(const Diagnostic& diagnostic)
+        {
+            if (diagnostic.relatedLocations.empty())
+                return diagnostic.message;
+            std::string text = escaped(diagnostic.message) + " (";
+            for (std::size_t index = 0; index < diagnostic.relatedLocations.size(); ++index)
+            {
+                if (index != 0)
+                    text += ", ";
+                text += "[" + escaped(diagnostic.relatedLocations[index].message) + "](" +
+                        std::to_string(index) + ")";
+            }
+            return text + ")";
+        }
+
         [[nodiscard]] nlohmann::json resultOf(const Diagnostic& diagnostic)
         {
             nlohmann::json result;
@@ -261,16 +383,18 @@ namespace ctrace
                 result["ruleId"] = diagnostic.ruleId;
             }
             result["level"] = levelOf(diagnostic.severity);
-            result["message"]["text"] = diagnostic.message;
+            result["message"]["text"] = linkedMessage(diagnostic);
             if (!diagnostic.file.empty())
             {
                 result["locations"] = nlohmann::json::array(
                     {{{"physicalLocation",
                        physicalLocationOf(diagnostic.file, diagnostic.line, diagnostic.column)}}});
             }
-            for (const RelatedLocation& related : diagnostic.relatedLocations)
+            for (std::size_t index = 0; index < diagnostic.relatedLocations.size(); ++index)
             {
+                const RelatedLocation& related = diagnostic.relatedLocations[index];
                 nlohmann::json location;
+                location["id"] = index;
                 if (!related.file.empty())
                 {
                     location["physicalLocation"] =

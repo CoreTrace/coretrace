@@ -169,6 +169,49 @@ int main(int argc, char** argv)
                       "location");
     }
 
+    // The places a finding involves, and how sure its tool is, reach the model from the tool's
+    // own SARIF, as the runtime analyzer gives the allocation of a heap overflow and the
+    // Python analyzer the sink a flow reaches. Its message comes without the embedded links to
+    // them, which the merged log writes again.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"json({
+          "version": "2.1.0",
+          "runs": [{
+            "tool": {"driver": {"name": "tool"}},
+            "results": [
+              {"ruleId": "heap-buffer-overflow", "message": {"text": "a\\[0\\] overflows ([allocated here](0))"},
+               "locations": [{"physicalLocation": {"artifactLocation": {"uri": "a.c"},
+                  "region": {"startLine": 7, "startColumn": 15}}}],
+               "relatedLocations": [{"id": 0, "message": {"text": "allocated here"},
+                  "physicalLocation": {"artifactLocation": {"uri": "a.c"},
+                  "region": {"startLine": 6, "startColumn": 19}}}],
+               "properties": {"confidence": "HIGH"}
+},
+              {"ruleId": "r", "message": {"text": "m"}, "properties": {"confidence": "medium"}},
+              {"ruleId": "r", "message": {"text": "m"}, "properties": {"confidence": "sure"}},
+              {"ruleId": "r", "message": {"text": "m"}, "relatedLocations": [42, {"id": 1}]}
+            ]
+}]
+})json");
+        const std::vector<Diagnostic> items =
+            diagnosticsFromSarif(log, "tool").value_or(std::vector<Diagnostic>{});
+        report.expect(items.size() == 4 && items[0].relatedLocations.size() == 1 &&
+                          items[0].relatedLocations[0].file == "a.c" &&
+                          items[0].relatedLocations[0].line == 6 &&
+                          items[0].relatedLocations[0].column == 19 &&
+                          items[0].relatedLocations[0].message == "allocated here",
+                      "sarif: a result's related locations reach the model");
+        report.expect(items.size() == 4 && items[0].message == "a[0] overflows (allocated here)",
+                      "sarif: the message drops its embedded links and escapes");
+        report.expect(items.size() == 4 && items[0].confidence == "high" &&
+                          items[1].confidence == "medium" && items[2].confidence.empty(),
+                      "sarif: the confidence is read in any case; another value is ignored");
+        report.expect(items.size() == 4 && items[3].relatedLocations.size() == 1 &&
+                          items[3].relatedLocations[0].file.empty(),
+                      "sarif: a related location that is not an object is skipped, one "
+                      "without a place kept without it");
+    }
+
     // A rule a tool describes in its own SARIF keeps its description through the model, as
     // flawfinder writes it (a title and a link, no long description). A text that only repeats
     // the rule's id, as the Python analyzer writes it, says nothing and is dropped; a rule the
@@ -400,6 +443,34 @@ int main(int argc, char** argv)
         const nlohmann::json bare = renderSarif({plain})["runs"][0]["results"][0];
         report.expect(!bare.contains("relatedLocations") && !bare.contains("properties"),
                       "renderSarif: no related location and no confidence are left out");
+    }
+
+    // GitHub code scanning links a result to its related locations when the message names them:
+    // each gets its id, and the message ends with an embedded link to each, its own brackets
+    // and backslashes escaped. A result without related locations keeps its message.
+    {
+        Diagnostic overflow{"coretrace-runtime-analyzer",
+                            "heap-buffer-overflow",
+                            "a.c",
+                            7,
+                            15,
+                            Severity::Error,
+                            "values[4] overflows",
+                            "CWE-122"};
+        const nlohmann::json bare = renderSarif({overflow})["runs"][0]["results"][0];
+        overflow.relatedLocations = {{"a.c", 6, 19, "allocated here"},
+                                     {"a.c", 8, 5, "freed [here]"}};
+        nlohmann::json linked = renderSarif({overflow})["runs"][0]["results"][0];
+        report.expect(linked["relatedLocations"][0]["id"] == 0 &&
+                          linked["relatedLocations"][1]["id"] == 1,
+                      "renderSarif: each related location has its id");
+        report.expect(linked["message"]["text"] ==
+                          "values\\[4\\] overflows ([allocated here](0), [freed \\[here\\]](1))",
+                      "renderSarif: the message links to each related location");
+        report.expect(bare["message"]["text"] == "values[4] overflows",
+                      "renderSarif: a message without related locations is left as it is");
+        report.expect(linked["partialFingerprints"] == bare["partialFingerprints"],
+                      "renderSarif: the links change no fingerprint");
     }
 
     // A rule its tool describes is described in the log, so that a SARIF consumer (GitHub code
