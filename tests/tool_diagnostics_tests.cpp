@@ -445,6 +445,34 @@ int main(int argc, char** argv)
                       "renderSarif: no related location and no confidence are left out");
     }
 
+    // GitHub code scanning links a result to its related locations when the message names them:
+    // each gets its id, and the message ends with an embedded link to each, its own brackets
+    // and backslashes escaped. A result without related locations keeps its message.
+    {
+        Diagnostic overflow{"coretrace-runtime-analyzer",
+                            "heap-buffer-overflow",
+                            "a.c",
+                            7,
+                            15,
+                            Severity::Error,
+                            "values[4] overflows",
+                            "CWE-122"};
+        const nlohmann::json bare = renderSarif({overflow})["runs"][0]["results"][0];
+        overflow.relatedLocations = {{"a.c", 6, 19, "allocated here"},
+                                     {"a.c", 8, 5, "freed [here]"}};
+        nlohmann::json linked = renderSarif({overflow})["runs"][0]["results"][0];
+        report.expect(linked["relatedLocations"][0]["id"] == 0 &&
+                          linked["relatedLocations"][1]["id"] == 1,
+                      "renderSarif: each related location has its id");
+        report.expect(linked["message"]["text"] ==
+                          "values\\[4\\] overflows ([allocated here](0), [freed \\[here\\]](1))",
+                      "renderSarif: the message links to each related location");
+        report.expect(bare["message"]["text"] == "values[4] overflows",
+                      "renderSarif: a message without related locations is left as it is");
+        report.expect(linked["partialFingerprints"] == bare["partialFingerprints"],
+                      "renderSarif: the links change no fingerprint");
+    }
+
     // A rule its tool describes is described in the log, so that a SARIF consumer (GitHub code
     // scanning) can explain the finding; a rule without a description keeps its id alone. The
     // results, their fingerprints included, do not change.
