@@ -63,6 +63,16 @@ int main()
 {
     TestReport report;
     const auto dir = scratchDir();
+    // An input must exist: the plain paths below are files of the scratch directory, which the
+    // relative ones are relative to.
+    std::filesystem::current_path(dir);
+    for (const char* file : {"a.c", "b.c", "-F.c", "main.c", "src/-t.c", "-x.c", "extra.c",
+                             "src/x.c", "abs/dir/y.c", "build/_deps/lib/z.c", "already/absolute.c"})
+    {
+        std::filesystem::create_directories((dir / file).parent_path());
+        writeFile(dir / file, "");
+    }
+    const std::string absoluteDash = (dir / "-x.c").string();
 
     // Plain paths: normalized and deduplicated, order preserved.
     {
@@ -75,37 +85,41 @@ int main()
     // A name starting with `-` keeps a `./` in front, or the tools read it as an option; both
     // spellings are one file. Other paths are left as they are.
     {
-        const auto r = resolve({"-F.c", "./-F.c", "main.c", "src/-t.c", "/abs/-x.c"});
+        const auto r = resolve({"-F.c", "./-F.c", "main.c", "src/-t.c", absoluteDash});
         report.expect(
-            (r.files == std::vector<std::string>{"./-F.c", "main.c", "src/-t.c", "/abs/-x.c"}),
+            (r.files == std::vector<std::string>{"./-F.c", "main.c", "src/-t.c", absoluteDash}),
             "dash paths: './' kept in front of a leading '-', both spellings deduplicated");
     }
 
     // An explicit compile database: entries resolve against their directory (relative to the
     // database location) and _deps entries are kept because the user named the file.
     const auto compdb = dir / "compile_commands.json";
+    const std::string absoluteDir = norm(dir / "abs/dir");
+    const std::string absoluteFile = norm(dir / "already/absolute.c");
     writeFile(compdb, R"json([
   {"directory": "src", "file": "x.c", "command": "cc x.c"},
-  {"directory": "/abs/dir", "file": "y.c", "command": "cc y.c"},
+  {"directory": ")json" + absoluteDir +
+                          R"json(", "file": "y.c", "command": "cc y.c"},
   {"directory": "build/_deps/lib", "file": "z.c", "command": "cc z.c"},
-  {"file": "/already/absolute.c", "command": "cc absolute.c"}
+  {"file": ")json" + absoluteFile +
+                          R"json(", "command": "cc absolute.c"}
 ])json");
     {
         const auto r = resolve({compdb.string()});
         report.expect(r.ok(), "explicit compdb: resolves without error (" + r.error + ")");
-        report.expect((r.files == std::vector<std::string>{norm(dir / "src/x.c"), "/abs/dir/y.c",
-                                                           norm(dir / "build/_deps/lib/z.c"),
-                                                           "/already/absolute.c"}),
-                      "explicit compdb: entries resolve against their directory, _deps kept");
+        report.expect(
+            (r.files == std::vector<std::string>{norm(dir / "src/x.c"), norm(dir / "abs/dir/y.c"),
+                                                 norm(dir / "build/_deps/lib/z.c"), absoluteFile}),
+            "explicit compdb: entries resolve against their directory, _deps kept");
     }
 
     // Auto-discovery from files.compile_commands (directory form): _deps filtered unless asked.
     {
         const auto r = resolve({}, dir.string());
-        report.expect(
-            r.ok() && (r.files == std::vector<std::string>{norm(dir / "src/x.c"), "/abs/dir/y.c",
-                                                           "/already/absolute.c"}),
-            "auto-discovered compdb: _deps entries are filtered by default");
+        report.expect(r.ok() && (r.files == std::vector<std::string>{norm(dir / "src/x.c"),
+                                                                     norm(dir / "abs/dir/y.c"),
+                                                                     absoluteFile}),
+                      "auto-discovered compdb: _deps entries are filtered by default");
         const auto kept = resolve({}, dir.string(), /*includeDeps=*/true);
         report.expect(kept.ok() && kept.files.size() == 4,
                       "auto-discovered compdb: include_compdb_deps keeps _deps entries");
@@ -144,6 +158,50 @@ int main()
         const auto r = resolve({compdb.string(), "extra.c"});
         report.expect(r.ok() && r.files.size() == 5 && r.files.back() == "extra.c",
                       "mixed input: compdb entries then plain paths");
+    }
+
+    // A missing input, or a missing compile database, is an error that names it.
+    {
+        const auto r = resolve({"a.c", "no_such_input.c"});
+        report.expect(!r.ok() && r.error.find("no_such_input.c") != std::string::npos,
+                      "missing input: rejected with its path (" + r.error + ")");
+        const auto database = resolve({}, (dir / "no/such/build").string());
+        report.expect(!database.ok() && database.error.find("no/such/build") != std::string::npos,
+                      "missing compile database: rejected with its path (" + database.error + ")");
+    }
+
+    // The database is checked even when inputs are given, and so is every source it lists that
+    // is kept: one the _deps filter leaves out is not.
+    {
+        const auto r = resolve({"a.c"}, (dir / "no/such/build").string());
+        report.expect(!r.ok() && r.error.find("no/such/build") != std::string::npos,
+                      "missing compile database beside an input: rejected with its path (" +
+                          r.error + ")");
+    }
+    std::filesystem::create_directories(dir / "missing-source");
+    const auto listsMissing = dir / "missing-source/compile_commands.json";
+    writeFile(listsMissing, R"json([
+  {"directory": ".", "file": "gone.c", "command": "cc gone.c"}
+])json");
+    {
+        const auto r = resolve({listsMissing.string()});
+        report.expect(!r.ok() &&
+                          r.error.find(norm(dir / "missing-source/gone.c")) != std::string::npos &&
+                          r.error.find(listsMissing.string()) != std::string::npos,
+                      "compile database listing a missing source: rejected with both paths (" +
+                          r.error + ")");
+    }
+    std::filesystem::create_directories(dir / "missing-dependency");
+    writeFile(dir / "missing-dependency/main.c", "");
+    writeFile(dir / "missing-dependency/compile_commands.json", R"json([
+  {"directory": ".", "file": "main.c", "command": "cc main.c"},
+  {"directory": ".", "file": "_deps/lib/gone.c", "command": "cc gone.c"}
+])json");
+    {
+        const auto r = resolve({}, (dir / "missing-dependency").string());
+        report.expect(r.ok() && r.files.size() == 1,
+                      "missing source filtered out as a dependency: not an error (" + r.error +
+                          ")");
     }
 
     if (report.failures == 0)

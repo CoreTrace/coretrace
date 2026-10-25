@@ -337,18 +337,7 @@ namespace
         const size_t processed = validSourceFiles.size();
         if (processed > 0)
         {
-            if (config.analysis.static_enabled)
-            {
-                invoker.runStaticTools(validSourceFiles);
-            }
-            if (config.analysis.dynamic_enabled)
-            {
-                invoker.runDynamicTools(validSourceFiles);
-            }
-            if (!config.analysis.invoke.empty())
-            {
-                invoker.runSpecificTools(config.analysis.invoke, validSourceFiles);
-            }
+            invoker.runSelectedTools(config.analysis, validSourceFiles);
         }
 
         if (processed == 0)

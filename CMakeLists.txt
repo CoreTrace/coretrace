@@ -415,6 +415,29 @@ set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSIO
 # log still reaches stdout and the verdict stands.
 add_test(NAME ctrace_exit_1_without_input
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No input files resolved'")
+# A missing input, or a missing compile database, is a usage error that names the path, found
+# before any tool runs, instead of a tool failing on it (C07, C08, C23).
+add_test(NAME ctrace_exit_1_naming_a_missing_input
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --input tests/double_free.c,tests/no_such_input.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'tests/no_such_input.c' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME ctrace_exit_1_naming_a_missing_compile_database
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --compile-commands no/such/build 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'no/such/build'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# The database is checked even beside an input, and so is every source it lists.
+add_test(NAME ctrace_exit_1_naming_a_missing_compile_database_beside_an_input
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --input tests/double_free.c --compile-commands no/such/build 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'no/such/build' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set(ctrace_compdb_missing_source ${CMAKE_BINARY_DIR}/compdb-missing-source)
+file(WRITE ${ctrace_compdb_missing_source}/compile_commands.json
+    "[\n  {\"directory\": \"${CMAKE_SOURCE_DIR}/tests\", \"file\": \"double_free.c\", \"command\": \"cc -c double_free.c\"},\n  {\"directory\": \"${CMAKE_SOURCE_DIR}/tests\", \"file\": \"no_such_source.c\", \"command\": \"cc -c no_such_source.c\"}\n]\n")
+add_test(NAME ctrace_exit_1_naming_a_missing_compile_database_source
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --compile-commands ${ctrace_compdb_missing_source} 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'tests/no_such_source.c' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck'")
+# A tool that --static and --invoke both select runs once, and its findings count once (C36).
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-selected-twice.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\"}}}\n")
+add_test(NAME ctrace_a_tool_selected_twice_runs_once
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --static --invoke cppcheck --fail-on none --config ${CMAKE_BINARY_DIR}/fake-cppcheck-selected-twice.json --input tests/double_free.c 2>&1); printf '%s\\n' \"$out\"; test $(printf '%s\\n' \"$out\" | grep -c 'Running cppcheck on') -eq 1 && test $(printf '%s\\n' \"$out\" | grep -c '(cppcheck) Diagnostics summary') -eq 1"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # Nothing selected to run is a usage error too: a CI step that forgot --static would otherwise
 # pass forever, having checked nothing (C35).
 add_test(NAME ctrace_exit_1_without_analysis

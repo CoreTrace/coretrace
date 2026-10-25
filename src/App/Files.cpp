@@ -60,7 +60,7 @@ namespace ctrace
             std::vector<std::string> files_;
         };
 
-        /// Reads a Clang compilation database and appends its source files.
+        /// Reads a Clang compilation database and appends its source files, which must exist.
         [[nodiscard]] bool appendCompileDatabase(const std::filesystem::path& databasePath,
                                                  bool skipDependencyEntries, FileList& out,
                                                  std::string& error)
@@ -124,6 +124,13 @@ namespace ctrace
                 {
                     continue;
                 }
+                std::error_code fsError;
+                if (!std::filesystem::exists(source, fsError))
+                {
+                    error = "Source file not found: " + source.lexically_normal().string() +
+                            " (listed in compile database '" + databasePath.string() + "').";
+                    return false;
+                }
                 out.add(source);
             }
             return true;
@@ -137,7 +144,8 @@ namespace ctrace
 
         std::vector<std::string> inputs = config.files.input;
         std::filesystem::path autoDiscovered;
-        if (inputs.empty() && !config.files.compile_commands.empty())
+        // Checked even beside inputs: the tools that read the database would fail on it.
+        if (!config.files.compile_commands.empty())
         {
             std::filesystem::path candidate(config.files.compile_commands);
             std::error_code fsError;
@@ -145,7 +153,12 @@ namespace ctrace
             {
                 candidate /= "compile_commands.json";
             }
-            if (std::filesystem::is_regular_file(candidate, fsError))
+            if (!std::filesystem::is_regular_file(candidate, fsError))
+            {
+                result.error = "Compile database not found: " + config.files.compile_commands;
+                return result;
+            }
+            if (inputs.empty())
             {
                 autoDiscovered = candidate.lexically_normal();
                 inputs.push_back(autoDiscovered.string());
@@ -160,6 +173,13 @@ namespace ctrace
             }
             if (!endsWithJson(input))
             {
+                // Found here rather than by each tool failing on it, with its path.
+                std::error_code fsError;
+                if (!std::filesystem::exists(input, fsError))
+                {
+                    result.error = "Input file not found: " + input;
+                    return result;
+                }
                 files.add(input);
                 continue;
             }

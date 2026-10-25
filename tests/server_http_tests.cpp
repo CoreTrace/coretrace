@@ -428,6 +428,23 @@ namespace
 
     // A tool whose output cannot be read leaves the run incomplete, as on the command line:
     // the gate exits 3 and names the tool. echo stands in for a flawfinder that prints no SARIF.
+    // A request naming a file that does not exist is an invalid request that names it, answered
+    // before any tool runs, not an analysis whose tools fail on it.
+    void testMissingInput(TestReport& report, const std::string& sourceDir)
+    {
+        ConsoleLogger logger;
+        ApiHandler handler(logger, /*executable=*/{});
+        nlohmann::json request =
+            analysisRequest(sourceDir + "/tests/no_such_input.c", {"cppcheck"}, false, "");
+        request["params"].erase("config");
+        const nlohmann::json response = handler.handle_request(request);
+        report.expect(errorCode(response) == "InvalidInput" &&
+                          response.value(nlohmann::json::json_pointer("/error/message"), "")
+                                  .find("no_such_input.c") != std::string::npos,
+                      "a missing input is answered with InvalidInput, naming it (" +
+                          response.dump() + ")");
+    }
+
     void testUnreadToolOutput(TestReport& report, const std::string& buildDir,
                               const std::string& sourceDir)
     {
@@ -467,6 +484,7 @@ int main(int argc, char* argv[])
     testToolOutputThatIsNotUtf8(report, argv[1], argv[2]);
     testUnreachableIpcSocket(report, argv[2]);
     testUnreadToolOutput(report, argv[1], argv[2]);
+    testMissingInput(report, argv[2]);
 
     if (report.failures == 0)
     {

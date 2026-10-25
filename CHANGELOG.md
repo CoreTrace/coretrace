@@ -21,6 +21,13 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 - **SARIF:** the related locations and the confidence a tool writes in its SARIF reach the merged
   log (the runtime analyzer's allocation site, the Python analyzer's sink), and a result's
   message links to its related locations, which GitHub code scanning then shows as links.
+- **Inputs:** an input file, a compilation database or a source it lists that does not exist
+  stops the run before any tool starts, with exit code 1 and a message naming it
+  (`Input file not found`, `Compile database not found`, `Source file not found`), instead of
+  each tool failing on it (exit code 3). A compilation database is checked even beside
+  `--input`. The server answers `InvalidInput`.
+- **Tool selection:** a tool selected twice, by `--static` or `--dyn` and by `--invoke`, runs
+  once, and its findings are counted once.
 
 ## v0.85.0
 
