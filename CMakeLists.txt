@@ -423,6 +423,12 @@ add_test(NAME ctrace_exit_1_naming_a_missing_input
 add_test(NAME ctrace_exit_1_naming_a_missing_compile_database
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --compile-commands no/such/build 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'no/such/build'"
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+# A tool that --static and --invoke both select runs once, and its findings count once (C36).
+file(WRITE ${CMAKE_BINARY_DIR}/fake-cppcheck-selected-twice.json
+    "{\"schema_version\": 1, \"tools\": {\"cppcheck\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-file-list-tool.sh\"}}}\n")
+add_test(NAME ctrace_a_tool_selected_twice_runs_once
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --static --invoke cppcheck --fail-on none --config ${CMAKE_BINARY_DIR}/fake-cppcheck-selected-twice.json --input tests/double_free.c 2>&1); printf '%s\\n' \"$out\"; test $(printf '%s\\n' \"$out\" | grep -c 'Running cppcheck on') -eq 1 && test $(printf '%s\\n' \"$out\" | grep -c '(cppcheck) Diagnostics summary') -eq 1"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # Nothing selected to run is a usage error too: a CI step that forgot --static would otherwise
 # pass forever, having checked nothing (C35).
 add_test(NAME ctrace_exit_1_without_analysis
