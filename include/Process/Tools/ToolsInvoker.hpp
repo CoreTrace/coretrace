@@ -185,18 +185,6 @@ namespace ctrace
             }
         }
 
-        // Execute all static analysis tools
-        void runStaticTools(const std::vector<std::string>& files)
-        {
-            runToolList(static_tools, files);
-        }
-
-        // Execute all dynamic analysis tools
-        void runDynamicTools(const std::vector<std::string>& files)
-        {
-            runToolList(dynamic_tools, files);
-        }
-
         // Execute a specific tool list
         void runSpecificTools(const std::vector<std::string>& tool_names,
                               const std::vector<std::string>& files)
