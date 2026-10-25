@@ -63,6 +63,15 @@ int main()
 {
     TestReport report;
     const auto dir = scratchDir();
+    // An input must exist: the plain paths below are files of the scratch directory, which the
+    // relative ones are relative to.
+    std::filesystem::current_path(dir);
+    std::filesystem::create_directories(dir / "src");
+    for (const char* file : {"a.c", "b.c", "-F.c", "main.c", "src/-t.c", "-x.c", "extra.c"})
+    {
+        writeFile(dir / file, "");
+    }
+    const std::string absoluteDash = (dir / "-x.c").string();
 
     // Plain paths: normalized and deduplicated, order preserved.
     {
@@ -75,9 +84,9 @@ int main()
     // A name starting with `-` keeps a `./` in front, or the tools read it as an option; both
     // spellings are one file. Other paths are left as they are.
     {
-        const auto r = resolve({"-F.c", "./-F.c", "main.c", "src/-t.c", "/abs/-x.c"});
+        const auto r = resolve({"-F.c", "./-F.c", "main.c", "src/-t.c", absoluteDash});
         report.expect(
-            (r.files == std::vector<std::string>{"./-F.c", "main.c", "src/-t.c", "/abs/-x.c"}),
+            (r.files == std::vector<std::string>{"./-F.c", "main.c", "src/-t.c", absoluteDash}),
             "dash paths: './' kept in front of a leading '-', both spellings deduplicated");
     }
 
@@ -144,6 +153,16 @@ int main()
         const auto r = resolve({compdb.string(), "extra.c"});
         report.expect(r.ok() && r.files.size() == 5 && r.files.back() == "extra.c",
                       "mixed input: compdb entries then plain paths");
+    }
+
+    // A missing input, or a missing compile database, is an error that names it.
+    {
+        const auto r = resolve({"a.c", "no_such_input.c"});
+        report.expect(!r.ok() && r.error.find("no_such_input.c") != std::string::npos,
+                      "missing input: rejected with its path (" + r.error + ")");
+        const auto database = resolve({}, (dir / "no/such/build").string());
+        report.expect(!database.ok() && database.error.find("no/such/build") != std::string::npos,
+                      "missing compile database: rejected with its path (" + database.error + ")");
     }
 
     if (report.failures == 0)
