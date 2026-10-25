@@ -40,7 +40,7 @@ same loader as the configuration file, so the CLI and the file share the same ru
 | Unknown option | CLI11 | `The following argument was not expected: --x`, exit 1 (C02) |
 | Unsigned values: `--jobs`, `--serve-port`, `--shutdown-timeout-ms`, `--stack-limit`, `--smt-*` | Digits only, then range: `--jobs` 0–1024 (0 = one per core), port 0–65535 | `Invalid value for --jobs: 'abc' is not an unsigned integer.`, exit 1 (C04, C05) |
 | Enumerations: `--fail-on`, `--ipc`, `--analysis-profile`... | Exact value from a fixed list | `Invalid value 'sometimes' for '--fail-on'. Allowed values: [none, warning, error]`, exit 1 (C03) |
-| `--invoke` | Each name in the list of supported tools; duplicates removed | `--invoke: Unknown tool 'x'. Allowed tools: [...]`, exit 1 (C06) |
+| `--invoke` | Each name in the list of supported tools; duplicates removed, and a tool `--static` or `--dyn` already selects runs once (C36) | `--invoke: Unknown tool 'x'. Allowed tools: [...]`, exit 1 (C06) |
 | `--serve-host`, `--serve-port` without `--ipc serve` | Rejected | exit 1 |
 | Deprecated spellings (`--async`) | Accepted | A warning names the replacement |
 
@@ -68,7 +68,7 @@ Relative paths of models and inputs are resolved from the configuration file's d
 
 | Input | Behavior | Scenario |
 |---|---|---|
-| A path that does not exist | Passed to the tools, which fail: exit 3. Found late, without naming the file ([#190](https://github.com/CoreTrace/coretrace/issues/190)) | C07, C08 |
+| A path that does not exist | `Input file not found: <path>`, exit 1, before any tool runs; the server answers `InvalidInput` | C07, C08 |
 | A file that cannot be read | The tool fails: exit 3 | C10 |
 | An empty file | Analyzed: nothing found, exit 0 | C11 |
 | Binary content, or C that does not compile | The analyzer fails: exit 3 | C12, C13 |
@@ -78,7 +78,8 @@ Relative paths of models and inputs are resolved from the configuration file's d
 | A file outside the working directory | Analyzed, and reported with its absolute path | — |
 | `compile_commands.json` that is not JSON | `Invalid JSON in compile database '<path>'.`, exit 1 | C20 |
 | Not an array of objects with a `file` string | `'<path>' is not a compile_commands.json document: expected an array of objects with a "file" field.`, exit 1 | C21 |
-| Empty, or missing | `No input files resolved. Provide --input or --compile-commands.`, exit 1; a missing database is not named ([#190](https://github.com/CoreTrace/coretrace/issues/190)) | C22, C23 |
+| Empty | `No input files resolved. Provide --input or --compile-commands.`, exit 1 | C22 |
+| Missing | `Compile database not found: <path>`, exit 1 | C23 |
 
 The extension decides the language: `.py` goes to the Python analyzer, anything else to the C and
 C++ tools (`src/ctrace_tools/languageType.cpp`).
