@@ -204,6 +204,24 @@ namespace ctrace
             runToolList(deduplicateToolNames(tool_names), files);
         }
 
+        /// Runs every tool `analysis` selects, each once: the static set, the dynamic set and the
+        /// tools named to invoke. A tool two of them select (`--static --invoke cppcheck`) would
+        /// otherwise run twice and count its findings twice.
+        void runSelectedTools(const AnalysisConfig& analysis, const std::vector<std::string>& files)
+        {
+            std::vector<std::string> selected;
+            if (analysis.static_enabled)
+            {
+                selected.insert(selected.end(), static_tools.begin(), static_tools.end());
+            }
+            if (analysis.dynamic_enabled)
+            {
+                selected.insert(selected.end(), dynamic_tools.begin(), dynamic_tools.end());
+            }
+            selected.insert(selected.end(), analysis.invoke.begin(), analysis.invoke.end());
+            runToolList(deduplicateToolNames(selected), files);
+        }
+
         /// Every finding collected so far, in reportedBefore order: reports do not depend on
         /// the order tool runs finished in.
         [[nodiscard]] std::vector<Diagnostic> diagnostics() const

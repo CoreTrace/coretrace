@@ -158,20 +158,18 @@ namespace ctrace
         {
             coretrace::log(coretrace::Level::Info, "Running static analysis on {} file(s)\n",
                            sourceFiles.size());
-            invoker.runStaticTools(sourceFiles);
         }
         if (config.analysis.dynamic_enabled)
         {
             coretrace::log(coretrace::Level::Info, "Running dynamic analysis on {} file(s)\n",
                            sourceFiles.size());
-            invoker.runDynamicTools(sourceFiles);
         }
         if (!config.analysis.invoke.empty())
         {
             coretrace::log(coretrace::Level::Info, "Running specific tools on {} file(s)\n",
                            sourceFiles.size());
-            invoker.runSpecificTools(config.analysis.invoke, sourceFiles);
         }
+        invoker.runSelectedTools(config.analysis, sourceFiles);
 
         // The tools were stopped: a report or a verdict would pass findings off as complete.
         if (const int signal = interrupt::received(); signal != 0)
