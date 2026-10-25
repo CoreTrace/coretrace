@@ -137,7 +137,8 @@ namespace ctrace
 
         std::vector<std::string> inputs = config.files.input;
         std::filesystem::path autoDiscovered;
-        if (inputs.empty() && !config.files.compile_commands.empty())
+        // Checked even beside inputs: the tools that read the database would fail on it.
+        if (!config.files.compile_commands.empty())
         {
             std::filesystem::path candidate(config.files.compile_commands);
             std::error_code fsError;
@@ -150,8 +151,11 @@ namespace ctrace
                 result.error = "Compile database not found: " + config.files.compile_commands;
                 return result;
             }
-            autoDiscovered = candidate.lexically_normal();
-            inputs.push_back(autoDiscovered.string());
+            if (inputs.empty())
+            {
+                autoDiscovered = candidate.lexically_normal();
+                inputs.push_back(autoDiscovered.string());
+            }
         }
 
         for (const std::string& input : inputs)
