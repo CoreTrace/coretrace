@@ -169,6 +169,49 @@ int main(int argc, char** argv)
                       "location");
     }
 
+    // The places a finding involves, and how sure its tool is, reach the model from the tool's
+    // own SARIF, as the runtime analyzer gives the allocation of a heap overflow and the
+    // Python analyzer the sink a flow reaches. Its message comes without the embedded links to
+    // them, which the merged log writes again.
+    {
+        const nlohmann::json log = nlohmann::json::parse(R"json({
+          "version": "2.1.0",
+          "runs": [{
+            "tool": {"driver": {"name": "tool"}},
+            "results": [
+              {"ruleId": "heap-buffer-overflow", "message": {"text": "a\\[0\\] overflows ([allocated here](0))"},
+               "locations": [{"physicalLocation": {"artifactLocation": {"uri": "a.c"},
+                  "region": {"startLine": 7, "startColumn": 15}}}],
+               "relatedLocations": [{"id": 0, "message": {"text": "allocated here"},
+                  "physicalLocation": {"artifactLocation": {"uri": "a.c"},
+                  "region": {"startLine": 6, "startColumn": 19}}}],
+               "properties": {"confidence": "HIGH"}
+},
+              {"ruleId": "r", "message": {"text": "m"}, "properties": {"confidence": "medium"}},
+              {"ruleId": "r", "message": {"text": "m"}, "properties": {"confidence": "sure"}},
+              {"ruleId": "r", "message": {"text": "m"}, "relatedLocations": [42, {"id": 1}]}
+            ]
+}]
+})json");
+        const std::vector<Diagnostic> items =
+            diagnosticsFromSarif(log, "tool").value_or(std::vector<Diagnostic>{});
+        report.expect(items.size() == 4 && items[0].relatedLocations.size() == 1 &&
+                          items[0].relatedLocations[0].file == "a.c" &&
+                          items[0].relatedLocations[0].line == 6 &&
+                          items[0].relatedLocations[0].column == 19 &&
+                          items[0].relatedLocations[0].message == "allocated here",
+                      "sarif: a result's related locations reach the model");
+        report.expect(items.size() == 4 && items[0].message == "a[0] overflows (allocated here)",
+                      "sarif: the message drops its embedded links and escapes");
+        report.expect(items.size() == 4 && items[0].confidence == "high" &&
+                          items[1].confidence == "medium" && items[2].confidence.empty(),
+                      "sarif: the confidence is read in any case; another value is ignored");
+        report.expect(items.size() == 4 && items[3].relatedLocations.size() == 1 &&
+                          items[3].relatedLocations[0].file.empty(),
+                      "sarif: a related location that is not an object is skipped, one "
+                      "without a place kept without it");
+    }
+
     // A rule a tool describes in its own SARIF keeps its description through the model, as
     // flawfinder writes it (a title and a link, no long description). A text that only repeats
     // the rule's id, as the Python analyzer writes it, says nothing and is dropped; a rule the
@@ -402,6 +445,34 @@ int main(int argc, char** argv)
                       "renderSarif: no related location and no confidence are left out");
     }
 
+    // GitHub code scanning links a result to its related locations when the message names them:
+    // each gets its id, and the message ends with an embedded link to each, its own brackets
+    // and backslashes escaped. A result without related locations keeps its message.
+    {
+        Diagnostic overflow{"coretrace-runtime-analyzer",
+                            "heap-buffer-overflow",
+                            "a.c",
+                            7,
+                            15,
+                            Severity::Error,
+                            "values[4] overflows",
+                            "CWE-122"};
+        const nlohmann::json bare = renderSarif({overflow})["runs"][0]["results"][0];
+        overflow.relatedLocations = {{"a.c", 6, 19, "allocated here"},
+                                     {"a.c", 8, 5, "freed [here]"}};
+        nlohmann::json linked = renderSarif({overflow})["runs"][0]["results"][0];
+        report.expect(linked["relatedLocations"][0]["id"] == 0 &&
+                          linked["relatedLocations"][1]["id"] == 1,
+                      "renderSarif: each related location has its id");
+        report.expect(linked["message"]["text"] ==
+                          "values\\[4\\] overflows ([allocated here](0), [freed \\[here\\]](1))",
+                      "renderSarif: the message links to each related location");
+        report.expect(bare["message"]["text"] == "values[4] overflows",
+                      "renderSarif: a message without related locations is left as it is");
+        report.expect(linked["partialFingerprints"] == bare["partialFingerprints"],
+                      "renderSarif: the links change no fingerprint");
+    }
+
     // A rule its tool describes is described in the log, so that a SARIF consumer (GitHub code
     // scanning) can explain the finding; a rule without a description keeps its id alone. The
     // results, their fingerprints included, do not change.
@@ -620,6 +691,53 @@ int main(int argc, char** argv)
                           (*elsewhere)[0].file == "/elsewhere/proj/requirements.txt",
                       "coretrace-python-analyzer: a project outside the working directory is "
                       "spelled absolute");
+    }
+
+    // The places a finding involves are relative to the project root too: they are resolved
+    // from it and spelled as the main location is, or a link of the merged log would open
+    // another file (a project outside the working directory).
+    {
+        const std::string sarif = R"json({"version": "2.1.0", "runs": [{"results": [
+          {"ruleId": "code-injection", "level": "error", "message": {"text": "flow"},
+           "locations": [{"physicalLocation": {
+             "artifactLocation": {"uri": "app/main.py", "uriBaseId": "SRCROOT"},
+             "region": {"startLine": 8, "startColumn": 5}}}],
+           "relatedLocations": [
+             {"id": 0, "message": {"text": "sink"}, "physicalLocation": {
+               "artifactLocation": {"uri": "app/helpers.py", "uriBaseId": "SRCROOT"},
+               "region": {"startLine": 2, "startColumn": 12}}},
+             {"id": 1, "message": {"text": "again"}, "physicalLocation": {
+               "artifactLocation": {"uri": "app/main.py", "uriBaseId": "SRCROOT"},
+               "region": {"startLine": 3, "startColumn": 1}}}]}]}]})json";
+        const auto kept = PythonAnalyzerToolImplementation::parseDiagnostics(
+            sarif, "/elsewhere/proj", {"/elsewhere/proj/app/main.py"});
+        const bool one =
+            kept.has_value() && kept->size() == 1 && (*kept)[0].relatedLocations.size() == 2;
+        report.expect(one &&
+                          (*kept)[0].relatedLocations[0].file == "/elsewhere/proj/app/helpers.py",
+                      "coretrace-python-analyzer: a related location is resolved from the project "
+                      "root");
+        report.expect(one && (*kept)[0].relatedLocations[1].file == "/elsewhere/proj/app/main.py",
+                      "coretrace-python-analyzer: a related location in an input is spelled as "
+                      "the input");
+    }
+
+    // The tools that respell their findings as the inputs respell the places they involve too.
+    {
+        Diagnostic finding{"coretrace-runtime-analyzer",
+                           "heap-buffer-overflow",
+                           "-F.c",
+                           7,
+                           15,
+                           Severity::Error,
+                           "overflow",
+                           ""};
+        finding.relatedLocations = {{"-F.c", 6, 19, "allocated here"}};
+        std::vector<Diagnostic> findings{finding};
+        respellFindings(findings, {"./-F.c"});
+        report.expect(findings[0].file == "./-F.c" &&
+                          findings[0].relatedLocations[0].file == "./-F.c",
+                      "respellFindings: a related location is spelled as the input");
     }
 
     // Through a stand-in executable with the real tool's contract (it only accepts a project

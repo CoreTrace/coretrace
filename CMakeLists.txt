@@ -870,6 +870,12 @@ add_test(NAME ctrace_dyn_findings_merge_with_static_ones
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # A finding the runtime analyzer reports without a location keeps none: no file is made up for
 # it, and the run does not fail on it.
+# The allocation of a heap overflow, which the runtime analyzer gives as a related location, and
+# the finding's confidence reach the merged log, whose message links to the allocation.
+set(ctrace_runtime_related_sarif ${CMAKE_BINARY_DIR}/runtime-related.sarif)
+add_test(NAME ctrace_sarif_keeps_the_runtime_allocation_site
+    COMMAND sh -c "rm -f '${ctrace_runtime_related_sarif}'; $<TARGET_FILE:ctrace> --sarif-format --fail-on none --dyn --config ${CMAKE_BINARY_DIR}/fake-runtime-analyzer.json --input tests/runtime/heap_overflow.c --report-file '${ctrace_runtime_related_sarif}' > /dev/null 2>&1; grep -q '\"allocated here\"' '${ctrace_runtime_related_sarif}' && grep -q '(\\[allocated here\\](0))' '${ctrace_runtime_related_sarif}' && grep -q '\"confidence\": \"high\"' '${ctrace_runtime_related_sarif}'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 file(WRITE ${CMAKE_BINARY_DIR}/fake-runtime-no-location.json
     "{\"schema_version\": 1, \"tools\": {\"coretrace-runtime-analyzer\": {\"path\": \"${CMAKE_SOURCE_DIR}/tests/fake-runtime-analyzer.sh\", \"args\": [\"--fake-no-location\"]}}}\n")
 set(ctrace_no_location_sarif ${CMAKE_BINARY_DIR}/no-location.sarif)

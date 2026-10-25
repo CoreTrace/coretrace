@@ -18,6 +18,9 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 - **SARIF:** a rule of the merged log carries the title, description and documentation link its
   tool gives, so that GitHub code scanning can explain the finding; flawfinder's rule titles and
   CWE links come first, the analyzers' when they describe their rules.
+- **SARIF:** the related locations and the confidence a tool writes in its SARIF reach the merged
+  log (the runtime analyzer's allocation site, the Python analyzer's sink), and a result's
+  message links to its related locations, which GitHub code scanning then shows as links.
 
 ## v0.85.0
 

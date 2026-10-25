@@ -66,6 +66,10 @@ namespace ctrace
             return diagnostics;
         }
         const InputPaths paths(inputs);
+        // The analyzer locates findings, and the places they involve, relative to the project
+        // root it was given.
+        const auto locate = [&root](const std::string& file)
+        { return fs::path(file).is_relative() ? root / file : fs::path(file); };
         std::vector<Diagnostic> kept;
         for (Diagnostic& diagnostic : *diagnostics)
         {
@@ -73,10 +77,14 @@ namespace ctrace
             {
                 continue;
             }
-            // The analyzer locates findings relative to the project root it was given.
-            const fs::path located = fs::path(diagnostic.file).is_relative()
-                                         ? root / diagnostic.file
-                                         : fs::path(diagnostic.file);
+            for (RelatedLocation& related : diagnostic.relatedLocations)
+            {
+                if (!related.file.empty())
+                {
+                    related.file = paths.display(locate(related.file));
+                }
+            }
+            const fs::path located = locate(diagnostic.file);
             if (auto input = paths.asInput(located))
             {
                 diagnostic.file = *input;
