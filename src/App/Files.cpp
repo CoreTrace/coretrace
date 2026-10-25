@@ -60,7 +60,7 @@ namespace ctrace
             std::vector<std::string> files_;
         };
 
-        /// Reads a Clang compilation database and appends its source files.
+        /// Reads a Clang compilation database and appends its source files, which must exist.
         [[nodiscard]] bool appendCompileDatabase(const std::filesystem::path& databasePath,
                                                  bool skipDependencyEntries, FileList& out,
                                                  std::string& error)
@@ -123,6 +123,13 @@ namespace ctrace
                 if (skipDependencyEntries && hasPathSegment(source.lexically_normal(), "_deps"))
                 {
                     continue;
+                }
+                std::error_code fsError;
+                if (!std::filesystem::exists(source, fsError))
+                {
+                    error = "Source file not found: " + source.lexically_normal().string() +
+                            " (listed in compile database '" + databasePath.string() + "').";
+                    return false;
                 }
                 out.add(source);
             }
