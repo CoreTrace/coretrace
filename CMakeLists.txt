@@ -415,6 +415,14 @@ set_tests_properties(ctrace_help_lists_fail_on PROPERTIES PASS_REGULAR_EXPRESSIO
 # log still reaches stdout and the verdict stands.
 add_test(NAME ctrace_exit_1_without_input
     COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'No input files resolved'")
+# A missing input, or a missing compile database, is a usage error that names the path, found
+# before any tool runs, instead of a tool failing on it (C07, C08, C23).
+add_test(NAME ctrace_exit_1_naming_a_missing_input
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --input tests/double_free.c,tests/no_such_input.c 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'tests/no_such_input.c' && ! printf '%s\\n' \"$out\" | grep -q 'Running cppcheck'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME ctrace_exit_1_naming_a_missing_compile_database
+    COMMAND sh -c "out=$($<TARGET_FILE:ctrace> --invoke cppcheck --compile-commands no/such/build 2>&1); status=$?; printf '%s\\n' \"$out\"; test $status -eq 1 && printf '%s\\n' \"$out\" | grep -q 'no/such/build'"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 # Nothing selected to run is a usage error too: a CI step that forgot --static would otherwise
 # pass forever, having checked nothing (C35).
 add_test(NAME ctrace_exit_1_without_analysis
