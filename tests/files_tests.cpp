@@ -170,6 +170,40 @@ int main()
                       "missing compile database: rejected with its path (" + database.error + ")");
     }
 
+    // The database is checked even when inputs are given, and so is every source it lists that
+    // is kept: one the _deps filter leaves out is not.
+    {
+        const auto r = resolve({"a.c"}, (dir / "no/such/build").string());
+        report.expect(!r.ok() && r.error.find("no/such/build") != std::string::npos,
+                      "missing compile database beside an input: rejected with its path (" +
+                          r.error + ")");
+    }
+    std::filesystem::create_directories(dir / "missing-source");
+    const auto listsMissing = dir / "missing-source/compile_commands.json";
+    writeFile(listsMissing, R"json([
+  {"directory": ".", "file": "gone.c", "command": "cc gone.c"}
+])json");
+    {
+        const auto r = resolve({listsMissing.string()});
+        report.expect(!r.ok() &&
+                          r.error.find(norm(dir / "missing-source/gone.c")) != std::string::npos &&
+                          r.error.find(listsMissing.string()) != std::string::npos,
+                      "compile database listing a missing source: rejected with both paths (" +
+                          r.error + ")");
+    }
+    std::filesystem::create_directories(dir / "missing-dependency");
+    writeFile(dir / "missing-dependency/main.c", "");
+    writeFile(dir / "missing-dependency/compile_commands.json", R"json([
+  {"directory": ".", "file": "main.c", "command": "cc main.c"},
+  {"directory": ".", "file": "_deps/lib/gone.c", "command": "cc gone.c"}
+])json");
+    {
+        const auto r = resolve({}, (dir / "missing-dependency").string());
+        report.expect(r.ok() && r.files.size() == 1,
+                      "missing source filtered out as a dependency: not an error (" + r.error +
+                          ")");
+    }
+
     if (report.failures == 0)
     {
         std::cout << "files_tests: all checks passed\n";
