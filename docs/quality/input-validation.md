@@ -79,7 +79,8 @@ Relative paths of models and inputs are resolved from the configuration file's d
 | `compile_commands.json` that is not JSON | `Invalid JSON in compile database '<path>'.`, exit 1 | C20 |
 | Not an array of objects with a `file` string | `'<path>' is not a compile_commands.json document: expected an array of objects with a "file" field.`, exit 1 | C21 |
 | Empty | `No input files resolved. Provide --input or --compile-commands.`, exit 1 | C22 |
-| Missing | `Compile database not found: <path>`, exit 1 | C23 |
+| Missing, even beside `--input` | `Compile database not found: <path>`, exit 1 | C23 |
+| A source it lists that does not exist | `Source file not found: <path> (listed in compile database '<path>').`, exit 1; a `_deps` entry the filter leaves out is not checked | — |
 
 The extension decides the language: `.py` goes to the Python analyzer, anything else to the C and
 C++ tools (`src/ctrace_tools/languageType.cpp`).
