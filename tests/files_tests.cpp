@@ -66,9 +66,10 @@ int main()
     // An input must exist: the plain paths below are files of the scratch directory, which the
     // relative ones are relative to.
     std::filesystem::current_path(dir);
-    std::filesystem::create_directories(dir / "src");
-    for (const char* file : {"a.c", "b.c", "-F.c", "main.c", "src/-t.c", "-x.c", "extra.c"})
+    for (const char* file : {"a.c", "b.c", "-F.c", "main.c", "src/-t.c", "-x.c", "extra.c",
+                             "src/x.c", "abs/dir/y.c", "build/_deps/lib/z.c", "already/absolute.c"})
     {
+        std::filesystem::create_directories((dir / file).parent_path());
         writeFile(dir / file, "");
     }
     const std::string absoluteDash = (dir / "-x.c").string();
@@ -93,28 +94,32 @@ int main()
     // An explicit compile database: entries resolve against their directory (relative to the
     // database location) and _deps entries are kept because the user named the file.
     const auto compdb = dir / "compile_commands.json";
+    const std::string absoluteDir = norm(dir / "abs/dir");
+    const std::string absoluteFile = norm(dir / "already/absolute.c");
     writeFile(compdb, R"json([
   {"directory": "src", "file": "x.c", "command": "cc x.c"},
-  {"directory": "/abs/dir", "file": "y.c", "command": "cc y.c"},
+  {"directory": ")json" + absoluteDir +
+                          R"json(", "file": "y.c", "command": "cc y.c"},
   {"directory": "build/_deps/lib", "file": "z.c", "command": "cc z.c"},
-  {"file": "/already/absolute.c", "command": "cc absolute.c"}
+  {"file": ")json" + absoluteFile +
+                          R"json(", "command": "cc absolute.c"}
 ])json");
     {
         const auto r = resolve({compdb.string()});
         report.expect(r.ok(), "explicit compdb: resolves without error (" + r.error + ")");
-        report.expect((r.files == std::vector<std::string>{norm(dir / "src/x.c"), "/abs/dir/y.c",
-                                                           norm(dir / "build/_deps/lib/z.c"),
-                                                           "/already/absolute.c"}),
-                      "explicit compdb: entries resolve against their directory, _deps kept");
+        report.expect(
+            (r.files == std::vector<std::string>{norm(dir / "src/x.c"), norm(dir / "abs/dir/y.c"),
+                                                 norm(dir / "build/_deps/lib/z.c"), absoluteFile}),
+            "explicit compdb: entries resolve against their directory, _deps kept");
     }
 
     // Auto-discovery from files.compile_commands (directory form): _deps filtered unless asked.
     {
         const auto r = resolve({}, dir.string());
-        report.expect(
-            r.ok() && (r.files == std::vector<std::string>{norm(dir / "src/x.c"), "/abs/dir/y.c",
-                                                           "/already/absolute.c"}),
-            "auto-discovered compdb: _deps entries are filtered by default");
+        report.expect(r.ok() && (r.files == std::vector<std::string>{norm(dir / "src/x.c"),
+                                                                     norm(dir / "abs/dir/y.c"),
+                                                                     absoluteFile}),
+                      "auto-discovered compdb: _deps entries are filtered by default");
         const auto kept = resolve({}, dir.string(), /*includeDeps=*/true);
         report.expect(kept.ok() && kept.files.size() == 4,
                       "auto-discovered compdb: include_compdb_deps keeps _deps entries");
