@@ -89,7 +89,7 @@ C++ tools (`src/ctrace_tools/languageType.cpp`).
 | Failure | Detection | Result | Scenario |
 |---|---|---|---|
 | Tool not installed | Lookup in `PATH` before starting (`include/Process/UnixProcess.hpp:268-317`) | `Command not found in PATH: cppcheck`, exit 3 | C24 |
-| Tool exits with an error | Exit status checked (`include/Process/Process.hpp:43-63`) | `cppcheck exited with exit code 1`, exit 3 | C07 |
+| Tool exits with an error | Exit status checked (`include/Process/Process.hpp:43-63`) | `cppcheck exited with exit code 1`, exit 3 | C10 |
 | Tool killed by a signal | Same | `cppcheck was terminated by signal 11`, exit 3 | C25 |
 | Tool that hangs | Deadline: `tools.<name>.timeout_s`, 600 s per file by default; the tool runs in its own process group, killed with SIGKILL at the deadline | `did not finish within its time limit and was stopped`, exit 3, no process left | C26 |
 | Tool that throws inside `ctrace` | Caught per tool (`include/Process/Tools/ToolsInvoker.hpp:306-332`) | The other tools go on; exit 3 | — |
