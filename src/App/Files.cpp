@@ -145,11 +145,13 @@ namespace ctrace
             {
                 candidate /= "compile_commands.json";
             }
-            if (std::filesystem::is_regular_file(candidate, fsError))
+            if (!std::filesystem::is_regular_file(candidate, fsError))
             {
-                autoDiscovered = candidate.lexically_normal();
-                inputs.push_back(autoDiscovered.string());
+                result.error = "Compile database not found: " + config.files.compile_commands;
+                return result;
             }
+            autoDiscovered = candidate.lexically_normal();
+            inputs.push_back(autoDiscovered.string());
         }
 
         for (const std::string& input : inputs)
@@ -160,6 +162,13 @@ namespace ctrace
             }
             if (!endsWithJson(input))
             {
+                // Found here rather than by each tool failing on it, with its path.
+                std::error_code fsError;
+                if (!std::filesystem::exists(input, fsError))
+                {
+                    result.error = "Input file not found: " + input;
+                    return result;
+                }
                 files.add(input);
                 continue;
             }
