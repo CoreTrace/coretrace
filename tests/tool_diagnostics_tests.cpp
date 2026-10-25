@@ -693,6 +693,53 @@ int main(int argc, char** argv)
                       "spelled absolute");
     }
 
+    // The places a finding involves are relative to the project root too: they are resolved
+    // from it and spelled as the main location is, or a link of the merged log would open
+    // another file (a project outside the working directory).
+    {
+        const std::string sarif = R"json({"version": "2.1.0", "runs": [{"results": [
+          {"ruleId": "code-injection", "level": "error", "message": {"text": "flow"},
+           "locations": [{"physicalLocation": {
+             "artifactLocation": {"uri": "app/main.py", "uriBaseId": "SRCROOT"},
+             "region": {"startLine": 8, "startColumn": 5}}}],
+           "relatedLocations": [
+             {"id": 0, "message": {"text": "sink"}, "physicalLocation": {
+               "artifactLocation": {"uri": "app/helpers.py", "uriBaseId": "SRCROOT"},
+               "region": {"startLine": 2, "startColumn": 12}}},
+             {"id": 1, "message": {"text": "again"}, "physicalLocation": {
+               "artifactLocation": {"uri": "app/main.py", "uriBaseId": "SRCROOT"},
+               "region": {"startLine": 3, "startColumn": 1}}}]}]}]})json";
+        const auto kept = PythonAnalyzerToolImplementation::parseDiagnostics(
+            sarif, "/elsewhere/proj", {"/elsewhere/proj/app/main.py"});
+        const bool one =
+            kept.has_value() && kept->size() == 1 && (*kept)[0].relatedLocations.size() == 2;
+        report.expect(one &&
+                          (*kept)[0].relatedLocations[0].file == "/elsewhere/proj/app/helpers.py",
+                      "coretrace-python-analyzer: a related location is resolved from the project "
+                      "root");
+        report.expect(one && (*kept)[0].relatedLocations[1].file == "/elsewhere/proj/app/main.py",
+                      "coretrace-python-analyzer: a related location in an input is spelled as "
+                      "the input");
+    }
+
+    // The tools that respell their findings as the inputs respell the places they involve too.
+    {
+        Diagnostic finding{"coretrace-runtime-analyzer",
+                           "heap-buffer-overflow",
+                           "-F.c",
+                           7,
+                           15,
+                           Severity::Error,
+                           "overflow",
+                           ""};
+        finding.relatedLocations = {{"-F.c", 6, 19, "allocated here"}};
+        std::vector<Diagnostic> findings{finding};
+        respellFindings(findings, {"./-F.c"});
+        report.expect(findings[0].file == "./-F.c" &&
+                          findings[0].relatedLocations[0].file == "./-F.c",
+                      "respellFindings: a related location is spelled as the input");
+    }
+
     // Through a stand-in executable with the real tool's contract (it only accepts a project
     // directory, like the real one in project mode).
     {
