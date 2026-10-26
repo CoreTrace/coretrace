@@ -1071,7 +1071,7 @@ namespace ctrace
 
         /// `stack_analyzer`, `stack-analyzer`, `tools.ctrace_stack_analyzer` or
         /// `tools.stack_analyzer`, in that order of preference.
-        [[nodiscard]] const json* findStackAnalyzerSection(const json& root, LoadContext& ctx,
+        [[nodiscard]] const json* findStackAnalyzerSection(const json& root, const LoadContext& ctx,
                                                            std::string& errorMessage)
         {
             const auto asObject = [&](const json& value, const char* name) -> const json*
