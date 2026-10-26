@@ -10,7 +10,8 @@ namespace ctrace
     FlawfinderToolImplementation::buildArguments(const ctrace::ProgramConfig& config,
                                                  const std::vector<std::string>& files)
     {
-        // Always the machine format (flawfinder >= 2.0): CoreTrace renders the text itself.
+        // Always the machine format (flawfinder >= 2.0.16, the first with --sarif): CoreTrace
+        // renders the text itself.
         std::vector<std::string> args = {"--sarif"};
         appendToolArguments(args, config, "flawfinder");
         // flawfinder has no file list: the paths go on the command line, which bounds a run by
@@ -41,7 +42,7 @@ namespace ctrace
         if (!diagnostics)
         {
             coretrace::log(coretrace::Level::Warn, coretrace::Module(name()),
-                           "output is not a SARIF document (flawfinder >= 2.0 is required); "
+                           "output is not a SARIF document (flawfinder >= 2.0.16 is required); "
                            "findings are not counted\n");
             emit(config, output, run->output, /*toConsole=*/!config.output.sarif_format);
             return;
