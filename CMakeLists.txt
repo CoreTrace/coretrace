@@ -112,13 +112,6 @@ target_link_libraries(ctrace PRIVATE httplib::httplib)
 
 # === OPTIONAL DEPENDENCIES ===
 
-option(USE_EXTERNAL_CLI11 "Download CLI11" OFF)
-
-if (USE_EXTERNAL_CLI11)
-    include(${CMAKE_SOURCE_DIR}/cmake/CLI11.cmake)
-    target_link_libraries(ctrace PRIVATE CLI11::CLI11)
-endif()
-
 option(ENABLE_TSCANCODE "Download Tscancode" OFF)
 
 if (ENABLE_TSCANCODE)
