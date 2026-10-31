@@ -124,8 +124,8 @@ jobs:
   build-macos-binary:
     name: Build macOS binary (arm64)
     # Apple silicon. The Homebrew libraries the image ships are built for the runner's macOS,
-    # the oldest one the image then runs on: macos-14 gives macOS 14 (Sonoma).
-    runs-on: macos-14
+    # the oldest one the image then runs on: macos-15 gives macOS 15 (Sequoia).
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -158,7 +158,7 @@ jobs:
           llvm="$(brew --prefix llvm@20)"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
             -DCORETRACE_VERSION_OVERRIDE="${{ steps.version.outputs.value }}" \
             -DLLVM_DIR="${llvm}/lib/cmake/llvm" \
             -DClang_DIR="${llvm}/lib/cmake/clang" \

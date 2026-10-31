@@ -28,6 +28,9 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
   `--input`. The server answers `InvalidInput`.
 - **Tool selection:** a tool selected twice, by `--static` or `--dyn` and by `--invoke`, runs
   once, and its findings are counted once.
+- **macOS:** the disk image needs macOS 15 or newer, instead of 14. GitHub retires its macOS 14
+  runners on 2026-11-02, and the image ships Homebrew libraries built for the macOS of the
+  runner that makes it, now macOS 15.
 
 ## v0.85.0
 

@@ -48,7 +48,7 @@ at line 5, column 19
 ```
 
 The exit code is 2: a finding at or above `--fail-on`. Add `--sarif-format --report-file
-ctrace.sarif` for a report that GitHub Code Scanning reads. On macOS (Apple silicon, macOS 14 or
+ctrace.sarif` for a report that GitHub Code Scanning reads. On macOS (Apple silicon, macOS 15 or
 newer), take the disk image of the release instead ([RELEASES](#releases)). To change the code,
 [build from source](#build).
 
@@ -74,7 +74,7 @@ and read [CONTRIBUTING.md](CONTRIBUTING.md): a maintainer answers within three b
 Builds from source need Git, CMake 3.28 or newer, Ninja, a C++20 compiler whose standard library
 provides `<format>` (GCC 13 or newer, or Clang with libstdc++ 13 or libc++), and the LLVM 20 and
 Clang 20 development packages. The test suite also runs cppcheck. The build is tested on Ubuntu
-24.04 and macOS 14, and was checked on Ubuntu 22.04. Use matching
+24.04 and macOS 15, and was checked on Ubuntu 22.04. Use matching
 LLVM and Clang installations: `LLVM_DIR` and `Clang_DIR` select their CMake packages, while
 `CLANG_EXECUTABLE` selects the Clang 20 executable whose resource headers are bundled with
 `ctrace`. These paths are build-time settings; an installed or released `ctrace` does not need
@@ -175,12 +175,13 @@ RHEL 9 and its rebuilds (Rocky, Alma), Amazon Linux 2023, Ubuntu 22.04+, Debian 
 built on Rocky Linux 9. Each archive is unpacked and run on bare Rocky Linux 9, Ubuntu 22.04,
 Debian 12 and Ubuntu 24.04 images, with no compiler or LLVM, before it is published.
 
-The macOS disk image runs on Apple silicon with macOS 14 or newer. It holds one folder laid out
-as the Linux archive, with the Homebrew libraries `ctrace` and the Python analyzer load (LLVM and
-Clang, Python and OpenSSL...): copy the folder anywhere, Homebrew is not needed. Before it is
-published, the image is mounted, its folder copied out, and run with Homebrew moved away. Its
-third-party libraries are listed in `scripts/release/third-party-macos.txt`, and their licenses,
-with each Homebrew formula's version, are under `licenses/homebrew/`.
+The macOS disk image runs on Apple silicon with macOS 15 or newer; the images up to v0.85.0 also
+run on macOS 14. It holds one folder laid out as the Linux archive, with the Homebrew libraries
+`ctrace` and the Python analyzer load (LLVM and Clang, Python and OpenSSL...): copy the folder
+anywhere, Homebrew is not needed. Before it is published, the image is mounted, its folder copied
+out, and run with Homebrew moved away. Its third-party libraries are listed in
+`scripts/release/third-party-macos.txt`, and their licenses, with each Homebrew formula's version,
+are under `licenses/homebrew/`.
 
 Each archive carries the license of every third-party component it ships. `licenses/` holds
 those of the code compiled into `ctrace` and of the Ubuntu libraries in `lib/`, with each
