@@ -24,7 +24,7 @@ Issues labelled `good first issue`: each says what to change, where, and how to 
 | [coretrace#163](https://github.com/CoreTrace/coretrace/issues/163) Remove the unused `colors.hpp` | 2026-10-02 | thanvish21 | Merged, [#165](https://github.com/CoreTrace/coretrace/pull/165), the same day |
 | [coretrace#164](https://github.com/CoreTrace/coretrace/issues/164) Unit tests for `RunDirectory` | 2026-10-02 | tecnolgd, assigned 2026-10-13 | Merged, [#197](https://github.com/CoreTrace/coretrace/pull/197), 2026-10-16 |
 | [coretrace#167](https://github.com/CoreTrace/coretrace/issues/167) Move `isMangled` out of the public header | 2026-10-04 | tecnolgd | Merged, [#168](https://github.com/CoreTrace/coretrace/pull/168), 2026-10-08 |
-| [coretrace#175](https://github.com/CoreTrace/coretrace/issues/175) Remove the external CLI11 download option | 2026-10-13 | — | Open |
+| [coretrace#175](https://github.com/CoreTrace/coretrace/issues/175) Remove `USE_EXTERNAL_CLI11` | 2026-10-13 | — | Open |
 | [coretrace#177](https://github.com/CoreTrace/coretrace/issues/177) `const` reference in `findStackAnalyzerSection` | 2026-10-13 | — | Open |
 | [coretrace-gui#81](https://github.com/CoreTrace/coretrace-gui/issues/81) Light and dark themes | 2026-10-01 | — | Open |
 | [coretrace-gui#85](https://github.com/CoreTrace/coretrace-gui/issues/85) Breadcrumb contrast | 2026-10-09 | — | Open |
