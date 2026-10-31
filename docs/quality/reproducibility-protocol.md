@@ -10,7 +10,7 @@ a dated report in `docs/quality/reproducibility/`.
 line and the basics of C or C++. They use their own machine, with one of:
 
 - Ubuntu 24.04, natively or in WSL2;
-- macOS 14 or newer.
+- macOS 15 or newer.
 
 These are the platforms the README supports. Windows outside WSL2 is not supported
 ([#54](https://github.com/CoreTrace/coretrace/issues/54)).
