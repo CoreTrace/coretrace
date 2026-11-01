@@ -6,7 +6,7 @@ the [pull request history](quality/pull-requests-and-reviews.md) covers them.
 
 | | |
 |---|---|
-| Updated | 2026-10-31 |
+| Updated | 2026-11-01 |
 | Scope | The repositories of level 1 of the [open-source scope](open-source-scope.md) |
 | Times | UTC, as GitHub records them |
 
@@ -76,13 +76,12 @@ below).
 | 2026-10-29 | glitchjay-hub | Asked for [coretrace#175](https://github.com/CoreTrace/coretrace/issues/175) | 22 h | — | **Assigned** |
 | 2026-10-30 | hazzyadil | Asked for [coretrace#176](https://github.com/CoreTrace/coretrace/issues/176) | 40 min | Pointers in the issue, including a second place to change that the issue did not name | **Assigned** |
 | 2026-10-30 | glitchjay-hub | [coretrace#217](https://github.com/CoreTrace/coretrace/pull/217), remove `USE_EXTERNAL_CLI11` (welcome ticket #175) | 19 h 50 | Approved with the review tool, which explained a follow-up commit pushed on the contributor's branch: it restored two documents the maintainers keep, which the issue's acceptance criterion had led the contributor to edit | **Merged with modifications, argued** in the pull request |
-| 2026-10-31 | Vamsi-2581 | [coretrace-stack-analyzer#257](https://github.com/CoreTrace/coretrace-stack-analyzer/pull/257), the GitHub Action diagnoses the Ubuntu and LLVM versions it does not support | 9 h 13 | Thanks, and four follow-up commits pushed on the contributor's branch, explained in the pull request: among other changes, the action accepts LLVM 20 only, the version the analyzer builds with | **Pending** |
+| 2026-10-31 | Vamsi-2581 | [coretrace-stack-analyzer#257](https://github.com/CoreTrace/coretrace-stack-analyzer/pull/257), the GitHub Action diagnoses the Ubuntu and LLVM versions it does not support | 9 h 13 | Thanks, and four follow-up commits pushed on the contributor's branch, explained in the pull request: among other changes, the action accepts LLVM 20 only, the version the analyzer builds with | **Merged with modifications, argued** in the pull request |
 
 Every contribution got a first answer, and every decision is written in the pull request or the
-issue it concerns. Of the fourteen contributions of October, ten were accepted. Three were
+issue it concerns. Of the fourteen contributions of October, eleven were accepted. Three were
 declined with their reason: one from a bot, and two pull requests that duplicated #214, for a
-ticket another contributor had asked for first. The fourteenth, coretrace-stack-analyzer#257, is
-still pending.
+ticket another contributor had asked for first.
 
 ## How contributions are handled
 
