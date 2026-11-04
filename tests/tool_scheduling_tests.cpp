@@ -132,6 +132,13 @@ namespace
         std::mutex mutex;
         std::map<std::string, std::pair<Clock::time_point, Clock::time_point>> runs;
 
+        /// Records that `run` started at `start` and ends now.
+        void record(const std::string& run, Clock::time_point start)
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            runs[run] = {start, Clock::now()};
+        }
+
         [[nodiscard]] bool anyOverlap()
         {
             const std::lock_guard<std::mutex> lock(mutex);
@@ -168,10 +175,7 @@ namespace
             const Clock::time_point start = Clock::now();
             std::this_thread::sleep_for(file == "slow.c" ? std::chrono::milliseconds(1000)
                                                          : std::chrono::milliseconds(150));
-            {
-                const std::lock_guard<std::mutex> lock(m_timeline->mutex);
-                m_timeline->runs[file] = {start, Clock::now()};
-            }
+            m_timeline->record(file, start);
             output.diagnostics(
                 {{"timed", "rule", file, 1, 1, ctrace::Severity::Warning, "finding", ""}});
         }
@@ -222,8 +226,7 @@ namespace
         {
             const Clock::time_point start = Clock::now();
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            const std::lock_guard<std::mutex> lock(m_timeline->mutex);
-            m_timeline->runs[run] = {start, Clock::now()};
+            m_timeline->record(run, start);
         }
 
         std::string m_name;
@@ -245,8 +248,7 @@ namespace
         {
             const Clock::time_point start = Clock::now();
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            const std::lock_guard<std::mutex> lock(m_timeline->mutex);
-            m_timeline->runs[file] = {start, Clock::now()};
+            m_timeline->record(file, start);
         }
 
         [[nodiscard]] std::size_t maxConcurrentRuns() const override
