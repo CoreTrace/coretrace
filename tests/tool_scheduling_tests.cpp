@@ -9,11 +9,14 @@
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <cstddef>
 #include <future>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -130,13 +133,24 @@ namespace
     struct Timeline
     {
         std::mutex mutex;
+        std::condition_variable recorded;
         std::map<std::string, std::pair<Clock::time_point, Clock::time_point>> runs;
 
         /// Records that `run` started at `start` and ends now.
         void record(const std::string& run, Clock::time_point start)
         {
-            const std::lock_guard<std::mutex> lock(mutex);
-            runs[run] = {start, Clock::now()};
+            {
+                const std::lock_guard<std::mutex> lock(mutex);
+                runs[run] = {start, Clock::now()};
+            }
+            recorded.notify_all();
+        }
+
+        /// Whether `count` runs are recorded before `limit` passes.
+        [[nodiscard]] bool waitForRuns(std::size_t count, std::chrono::milliseconds limit)
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            return recorded.wait_for(lock, limit, [&] { return runs.size() >= count; });
         }
 
         [[nodiscard]] bool anyOverlap()
@@ -234,12 +248,15 @@ namespace
         std::shared_ptr<Timeline> m_timeline;
     };
 
-    /// Takes a while on each file, records when, and allows one run at a time.
+    /// Allows one run at a time. Each run waits for another tool to record `otherRuns` runs,
+    /// and fails if it has not within 10 s: it can only succeed if that tool runs while this
+    /// one holds a worker. It then takes a while and records when.
     class OneAtATimeTool : public ctrace::AnalysisToolBase
     {
       public:
-        explicit OneAtATimeTool(std::shared_ptr<Timeline> timeline)
-            : m_timeline(std::move(timeline))
+        OneAtATimeTool(std::shared_ptr<Timeline> timeline, std::shared_ptr<Timeline> other,
+                       std::size_t otherRuns)
+            : m_timeline(std::move(timeline)), m_other(std::move(other)), m_otherRuns(otherRuns)
         {
         }
 
@@ -247,8 +264,13 @@ namespace
                      ctrace::ToolOutput&) const override
         {
             const Clock::time_point start = Clock::now();
+            const bool otherDone = m_other->waitForRuns(m_otherRuns, std::chrono::seconds(10));
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
             m_timeline->record(file, start);
+            if (!otherDone)
+            {
+                throw std::runtime_error("the other tool did not run while this one waited");
+            }
         }
 
         [[nodiscard]] std::size_t maxConcurrentRuns() const override
@@ -263,6 +285,8 @@ namespace
 
       private:
         std::shared_ptr<Timeline> m_timeline;
+        std::shared_ptr<Timeline> m_other;
+        std::size_t m_otherRuns;
     };
 
     std::vector<ctrace::Diagnostic> runTimedTool(std::launch policy, std::size_t workers,
@@ -372,19 +396,21 @@ namespace
     }
 
     // A tool that allows one run at a time gets one, and does not keep the other tools waiting.
+    // The limited tool's runs wait for the other tool instead of racing it, so that the check
+    // does not depend on how fast the machine is.
     void testToolConcurrencyLimit(TestReport& report)
     {
+        const std::vector<std::string> files = {"a.c", "b.c", "c.c"};
         auto limited = std::make_shared<Timeline>();
         auto timed = std::make_shared<Timeline>();
         ctrace::ToolInvoker invoker(ctrace::ProgramConfig{}, poolFor(std::launch::async, 2));
-        invoker.registerTool("one_at_a_time", std::make_unique<OneAtATimeTool>(limited));
+        invoker.registerTool("one_at_a_time",
+                             std::make_unique<OneAtATimeTool>(limited, timed, files.size()));
         invoker.registerTool("timed", std::make_unique<TimedTool>(timed));
-        invoker.runSpecificTools({"one_at_a_time", "timed"}, {"a.c", "b.c", "c.c"});
+        invoker.runSpecificTools({"one_at_a_time", "timed"}, files);
 
         report.expect(!limited->anyOverlap(), "a tool limited to one run never runs twice at once");
-        const Clock::time_point limitedEnd = limited->end("c.c");
-        report.expect(timed->end("a.c") < limitedEnd && timed->end("b.c") < limitedEnd &&
-                          timed->end("c.c") < limitedEnd,
+        report.expect(invoker.failedTools().empty(),
                       "the other tools run while the limited tool works through its files");
     }
 
