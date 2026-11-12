@@ -409,6 +409,9 @@ namespace
         invoker.registerTool("timed", std::make_unique<TimedTool>(timed));
         invoker.runSpecificTools({"one_at_a_time", "timed"}, files);
 
+        // Without this, a scheduler that never ran the limited tool would pass both checks below.
+        report.expect(limited->runs.size() == files.size() && timed->runs.size() == files.size(),
+                      "the limited tool and the other tool each run on every file");
         report.expect(!limited->anyOverlap(), "a tool limited to one run never runs twice at once");
         report.expect(invoker.failedTools().empty(),
                       "the other tools run while the limited tool works through its files");
