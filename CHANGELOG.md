@@ -31,6 +31,8 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 - **macOS:** the disk image needs macOS 15 or newer, instead of 14. GitHub retires its macOS 14
   runners on 2026-11-02, and the image ships Homebrew libraries built for the macOS of the
   runner that makes it, now macOS 15.
+- **Licensing:** `NOTICE` dates the copyright from 2025, when the code began, credits the
+  CoreTrace contributors alongside Hugo Payet and links the repository.
 
 ## v0.85.0
 

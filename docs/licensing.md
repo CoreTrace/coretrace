@@ -140,9 +140,9 @@ the offer of their source code. The packaging enforces the first part: see below
    ([#170](https://github.com/CoreTrace/coretrace/pull/170)), from the release after `v0.84.0`.
 2. **Done: consent to the relicensing.** Arthur Mazeau and Cédric Roulof confirmed it in
    [#171](https://github.com/CoreTrace/coretrace/issues/171) on 2026-10-13.
-3. **`NOTICE` says "Copyright 2026 Hugo Payet".** The code dates from 2025 and has other
-   authors: "Copyright 2025-2026 Hugo Payet and the CoreTrace contributors", with a pointer to
-   `AUTHORS.md`, is more accurate.
+3. **Done: `NOTICE` dates the copyright from 2025 and credits the other authors.** It reads
+   "Copyright 2025-2026 Hugo Payet and the CoreTrace contributors" and links the repository,
+   whose history names them, rather than `AUTHORS.md`, which release archives do not ship.
 4. **The organization profile is out of date.** Its table marks `coretrace-runtime-analyzer` and
    `coretrace-tool-template` "Not declared" (both are now Apache-2.0) and `coretrace-TscanCode`
    "Not identified" (GPL-3.0). `coretrace-web` and `coretrace-ci-consumer-demo` are public
