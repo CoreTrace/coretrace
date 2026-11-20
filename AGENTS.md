@@ -30,7 +30,7 @@ ctest --test-dir build -L unit               # in process, about 7 s
 ctest --test-dir build -L integration        # the real binary on the fixtures of tests/
 ./scripts/format-check.sh                    # ./scripts/format.sh applies the format
 ./scripts/check-license-compliance.sh        # SPDX header on every source file
-./scripts/release/check-pinned-dependencies.sh
+sh scripts/release/check-pinned-dependencies.sh .   # the argument is the source directory
 ```
 
 The first build fetches and compiles the analyzers and takes minutes on every core: ask the
@@ -45,7 +45,7 @@ Run the script and act on what it reports, rather than checking or formatting by
 |---|---|---|
 | After changing C++ | `./scripts/format.sh`, then `./scripts/format-check.sh` | Applies, then verifies, the `clang-format` style on the project's own sources. CI runs the check with `clang-format` 20 |
 | After adding a file | `./scripts/check-license-compliance.sh` | Fails on a tracked source, CMake, shell, Python or YAML file without `SPDX-License-Identifier: Apache-2.0` in its first 12 lines, and names it. It checks; it does not add the header: write it as the first line (`//` in C++, `#` elsewhere) |
-| After touching `cmake/*.cmake` | `./scripts/release/check-pinned-dependencies.sh` | Fails on a dependency fetched from a branch, or a download without its hash |
+| After touching `cmake/*.cmake` | `sh scripts/release/check-pinned-dependencies.sh .` | Fails on a dependency fetched from a branch, or a download without its hash |
 | To measure coverage | `sh scripts/ci/coverage.sh build coverage` | Needs a build configured with `-DCORETRACE_COVERAGE=ON` (Clang), so a full build: ask first |
 | In a CI step that uses the network | `scripts/ci/retry.sh` | Retries a command with a growing delay. Never for a test |
 
