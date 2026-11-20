@@ -118,9 +118,8 @@ the README, and tests with a fake tool (`tests/fake-*.sh`) for its failure paths
 
 - Never commit to `main`, force-push, or merge: `main` takes pull requests whose required
   checks pass. Commit, push or open an issue or a pull request only when the maintainer asks.
-- Follow the [AI-assisted code policy](docs/quality/ai-assisted-code-policy.md). Commits carry
-  no mark of the tool: no trailer, no co-author, no tool name. Declaring assistance is the
-  author's choice, with the box of the pull request template.
+- Follow the [AI code policy](docs/quality/ai-code-policy.md). Commits carry
+  no mark of the tool: no trailer, no co-author, no tool name.
 - Never weaken a gate to make a change pass: `-Werror`, a test, a coverage floor, the pinned
   dependency check, the license check. If a gate is wrong, say so and stop.
 - These are frozen interfaces. Changing one needs an issue open for 7 days
@@ -194,7 +193,7 @@ gh issue list --label refactor --state all --limit 100
   [docs/quality/static-analysis-initial.md](docs/quality/static-analysis-initial.md), so that
   two reports can be compared. cppcheck and clang-tidy alone, without building `ctrace`:
   [docs/quality/debt-baseline-2026-11-20.md](docs/quality/debt-baseline-2026-11-20.md).
-- The four indicators of the
-  [AI-assisted code policy](docs/quality/ai-assisted-code-policy.md): findings, debt added and
-  repaid, time to fix a vulnerability, share of assisted pull requests.
+- The three indicators of the
+  [AI code policy](docs/quality/ai-code-policy.md): findings, debt added and
+  repaid, time to fix a vulnerability.
 - What the gates caught: [docs/quality/regressions.md](docs/quality/regressions.md).

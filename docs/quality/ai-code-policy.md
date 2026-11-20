@@ -1,4 +1,4 @@
-# AI-assisted code policy
+# AI code policy
 
 How `ctrace` keeps its technical and security debt under control when code is written faster,
 with or without an AI tool: what a pull request must satisfy, how debt is repaid, and the
@@ -19,9 +19,9 @@ change may add, and reserves time to repay it.
 
 ## Rules
 
-1. **Declaring AI assistance is optional.** An author who used an AI tool may tick the box of
-   the pull request template; a maintainer then adds the `ai-assisted` label. Commits carry no
-   mark: no trailer, no co-author, no tool name. Nobody is asked to prove how code was written.
+1. **Nobody declares how code was written.** There is no label, no box to tick and no mark in
+   commits: no trailer, no co-author, no tool name. The rules below apply to every pull
+   request in the same way.
 2. **The author answers for the change.** They have read the whole diff, can explain each part
    of it, and know where the code comes from: nothing copied from a source whose license is
    unknown or incompatible with Apache-2.0.
@@ -55,7 +55,6 @@ Measured at each debt review, with the same commands, so that two measures compa
 | 1 | Static analysis findings | cppcheck and clang-tidy on the 22 translation units, with the protocol of the [debt baseline](debt-baseline-2026-11-20.md) | 69 findings, 0 at error level (cppcheck: 18 style; clang-tidy: 51 warnings) |
 | 2 | Debt added and repaid | Issues labelled `severity/*` or `refactor`, opened and closed in the period | September: 30 opened, 29 closed. October: 21 opened, 14 closed. November: none. In all, 51 recorded, 43 repaid, 8 open |
 | 3 | Time to fix a vulnerability | Days from a report (security advisory) or an alert (dependency scanner) to the release that fixes it; median over the period | Not measurable yet: too few events for a median. As a reference, a debt issue closes in a median of 4.7 days (critical), 4.9 (major) and 5.6 (minor) |
-| 4 | Share of AI-assisted pull requests | Merged pull requests labelled `ai-assisted`, over all merged pull requests of the period | 0 of 121: the label did not exist. From now on, a lower bound, since declaring is optional |
 
 ```bash
 # 2. Debt opened and closed, by month
@@ -64,28 +63,23 @@ gh issue list --state all --limit 500 --json labels,createdAt,closedAt \
         | (map(.createdAt[0:7]) | group_by(.) | map("opened \(.[0]) \(length)")),
           (map(select(.closedAt) | .closedAt[0:7]) | group_by(.) | map("closed \(.[0]) \(length)"))
         | .[]'
-
-# 4. Share of AI-assisted pull requests
-gh pr list --state merged --limit 500 --label ai-assisted --json number --jq length
-gh pr list --state merged --limit 500 --json number --jq length
 ```
 
 What the indicators are read for:
 
-- **1 goes down, or stays flat while the code grows.** A rise after a period of many assisted
-  pull requests is the signal this policy exists to catch.
+- **1 goes down, or stays flat while the code grows.** A rise after a period of fast delivery is
+  the signal this policy exists to catch.
 - **2: repaid stays close to added.** October repaid 14 for 21 added: the 20% budget of rule 6
   answers that gap.
 - **3 stays within the response targets** of [SECURITY.md](../../SECURITY.md).
-- **4 is context for the three others**, not a target: it is neither good nor bad in itself.
 
 ## Limits
 
 - **"Guarantee" is not absolute.** The policy bounds and reduces debt and shows its trend; it
   cannot prove there is none.
-- **AI-written code cannot be told apart.** Rule 1 relies on what authors declare, and
-  declaring is optional: indicator 4 is a minimum, never the real share. That is why no rule
-  depends on it.
+- **AI-written code cannot be told apart**, and this policy does not try: no rule depends on
+  it, and the share of assisted pull requests is not measured. The indicators show the effect
+  on the code, whatever its cause.
 - **The lead maintainer's pull requests have no second reader.** There, the gates of rule 4 are
   the only check, as [Pull requests and reviews](pull-requests-and-reviews.md) already
   explains for a team of this size.
