@@ -37,6 +37,22 @@ The first build fetches and compiles the analyzers and takes minutes on every co
 maintainer before starting it, and prefer `-L unit` or one test (`ctest -R <name>`) while
 iterating.
 
+### Use the scripts, do not redo their work by hand
+
+Run the script and act on what it reports, rather than checking or formatting by reading.
+
+| When | Script | What it does |
+|---|---|---|
+| After changing C++ | `./scripts/format.sh`, then `./scripts/format-check.sh` | Applies, then verifies, the `clang-format` style on the project's own sources. CI runs the check with `clang-format` 20 |
+| After adding a file | `./scripts/check-license-compliance.sh` | Fails on a tracked source, CMake, shell, Python or YAML file without `SPDX-License-Identifier: Apache-2.0` in its first 12 lines, and names it. It checks; it does not add the header: write it as the first line (`//` in C++, `#` elsewhere) |
+| After touching `cmake/*.cmake` | `./scripts/release/check-pinned-dependencies.sh` | Fails on a dependency fetched from a branch, or a download without its hash |
+| To measure coverage | `sh scripts/ci/coverage.sh build coverage` | Needs a build configured with `-DCORETRACE_COVERAGE=ON` (Clang), so a full build: ask first |
+| In a CI step that uses the network | `scripts/ci/retry.sh` | Retries a command with a growing delay. Never for a test |
+
+No script checks commit messages in this repository: nothing will catch a wrong one. Write the
+subject as an English Conventional Commit yourself, `type(scope): summary`, as the pull request
+template asks for the title.
+
 ## Architecture
 
 One pipeline, from the inputs to the verdict. It is the critical path of the
