@@ -78,8 +78,7 @@ What the indicators are read for:
 - **"Guarantee" is not absolute.** The policy bounds and reduces debt and shows its trend; it
   cannot prove there is none.
 - **AI-written code cannot be told apart**, and this policy does not try: no rule depends on
-  it, and the share of assisted pull requests is not measured. The indicators show the effect
-  on the code, whatever its cause.
+  it. The indicators show the effect on the code, whatever its cause.
 - **The lead maintainer's pull requests have no second reader.** There, the gates of rule 4 are
   the only check, as [Pull requests and reviews](pull-requests-and-reviews.md) already
   explains for a team of this size.
