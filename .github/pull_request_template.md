@@ -15,3 +15,4 @@ Closes #
 - [ ] `ctest --test-dir build --output-on-failure` passes.
 - [ ] `./scripts/format-check.sh` passes.
 - [ ] The README, `docs/` or the help text follow the change, if users see it.
+- [ ] Optional: an AI tool helped write this change (a maintainer adds the `ai-assisted` label; see the [policy](https://github.com/CoreTrace/coretrace/blob/main/docs/quality/ai-assisted-code-policy.md)).
